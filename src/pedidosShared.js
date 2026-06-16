@@ -3,6 +3,49 @@ export const TIPOS_ENTREGA = {
   SUCURSAL: 'sucursal',
 };
 
+export const COCINAS = {
+  COCINA1: 'cocina1',
+  COCINA2: 'cocina2',
+  NINGUNA: 'ninguna',
+};
+
+export const COCINAS_OPCIONES = [
+  { value: COCINAS.COCINA1, label: 'Cocina 1' },
+  { value: COCINAS.COCINA2, label: 'Cocina 2' },
+  { value: COCINAS.NINGUNA, label: 'Ninguna' },
+];
+
+export function normalizarCocinaProducto(cocina) {
+  if (cocina === COCINAS.COCINA2) return COCINAS.COCINA2;
+  if (cocina === COCINAS.NINGUNA) return COCINAS.NINGUNA;
+  return COCINAS.COCINA1;
+}
+
+export function etiquetaCocinaProducto(cocina) {
+  const opcion = COCINAS_OPCIONES.find(
+    (item) => item.value === normalizarCocinaProducto(cocina)
+  );
+  return opcion?.label || 'Cocina 1';
+}
+
+export function filtrarLineasDetallePorCocina(pedido, cocina) {
+  if (!pedido?.lineas_detalle?.length) {
+    if (cocina === COCINAS.COCINA1 && pedido?.producto?.trim()) {
+      return [{ cantidad: 1, descripcion: pedido.producto, subtotal: pedido.total }];
+    }
+    return [];
+  }
+
+  return pedido.lineas_detalle.filter(
+    (linea) => normalizarCocinaProducto(linea.cocina) === cocina
+  );
+}
+
+export function pedidoVisibleEnCocina(pedido, cocina) {
+  if (!esPedidoWhatsapp(pedido) || pedido.status !== 'en-cocina') return false;
+  return filtrarLineasDetallePorCocina(pedido, cocina).length > 0;
+}
+
 export const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 export const STATUS_FLOW_SUCURSAL = [
   'por-aceptar',
@@ -34,11 +77,21 @@ export function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
 }
 
-export function DesgloseProductosPedido({ pedido, mostrarTotal = true }) {
+export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCocina = null }) {
   if (pedido?.lineas_detalle?.length) {
+    const lineas = filtrarCocina
+      ? filtrarLineasDetallePorCocina(pedido, filtrarCocina)
+      : pedido.lineas_detalle;
+
+    if (lineas.length === 0) return null;
+
+    const total = redondearMoneda(
+      lineas.reduce((suma, linea) => suma + Number(linea.subtotal || 0), 0)
+    );
+
     return (
       <div className="pedido-desglose">
-        {pedido.lineas_detalle.map((linea, index) => (
+        {lineas.map((linea, index) => (
           <div key={index} className="pedido-desglose-linea">
             <span
               className="pedido-desglose-cantidad"
@@ -52,12 +105,14 @@ export function DesgloseProductosPedido({ pedido, mostrarTotal = true }) {
           </div>
         ))}
         {mostrarTotal && (
-          <p className="pedido-desglose-total">
-            Total: ${Number(pedido.total).toFixed(2)}
-          </p>
+          <p className="pedido-desglose-total">Total: ${total.toFixed(2)}</p>
         )}
       </div>
     );
+  }
+
+  if (filtrarCocina && filtrarCocina !== COCINAS.COCINA1) {
+    return null;
   }
 
   if (!pedido?.producto?.trim()) {
@@ -74,4 +129,8 @@ export function DesgloseProductosPedido({ pedido, mostrarTotal = true }) {
       )}
     </div>
   );
+}
+
+function redondearMoneda(valor) {
+  return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 }

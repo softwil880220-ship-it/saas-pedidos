@@ -1595,6 +1595,19 @@
   }
 }
 
+.vista-cocina2 {
+  background: #faf5ff;
+}
+
+.vista-cocina2 .vista-operativa-header {
+  border-left: 5px solid #7c3aed;
+}
+
+.pedido-cocina {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
 .vista-operativa {
   min-height: 100vh;
   padding: 1.25rem;

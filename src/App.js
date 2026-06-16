@@ -3,7 +3,14 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { supabase } from './supabase';
 import { usePedidosRealtime } from './usePedidosRealtime';
+import {
+  COCINAS,
+  COCINAS_OPCIONES,
+  etiquetaCocinaProducto,
+  normalizarCocinaProducto,
+} from './pedidosShared';
 import VistaCocina from './VistaCocina';
+import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
@@ -458,6 +465,7 @@ function calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes) {
     precioUnitario,
     subtotal,
     descripcion,
+    cocina: normalizarCocinaProducto(producto.cocina),
   };
 }
 
@@ -944,6 +952,7 @@ function Dashboard() {
     nombre: '',
     precio: '',
     categoria: '',
+    cocina: COCINAS.COCINA1,
     variantesActivas: crearVariantesActivasFormVacias(),
   });
   const [varianteForm, setVarianteForm] = useState({ nombre: '', precio: '0' });
@@ -1014,6 +1023,7 @@ function Dashboard() {
       nombre: '',
       precio: '',
       categoria: '',
+      cocina: COCINAS.COCINA1,
       variantesActivas: crearVariantesActivasFormVacias(),
     });
     setVarianteForm({ nombre: '', precio: '0' });
@@ -1273,6 +1283,7 @@ function Dashboard() {
       nombre: '',
       precio: '',
       categoria: '',
+      cocina: COCINAS.COCINA1,
       variantesActivas: crearVariantesActivasFormVacias(),
     });
     setFormularioNuevoProductoDesbloqueado(false);
@@ -1291,6 +1302,7 @@ function Dashboard() {
       nombre: producto.nombre,
       precio: String(producto.precio),
       categoria: producto.categoria || '',
+      cocina: normalizarCocinaProducto(producto.cocina),
       variantesActivas: variantesActivasFormDesdeProducto(producto, catalogosVariantes),
     });
   };
@@ -1328,6 +1340,7 @@ function Dashboard() {
       nombre: productoForm.nombre.trim(),
       precio: parseFloat(productoForm.precio),
       categoria: productoForm.categoria.trim() || null,
+      cocina: normalizarCocinaProducto(productoForm.cocina),
       variantes_activas: variantesActivasJsonDesdeForm(productoForm.variantesActivas),
     };
 
@@ -2970,6 +2983,21 @@ function Dashboard() {
                             onChange={handleProductoFormChange}
                           />
                         </div>
+                        <div className="formulario-campo">
+                          <label htmlFor="cocina">Cocina</label>
+                          <select
+                            id="cocina"
+                            name="cocina"
+                            value={productoForm.cocina}
+                            onChange={handleProductoFormChange}
+                          >
+                            {COCINAS_OPCIONES.map((opcion) => (
+                              <option key={opcion.value} value={opcion.value}>
+                                {opcion.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <fieldset className="producto-variantes-activas">
                           <legend className="producto-variantes-activas-titulo">
                             Variantes disponibles para este producto
@@ -3081,6 +3109,9 @@ function Dashboard() {
                           {producto.categoria && (
                             <p className="pedido-producto">{producto.categoria}</p>
                           )}
+                          <p className="pedido-producto pedido-cocina">
+                            {etiquetaCocinaProducto(producto.cocina)}
+                          </p>
                           <p className="pedido-total">
                             ${Number(producto.precio).toFixed(2)}
                           </p>
@@ -3386,6 +3417,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/cocina" element={<VistaCocina />} />
+        <Route path="/cocina2" element={<VistaCocina2 />} />
         <Route path="/repartidor" element={<VistaRepartidor />} />
       </Routes>
     </BrowserRouter>
