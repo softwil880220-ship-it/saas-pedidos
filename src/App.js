@@ -1237,11 +1237,13 @@ function Dashboard() {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
       telefono: esPresencial ? null : form.telefono.trim() || null,
       producto: resumen,
-      lineas_detalle: detallePedido.lineas,
+      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
       status: esPresencial ? 'entregado' : form.status,
       tipo: esPresencial ? 'presencial' : 'whatsapp',
-      tipo_entrega: esPresencial ? null : form.tipoEntrega,
+      tipo_entrega: esPresencial
+        ? TIPOS_ENTREGA.DOMICILIO
+        : normalizarTipoEntrega(form.tipoEntrega),
       direccion:
         esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
           ? null
@@ -1875,14 +1877,18 @@ function Dashboard() {
 
     const payload = {
       producto: resumen,
-      lineas_detalle: detallePedido.lineas,
+      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
       ...(esPresencial
-        ? { cliente: CLIENTE_PUBLICO, status: 'entregado' }
+        ? {
+            cliente: CLIENTE_PUBLICO,
+            status: 'entregado',
+            tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
+          }
         : {
             cliente: pedidoEditForm.cliente.trim(),
             telefono: pedidoEditForm.telefono?.trim() || null,
-            tipo_entrega: pedidoEditForm.tipoEntrega,
+            tipo_entrega: normalizarTipoEntrega(pedidoEditForm.tipoEntrega),
             direccion:
               pedidoEditForm.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
                 ? pedidoEditForm.direccion?.trim() || null
