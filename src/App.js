@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { supabase } from './supabase';
-import { usePedidosRealtime } from './usePedidosRealtime';
+import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
   COCINAS,
   COCINAS_OPCIONES,
@@ -929,7 +929,9 @@ function Dashboard() {
   const { pedidos, setPedidos } = usePedidosRealtime({
     channelName: 'dashboard-pedidos',
   });
-  const [productos, setProductos] = useState([]);
+  const { productos, setProductos } = useProductosRealtime({
+    channelName: 'dashboard-productos',
+  });
   const [catalogosVariantes, setCatalogosVariantes] = useState(
     crearCatalogosVariantesVacios
   );
@@ -988,17 +990,6 @@ function Dashboard() {
   const [pinError, setPinError] = useState('');
   const [accionPendiente, setAccionPendiente] = useState(null);
 
-  const cargarProductos = async () => {
-    const { data, error } = await supabase
-      .from('productos')
-      .select('*')
-      .order('id', { ascending: true });
-
-    if (!error && data) {
-      setProductos(data);
-    }
-  };
-
   const cargarCatalogosVariantes = async () => {
     const resultados = await Promise.all(
       VARIANTES_CATEGORIAS.map(async ({ key, tabla }) => {
@@ -1021,7 +1012,7 @@ function Dashboard() {
   };
 
   const cargarCatalogos = async () => {
-    await Promise.all([cargarProductos(), cargarCatalogosVariantes()]);
+    await cargarCatalogosVariantes();
   };
 
   const resetFormulariosCatalogo = () => {
