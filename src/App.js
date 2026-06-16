@@ -1903,91 +1903,12 @@ function Dashboard() {
     }
   };
 
-  const renderPedidosLista = (pedidosAgrupados, filtroActivo, totalPedidosTipo) => {
-    if (totalPedidosTipo === 0) {
-      return (
-        <p className="dashboard-vacio seccion-entrega-vacio">
-          No hay pedidos en la fecha seleccionada.
-        </p>
-      );
-    }
+  const renderPedidoEnEdicion = (pedido, totalEdicion) => {
+    if (!pedidoEditForm || editandoPedidoId !== pedido.id) return null;
 
-    const totalVisible = pedidosAgrupados.reduce(
-      (suma, grupo) => suma + grupo.pedidos.length,
-      0
-    );
+    const esPresencialPedido = pedido.tipo === 'presencial';
 
-    if (totalVisible === 0) {
-      return (
-        <p className="dashboard-vacio seccion-entrega-vacio">
-          {filtroActivo !== 'todos'
-            ? 'No hay pedidos con este status en la fecha seleccionada.'
-            : 'No hay pedidos en la fecha seleccionada.'}
-        </p>
-      );
-    }
-
-    return pedidosAgrupados.map(({ clave, etiqueta, pedidos: pedidosGrupo }) => {
-                  const esGrupoHistorico = clave !== hoyClave;
-                  const subtotalGrupo = pedidosGrupo.reduce(
-                    (suma, pedido) => suma + Number(pedido.total),
-                    0
-                  );
-
-                  return (
-                  <div key={clave} className="pedidos-grupo">
-                    <h3 className="pedidos-grupo-titulo">{etiqueta}</h3>
-                    {esGrupoHistorico ? (
-                      <>
-                        <div className="pedidos-reporte">
-                          <div className="pedidos-reporte-header">
-                            <span>Hora</span>
-                            <span>Cliente</span>
-                            <span>Productos</span>
-                            <span>Total</span>
-                          </div>
-                          {pedidosGrupo.map((pedido) => (
-                            <div key={pedido.id} className="pedidos-reporte-fila">
-                              <span className="reporte-hora">
-                                {pedido.created_at
-                                  ? formatearHora(new Date(pedido.created_at))
-                                  : '—'}
-                              </span>
-                              <span className="reporte-cliente">{pedido.cliente}</span>
-                              <span className="reporte-productos">
-                                {pedido.producto || '—'}
-                              </span>
-                              <span className="reporte-total">
-                                ${Number(pedido.total).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="pedidos-reporte-subtotal">
-                          Subtotal del día: ${subtotalGrupo.toFixed(2)}
-                        </p>
-                      </>
-                    ) : (
-                    <div className="pedidos-grid">
-                      {pedidosGrupo.map((pedido) => {
-                        const esFinal = esStatusFinal(
-                          pedido.status,
-                          pedido.tipo_entrega
-                        );
-                        const esPresencialPedido = pedido.tipo === 'presencial';
-                        const estaEditando = editandoPedidoId === pedido.id;
-                        const otroEditando =
-                          editandoPedidoId !== null && !estaEditando;
-                        const totalEdicion = pedidoEditForm
-                          ? calcularTotalLineas(
-                              pedidoEditForm.lineas,
-                              productos,
-                              catalogosVariantes
-                            )
-                          : 0;
-
-                        if (estaEditando && pedidoEditForm) {
-                          return (
+    return (
                             <article
                               key={pedido.id}
                               className="pedido-tarjeta pedido-tarjeta-editando"
@@ -2254,7 +2175,136 @@ function Dashboard() {
                                 </div>
                               </div>
                             </article>
-                          );
+    );
+  };
+
+  const renderPedidosLista = (pedidosAgrupados, filtroActivo, totalPedidosTipo) => {
+    if (totalPedidosTipo === 0) {
+      return (
+        <p className="dashboard-vacio seccion-entrega-vacio">
+          No hay pedidos en la fecha seleccionada.
+        </p>
+      );
+    }
+
+    const totalVisible = pedidosAgrupados.reduce(
+      (suma, grupo) => suma + grupo.pedidos.length,
+      0
+    );
+
+    if (totalVisible === 0) {
+      return (
+        <p className="dashboard-vacio seccion-entrega-vacio">
+          {filtroActivo !== 'todos'
+            ? 'No hay pedidos con este status en la fecha seleccionada.'
+            : 'No hay pedidos en la fecha seleccionada.'}
+        </p>
+      );
+    }
+
+    return pedidosAgrupados.map(({ clave, etiqueta, pedidos: pedidosGrupo }) => {
+                  const esGrupoHistorico = clave !== hoyClave;
+                  const subtotalGrupo = pedidosGrupo.reduce(
+                    (suma, pedido) => suma + Number(pedido.total),
+                    0
+                  );
+
+                  return (
+                  <div key={clave} className="pedidos-grupo">
+                    <h3 className="pedidos-grupo-titulo">{etiqueta}</h3>
+                    {esGrupoHistorico ? (
+                      <>
+                        <div className="pedidos-reporte">
+                          <div className="pedidos-reporte-header">
+                            <span>Hora</span>
+                            <span>Cliente</span>
+                            <span>Productos</span>
+                            <span>Total</span>
+                            <span>Acciones</span>
+                          </div>
+                          {pedidosGrupo.map((pedido) => {
+                            const otroEditando =
+                              editandoPedidoId !== null && editandoPedidoId !== pedido.id;
+                            const totalEdicionHistorico = pedidoEditForm
+                              ? calcularTotalLineas(
+                                  pedidoEditForm.lineas,
+                                  productos,
+                                  catalogosVariantes
+                                )
+                              : 0;
+
+                            if (editandoPedidoId === pedido.id && pedidoEditForm) {
+                              return (
+                                <div
+                                  key={pedido.id}
+                                  className="pedidos-reporte-editando"
+                                >
+                                  {renderPedidoEnEdicion(pedido, totalEdicionHistorico)}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div key={pedido.id} className="pedidos-reporte-fila">
+                                <span className="reporte-hora">
+                                  {pedido.created_at
+                                    ? formatearHora(new Date(pedido.created_at))
+                                    : '—'}
+                                </span>
+                                <span className="reporte-cliente">{pedido.cliente}</span>
+                                <span className="reporte-productos">
+                                  {pedido.producto || '—'}
+                                </span>
+                                <span className="reporte-total">
+                                  ${Number(pedido.total).toFixed(2)}
+                                </span>
+                                <span className="reporte-acciones">
+                                  <button
+                                    type="button"
+                                    className="editar-btn"
+                                    disabled={otroEditando}
+                                    onClick={() => solicitarEditarPedido(pedido)}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="eliminar-btn"
+                                    disabled={otroEditando}
+                                    onClick={() => solicitarEliminarPedido(pedido.id)}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="pedidos-reporte-subtotal">
+                          Subtotal del día: ${subtotalGrupo.toFixed(2)}
+                        </p>
+                      </>
+                    ) : (
+                    <div className="pedidos-grid">
+                      {pedidosGrupo.map((pedido) => {
+                        const esFinal = esStatusFinal(
+                          pedido.status,
+                          pedido.tipo_entrega
+                        );
+                        const esPresencialPedido = pedido.tipo === 'presencial';
+                        const estaEditando = editandoPedidoId === pedido.id;
+                        const otroEditando =
+                          editandoPedidoId !== null && !estaEditando;
+                        const totalEdicion = pedidoEditForm
+                          ? calcularTotalLineas(
+                              pedidoEditForm.lineas,
+                              productos,
+                              catalogosVariantes
+                            )
+                          : 0;
+
+                        if (estaEditando && pedidoEditForm) {
+                          return renderPedidoEnEdicion(pedido, totalEdicion);
                         }
 
                         return (

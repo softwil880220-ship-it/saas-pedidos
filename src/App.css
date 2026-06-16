@@ -758,7 +758,7 @@
 .pedidos-reporte-header,
 .pedidos-reporte-fila {
   display: grid;
-  grid-template-columns: 3.25rem minmax(4.5rem, 0.9fr) minmax(0, 2fr) 4.25rem;
+  grid-template-columns: 3.25rem minmax(4.5rem, 0.9fr) minmax(0, 2fr) 4.25rem minmax(8.5rem, auto);
   gap: 0.5rem 0.75rem;
   align-items: center;
   padding: 0.65rem 0.75rem;
@@ -811,6 +811,30 @@
   white-space: nowrap;
 }
 
+.reporte-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.reporte-acciones .editar-btn,
+.reporte-acciones .eliminar-btn {
+  min-width: auto;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.pedidos-reporte-editando {
+  padding: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.pedidos-reporte-editando .pedido-tarjeta {
+  margin: 0;
+}
+
 .pedidos-reporte-subtotal {
   margin: 0.75rem 0 0;
   padding: 0.75rem 0.85rem;
@@ -831,7 +855,8 @@
     grid-template-columns: 3rem minmax(0, 1fr) auto;
     grid-template-areas:
       'hora cliente total'
-      'productos productos productos';
+      'productos productos productos'
+      'acciones acciones acciones';
     gap: 0.25rem 0.5rem;
     padding: 0.75rem;
   }
@@ -856,6 +881,11 @@
 
   .reporte-total {
     grid-area: total;
+  }
+
+  .reporte-acciones {
+    grid-area: acciones;
+    justify-content: flex-start;
   }
 }
 
