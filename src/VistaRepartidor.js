@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import './App.css';
 import {
   DesgloseProductosPedido,
@@ -6,28 +6,21 @@ import {
   siguienteStatus,
 } from './pedidosShared';
 import { supabase } from './supabase';
+import { usePedidosRealtime } from './usePedidosRealtime';
+
+const filtrarPedidosRepartidor = (pedido) =>
+  esPedidoWhatsapp(pedido) && pedido.status === 'enviado';
+
+const compararPedidosRepartidor = (a, b) =>
+  new Date(a.created_at || 0) - new Date(b.created_at || 0);
 
 export default function VistaRepartidor() {
-  const [pedidos, setPedidos] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const { pedidos, setPedidos, cargando } = usePedidosRealtime({
+    channelName: 'repartidor-pedidos',
+    filtrar: filtrarPedidosRepartidor,
+    comparar: compararPedidosRepartidor,
+  });
   const [actualizandoId, setActualizandoId] = useState(null);
-
-  const cargarPedidos = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .eq('status', 'enviado')
-      .order('created_at', { ascending: true });
-
-    if (!error && data) {
-      setPedidos(data.filter((pedido) => esPedidoWhatsapp(pedido)));
-    }
-    setCargando(false);
-  }, []);
-
-  useEffect(() => {
-    cargarPedidos();
-  }, [cargarPedidos]);
 
   const marcarEntregado = async (pedido) => {
     const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
@@ -49,7 +42,9 @@ export default function VistaRepartidor() {
     <div className="vista-operativa vista-repartidor">
       <header className="vista-operativa-header">
         <h1>Repartidor</h1>
-        <p className="vista-operativa-subtitulo">Pedidos en camino</p>
+        <p className="vista-operativa-subtitulo">
+          Pedidos en camino · actualización en tiempo real
+        </p>
         <span className="vista-operativa-contador">{pedidos.length} pendientes</span>
       </header>
 

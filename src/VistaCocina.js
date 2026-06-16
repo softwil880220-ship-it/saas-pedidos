@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import './App.css';
 import {
   DesgloseProductosPedido,
@@ -6,6 +6,7 @@ import {
   siguienteStatus,
 } from './pedidosShared';
 import { supabase } from './supabase';
+import { usePedidosRealtime } from './usePedidosRealtime';
 
 function formatearHora(createdAt) {
   if (!createdAt) return '—';
@@ -15,29 +16,19 @@ function formatearHora(createdAt) {
   });
 }
 
+const filtrarPedidosCocina = (pedido) =>
+  esPedidoWhatsapp(pedido) && pedido.status === 'en-cocina';
+
+const compararPedidosCocina = (a, b) =>
+  new Date(a.created_at || 0) - new Date(b.created_at || 0);
+
 export default function VistaCocina() {
-  const [pedidos, setPedidos] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const { pedidos, setPedidos, cargando } = usePedidosRealtime({
+    channelName: 'cocina-pedidos',
+    filtrar: filtrarPedidosCocina,
+    comparar: compararPedidosCocina,
+  });
   const [actualizandoId, setActualizandoId] = useState(null);
-
-  const cargarPedidos = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .eq('status', 'en-cocina')
-      .order('created_at', { ascending: true });
-
-    if (!error && data) {
-      setPedidos(data.filter((pedido) => esPedidoWhatsapp(pedido)));
-    }
-    setCargando(false);
-  }, []);
-
-  useEffect(() => {
-    cargarPedidos();
-    const intervalo = setInterval(cargarPedidos, 30000);
-    return () => clearInterval(intervalo);
-  }, [cargarPedidos]);
 
   const marcarListo = async (pedido) => {
     const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
@@ -60,7 +51,7 @@ export default function VistaCocina() {
       <header className="vista-operativa-header">
         <h1>Cocina</h1>
         <p className="vista-operativa-subtitulo">
-          Pedidos en preparación · se actualiza cada 30 s
+          Pedidos en preparación · actualización en tiempo real
         </p>
         <span className="vista-operativa-contador">{pedidos.length} en cola</span>
       </header>

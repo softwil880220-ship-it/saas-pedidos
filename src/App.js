@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { supabase } from './supabase';
+import { usePedidosRealtime } from './usePedidosRealtime';
 import VistaCocina from './VistaCocina';
 import VistaRepartidor from './VistaRepartidor';
 
@@ -908,7 +909,9 @@ function Dashboard() {
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
-  const [pedidos, setPedidos] = useState([]);
+  const { pedidos, setPedidos } = usePedidosRealtime({
+    channelName: 'dashboard-pedidos',
+  });
   const [productos, setProductos] = useState([]);
   const [catalogosVariantes, setCatalogosVariantes] = useState(
     crearCatalogosVariantesVacios
@@ -967,17 +970,6 @@ function Dashboard() {
   const [pinError, setPinError] = useState('');
   const [accionPendiente, setAccionPendiente] = useState(null);
 
-  const cargarPedidos = async () => {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setPedidos(data);
-    }
-  };
-
   const cargarProductos = async () => {
     const { data, error } = await supabase
       .from('productos')
@@ -1029,7 +1021,6 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    cargarPedidos();
     cargarCatalogos();
   }, []);
 
