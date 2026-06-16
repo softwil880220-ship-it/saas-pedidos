@@ -2,8 +2,8 @@ import { useState } from 'react';
 import './App.css';
 import {
   DesgloseProductosPedido,
+  construirUpdateAlMarcarCocinaLista,
   pedidoVisibleEnCocina,
-  siguienteStatus,
 } from './pedidosShared';
 import { supabase } from './supabase';
 import { usePedidosRealtime } from './usePedidosRealtime';
@@ -29,13 +29,13 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
   const [actualizandoId, setActualizandoId] = useState(null);
 
   const marcarListo = async (pedido) => {
-    const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
-    if (nuevoStatus === pedido.status) return;
+    const update = construirUpdateAlMarcarCocinaLista(pedido, cocina);
+    if (!update) return;
 
     setActualizandoId(pedido.id);
     const { error } = await supabase
       .from('pedidos')
-      .update({ status: nuevoStatus })
+      .update(update)
       .eq('id', pedido.id);
 
     if (!error) {

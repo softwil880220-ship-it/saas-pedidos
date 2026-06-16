@@ -6,8 +6,17 @@ import { usePedidosRealtime } from './usePedidosRealtime';
 import {
   COCINAS,
   COCINAS_OPCIONES,
+  construirPayloadAvancePedido,
+  construirPayloadRetrocesoPedido,
   etiquetaCocinaProducto,
+  formatearProgresoCocinas,
+  mergeStatusCocinasEnEdicion,
   normalizarCocinaProducto,
+  obtenerStatusGlobalTrasCocinas,
+  payloadStatusCocinasParaStatusGlobal,
+  pedidoRequiereAlgunaCocina,
+  prepararStatusCocinasAlEntrar,
+  todasCocinasRequeridasListas,
 } from './pedidosShared';
 import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
@@ -1573,17 +1582,17 @@ function Dashboard() {
     const pedido = pedidos.find((p) => p.id === id);
     if (!pedido) return;
 
-    const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
-    if (nuevoStatus === pedido.status) return;
+    const payload = construirPayloadAvancePedido(pedido);
+    if (!payload) return;
 
     const { error } = await supabase
       .from('pedidos')
-      .update({ status: nuevoStatus })
+      .update(payload)
       .eq('id', id);
 
     if (!error) {
       setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: nuevoStatus } : p))
+        prev.map((p) => (p.id === id ? { ...p, ...payload } : p))
       );
     }
   };
@@ -1592,17 +1601,17 @@ function Dashboard() {
     const pedido = pedidos.find((p) => p.id === id);
     if (!pedido || !puedeRetrocederPedido(pedido.status, pedido.tipo_entrega)) return;
 
-    const nuevoStatus = anteriorStatus(pedido.status, pedido.tipo_entrega);
-    if (nuevoStatus === pedido.status) return;
+    const payload = construirPayloadRetrocesoPedido(pedido);
+    if (!payload) return;
 
     const { error } = await supabase
       .from('pedidos')
-      .update({ status: nuevoStatus })
+      .update(payload)
       .eq('id', id);
 
     if (!error) {
       setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: nuevoStatus } : p))
+        prev.map((p) => (p.id === id ? { ...p, ...payload } : p))
       );
     }
   };
@@ -1879,6 +1888,57 @@ function Dashboard() {
 
     setGuardandoEdicionPedido(true);
 
+    const pedidoConDetalle = {
+      ...pedido,
+      producto: resumen,
+      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
+      total: detallePedido.total,
+    };
+
+    let statusEdicion = pedidoEditForm.status;
+    let statusCocinas = {};
+
+    if (!esPresencial) {
+      if (statusEdicion === 'en-cocina') {
+        if (pedido.status === 'en-cocina') {
+          const merge = mergeStatusCocinasEnEdicion(pedido, pedidoConDetalle);
+          if (!merge.requiereAlgunaCocina) {
+            statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
+            statusCocinas = { status_cocina1: null, status_cocina2: null };
+          } else {
+            statusCocinas = {
+              status_cocina1: merge.status_cocina1,
+              status_cocina2: merge.status_cocina2,
+            };
+            const pedidoProyectado = {
+              ...pedidoConDetalle,
+              status: 'en-cocina',
+              ...statusCocinas,
+            };
+            if (todasCocinasRequeridasListas(pedidoProyectado)) {
+              statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
+            }
+          }
+        } else {
+          const cocinas = prepararStatusCocinasAlEntrar(pedidoConDetalle);
+          if (!cocinas.requiereAlgunaCocina) {
+            statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
+            statusCocinas = { status_cocina1: null, status_cocina2: null };
+          } else {
+            statusCocinas = {
+              status_cocina1: cocinas.status_cocina1,
+              status_cocina2: cocinas.status_cocina2,
+            };
+          }
+        }
+      } else {
+        statusCocinas = payloadStatusCocinasParaStatusGlobal(
+          pedidoConDetalle,
+          statusEdicion
+        );
+      }
+    }
+
     const payload = {
       producto: resumen,
       lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
@@ -1897,7 +1957,8 @@ function Dashboard() {
               pedidoEditForm.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
                 ? pedidoEditForm.direccion?.trim() || null
                 : null,
-            status: pedidoEditForm.status,
+            status: statusEdicion,
+            ...statusCocinas,
           }),
     };
 
@@ -2370,6 +2431,12 @@ function Dashboard() {
                                 <span className={`status-badge status-${pedido.status}`}>
                                   {STATUS_LABELS[pedido.status]}
                                 </span>
+                                {pedido.status === 'en-cocina' &&
+                                  pedidoRequiereAlgunaCocina(pedido) && (
+                                    <p className="pedido-progreso-cocinas">
+                                      {formatearProgresoCocinas(pedido)}
+                                    </p>
+                                  )}
                                 <div className="tarjeta-acciones tarjeta-acciones-doble">
                                   {(() => {
                                     const muestraRetroceder = puedeRetrocederPedido(
@@ -2406,7 +2473,11 @@ function Dashboard() {
                                         <button
                                           type="button"
                                           className="avanzar-btn"
-                                          disabled={esFinal || otroEditando}
+                                          disabled={
+                                            esFinal ||
+                                            otroEditando ||
+                                            pedido.status === 'en-cocina'
+                                          }
                                           onClick={() => avanzarPedido(pedido.id)}
                                         >
                                           Avanzar

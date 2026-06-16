@@ -1608,6 +1608,13 @@
   font-size: 0.85rem;
 }
 
+.pedido-progreso-cocinas {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .vista-operativa {
   min-height: 100vh;
   padding: 1.25rem;

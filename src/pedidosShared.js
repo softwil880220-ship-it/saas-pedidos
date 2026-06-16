@@ -41,9 +41,208 @@ export function filtrarLineasDetallePorCocina(pedido, cocina) {
   );
 }
 
+export const STATUS_COCINA = {
+  EN_COCINA: 'en-cocina',
+  LISTO: 'listo',
+};
+
+export function pedidoRequiereCocina(pedido, cocina) {
+  return filtrarLineasDetallePorCocina(pedido, cocina).length > 0;
+}
+
+export function pedidoRequiereAlgunaCocina(pedido) {
+  return (
+    pedidoRequiereCocina(pedido, COCINAS.COCINA1) ||
+    pedidoRequiereCocina(pedido, COCINAS.COCINA2)
+  );
+}
+
+export function obtenerStatusCocinaPedido(pedido, cocina) {
+  const campo = cocina === COCINAS.COCINA2 ? 'status_cocina2' : 'status_cocina1';
+  const valor = pedido?.[campo];
+  if (valor) return valor;
+
+  if (
+    pedido?.status === 'en-cocina' &&
+    cocina === COCINAS.COCINA1 &&
+    pedidoRequiereCocina(pedido, COCINAS.COCINA1)
+  ) {
+    return STATUS_COCINA.EN_COCINA;
+  }
+
+  return null;
+}
+
+export function esStatusCocinaFinal(status) {
+  return status === STATUS_COCINA.LISTO;
+}
+
+export function prepararStatusCocinasAlEntrar(pedido) {
+  const req1 = pedidoRequiereCocina(pedido, COCINAS.COCINA1);
+  const req2 = pedidoRequiereCocina(pedido, COCINAS.COCINA2);
+
+  return {
+    requiereAlgunaCocina: req1 || req2,
+    status_cocina1: req1 ? STATUS_COCINA.EN_COCINA : null,
+    status_cocina2: req2 ? STATUS_COCINA.EN_COCINA : null,
+  };
+}
+
+export function todasCocinasRequeridasListas(pedido) {
+  if (!pedidoRequiereAlgunaCocina(pedido)) return true;
+
+  if (
+    pedidoRequiereCocina(pedido, COCINAS.COCINA1) &&
+    !esStatusCocinaFinal(obtenerStatusCocinaPedido(pedido, COCINAS.COCINA1))
+  ) {
+    return false;
+  }
+
+  if (
+    pedidoRequiereCocina(pedido, COCINAS.COCINA2) &&
+    !esStatusCocinaFinal(obtenerStatusCocinaPedido(pedido, COCINAS.COCINA2))
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export function obtenerStatusGlobalTrasCocinas(tipoEntrega) {
+  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
+    ? 'listo-para-recoger'
+    : 'enviado';
+}
+
+export function construirUpdateAlMarcarCocinaLista(pedido, cocina) {
+  const campo = cocina === COCINAS.COCINA2 ? 'status_cocina2' : 'status_cocina1';
+  const statusActual = obtenerStatusCocinaPedido(pedido, cocina);
+
+  if (statusActual !== STATUS_COCINA.EN_COCINA) return null;
+
+  const pedidoActualizado = { ...pedido, [campo]: STATUS_COCINA.LISTO };
+  const update = { [campo]: STATUS_COCINA.LISTO };
+
+  if (
+    pedido.status === 'en-cocina' &&
+    todasCocinasRequeridasListas(pedidoActualizado)
+  ) {
+    update.status = obtenerStatusGlobalTrasCocinas(pedido.tipo_entrega);
+  }
+
+  return update;
+}
+
+export function mergeStatusCocinasEnEdicion(pedidoAnterior, pedidoNuevo) {
+  const cocinas = prepararStatusCocinasAlEntrar(pedidoNuevo);
+  if (!cocinas.requiereAlgunaCocina) {
+    return {
+      requiereAlgunaCocina: false,
+      status_cocina1: null,
+      status_cocina2: null,
+    };
+  }
+
+  const conservarOIniciar = (cocina, campo) => {
+    if (!pedidoRequiereCocina(pedidoNuevo, cocina)) return null;
+    if (
+      pedidoAnterior.status === 'en-cocina' &&
+      pedidoAnterior[campo] === STATUS_COCINA.LISTO
+    ) {
+      return STATUS_COCINA.LISTO;
+    }
+    return STATUS_COCINA.EN_COCINA;
+  };
+
+  return {
+    requiereAlgunaCocina: true,
+    status_cocina1: conservarOIniciar(COCINAS.COCINA1, 'status_cocina1'),
+    status_cocina2: conservarOIniciar(COCINAS.COCINA2, 'status_cocina2'),
+  };
+}
+
+export function payloadStatusCocinasParaStatusGlobal(pedido, statusGlobal) {
+  if (statusGlobal === 'en-cocina') {
+    const cocinas = prepararStatusCocinasAlEntrar(pedido);
+    return {
+      status_cocina1: cocinas.status_cocina1,
+      status_cocina2: cocinas.status_cocina2,
+    };
+  }
+
+  if (statusGlobal === 'por-aceptar') {
+    return { status_cocina1: null, status_cocina2: null };
+  }
+
+  if (['listo-para-recoger', 'enviado', 'entregado'].includes(statusGlobal)) {
+    const req1 = pedidoRequiereCocina(pedido, COCINAS.COCINA1);
+    const req2 = pedidoRequiereCocina(pedido, COCINAS.COCINA2);
+    return {
+      status_cocina1: req1 ? STATUS_COCINA.LISTO : null,
+      status_cocina2: req2 ? STATUS_COCINA.LISTO : null,
+    };
+  }
+
+  return {};
+}
+
+export function construirPayloadAvancePedido(pedido) {
+  if (pedido.status === 'en-cocina') return null;
+
+  const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
+  if (nuevoStatus === pedido.status) return null;
+
+  const payload = {
+    status: nuevoStatus,
+    ...payloadStatusCocinasParaStatusGlobal(pedido, nuevoStatus),
+  };
+
+  if (nuevoStatus === 'en-cocina') {
+    const cocinas = prepararStatusCocinasAlEntrar(pedido);
+    if (!cocinas.requiereAlgunaCocina) {
+      payload.status = obtenerStatusGlobalTrasCocinas(pedido.tipo_entrega);
+      payload.status_cocina1 = null;
+      payload.status_cocina2 = null;
+    }
+  }
+
+  return payload;
+}
+
+export function construirPayloadRetrocesoPedido(pedido) {
+  const nuevoStatus = anteriorStatus(pedido.status, pedido.tipo_entrega);
+  if (nuevoStatus === pedido.status) return null;
+
+  return {
+    status: nuevoStatus,
+    ...payloadStatusCocinasParaStatusGlobal(pedido, nuevoStatus),
+  };
+}
+
+export function formatearProgresoCocinas(pedido) {
+  const partes = [];
+
+  if (pedidoRequiereCocina(pedido, COCINAS.COCINA1)) {
+    const listo = esStatusCocinaFinal(
+      obtenerStatusCocinaPedido(pedido, COCINAS.COCINA1)
+    );
+    partes.push(`Cocina 1: ${listo ? 'lista' : 'en preparación'}`);
+  }
+
+  if (pedidoRequiereCocina(pedido, COCINAS.COCINA2)) {
+    const listo = esStatusCocinaFinal(
+      obtenerStatusCocinaPedido(pedido, COCINAS.COCINA2)
+    );
+    partes.push(`Cocina 2: ${listo ? 'lista' : 'en preparación'}`);
+  }
+
+  return partes.join(' · ');
+}
+
 export function pedidoVisibleEnCocina(pedido, cocina) {
   if (!esPedidoWhatsapp(pedido) || pedido.status !== 'en-cocina') return false;
-  return filtrarLineasDetallePorCocina(pedido, cocina).length > 0;
+  if (!pedidoRequiereCocina(pedido, cocina)) return false;
+  return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
 }
 
 export const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
@@ -71,6 +270,13 @@ export function siguienteStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
   const indice = flujo.indexOf(status);
   if (indice === -1 || indice === flujo.length - 1) return status;
   return flujo[indice + 1];
+}
+
+export function anteriorStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
+  const flujo = obtenerFlujoStatus(tipoEntrega);
+  const indice = flujo.indexOf(status);
+  if (indice <= 0) return status;
+  return flujo[indice - 1];
 }
 
 export function esPedidoWhatsapp(pedido) {
