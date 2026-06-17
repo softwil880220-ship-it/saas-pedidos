@@ -208,7 +208,6 @@ function obtenerConfigVariante(key) {
 }
 
 const CLIENTE_PUBLICO = 'Público general';
-const PIN_STORAGE_KEY = 'saas-pedidos-pin';
 
 function normalizarTipoEntrega(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
@@ -914,14 +913,6 @@ function contadoresPorFlujo(pedidos, flujo) {
   }));
 }
 
-function obtenerPinGuardado() {
-  return localStorage.getItem(PIN_STORAGE_KEY) || '';
-}
-
-function guardarPinEnStorage(pin) {
-  localStorage.setItem(PIN_STORAGE_KEY, pin);
-}
-
 function Dashboard() {
   const [seccion, setSeccion] = useState('pedidos');
   const [modo, setModo] = useState('whatsapp');
@@ -970,10 +961,7 @@ function Dashboard() {
   });
   const [varianteForm, setVarianteForm] = useState({ nombre: '', precio: '0' });
   const [editandoVariante, setEditandoVariante] = useState(null);
-  const [formularioNuevoVariante, setFormularioNuevoVariante] = useState(null);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
-  const [formularioNuevoProductoDesbloqueado, setFormularioNuevoProductoDesbloqueado] =
-    useState(false);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
   const [pedidoEditForm, setPedidoEditForm] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -982,15 +970,6 @@ function Dashboard() {
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
   const [pagoRecibido, setPagoRecibido] = useState('');
   const [fechaActual, setFechaActual] = useState(() => Date.now());
-  const [pinConfigurado, setPinConfigurado] = useState(() => obtenerPinGuardado());
-  const [mostrarAjustes, setMostrarAjustes] = useState(false);
-  const [pinForm, setPinForm] = useState({ pin: '', confirmar: '' });
-  const [pinFormError, setPinFormError] = useState('');
-  const [pinFormExito, setPinFormExito] = useState('');
-  const [mostrarModalPin, setMostrarModalPin] = useState(false);
-  const [pinIngresado, setPinIngresado] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [accionPendiente, setAccionPendiente] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
     const resultados = await Promise.all(
@@ -1020,7 +999,6 @@ function Dashboard() {
   const resetFormulariosCatalogo = () => {
     setEditandoProductoId(null);
     setEditandoVariante(null);
-    setFormularioNuevoVariante(null);
     setProductoForm({
       nombre: '',
       precio: '',
@@ -1029,7 +1007,6 @@ function Dashboard() {
       variantesActivas: crearVariantesActivasFormVacias(),
     });
     setVarianteForm({ nombre: '', precio: '0' });
-    setFormularioNuevoProductoDesbloqueado(false);
   };
 
   useEffect(() => {
@@ -1301,17 +1278,14 @@ function Dashboard() {
       cocina: COCINAS.COCINA1,
       variantesActivas: crearVariantesActivasFormVacias(),
     });
-    setFormularioNuevoProductoDesbloqueado(false);
   };
 
   const resetVarianteForm = () => {
     setEditandoVariante(null);
-    setFormularioNuevoVariante(null);
     setVarianteForm({ nombre: '', precio: '0' });
   };
 
   const iniciarEdicionProducto = (producto) => {
-    setFormularioNuevoProductoDesbloqueado(false);
     setEditandoProductoId(producto.id);
     setProductoForm({
       nombre: producto.nombre,
@@ -1323,7 +1297,6 @@ function Dashboard() {
   };
 
   const iniciarEdicionVariante = (categoria, item) => {
-    setFormularioNuevoVariante(null);
     setEditandoVariante({ categoria, id: item.id });
     setVarianteForm({
       nombre: item.nombre,
@@ -1641,154 +1614,6 @@ function Dashboard() {
         cancelarEdicionPedido();
       }
     }
-  };
-
-  const cerrarModalPin = () => {
-    setMostrarModalPin(false);
-    setPinIngresado('');
-    setPinError('');
-    setAccionPendiente(null);
-  };
-
-  const solicitarAccionProtegida = (accion) => {
-    setAccionPendiente(accion);
-    setPinIngresado('');
-    setPinError('');
-    setMostrarModalPin(true);
-  };
-
-  const solicitarEliminarPedido = (id) => {
-    solicitarAccionProtegida({ type: 'eliminar', entity: 'pedido', id });
-  };
-
-  const solicitarEditarPedido = (pedido) => {
-    solicitarAccionProtegida({ type: 'editar', entity: 'pedido', pedido });
-  };
-
-  const solicitarRetrocederPedido = (id) => {
-    solicitarAccionProtegida({ type: 'retroceder', entity: 'pedido', id });
-  };
-
-  const solicitarEliminarProducto = (id) => {
-    solicitarAccionProtegida({ type: 'eliminar', entity: 'producto', id });
-  };
-
-  const solicitarEditarProducto = (producto) => {
-    solicitarAccionProtegida({ type: 'editar', entity: 'producto', producto });
-  };
-
-  const solicitarAgregarProducto = () => {
-    solicitarAccionProtegida({ type: 'agregar', entity: 'producto' });
-  };
-
-  const solicitarEliminarVariante = (categoria, id) => {
-    solicitarAccionProtegida({ type: 'eliminar', entity: categoria, id });
-  };
-
-  const solicitarEditarVariante = (categoria, item) => {
-    solicitarAccionProtegida({ type: 'editar', entity: categoria, item });
-  };
-
-  const solicitarAgregarVariante = (categoria) => {
-    solicitarAccionProtegida({ type: 'agregar', entity: categoria });
-  };
-
-  const obtenerTituloModalPin = () => {
-    if (!accionPendiente) return 'Confirmar';
-
-    const { type, entity } = accionPendiente;
-    const config = esCategoriaVariante(entity) ? obtenerConfigVariante(entity) : null;
-    const nombreEntidad = config?.label || 'producto';
-
-    if (type === 'agregar' && entity === 'producto') {
-      return 'Confirmar nuevo producto';
-    }
-    if (type === 'agregar' && config) {
-      return `Confirmar nuevo ${nombreEntidad.toLowerCase()}`;
-    }
-    if (type === 'eliminar' && entity === 'producto') {
-      return 'Confirmar eliminación de producto';
-    }
-    if (type === 'eliminar' && config) {
-      return `Confirmar eliminación de ${nombreEntidad.toLowerCase()}`;
-    }
-    if (type === 'eliminar') return 'Confirmar eliminación';
-    if (type === 'retroceder' && entity === 'pedido') {
-      return 'Confirmar retroceso de pedido';
-    }
-    if (entity === 'producto') return 'Confirmar edición de producto';
-    if (config) return `Confirmar edición de ${nombreEntidad.toLowerCase()}`;
-    return 'Confirmar edición';
-  };
-
-  const verificarPinYContinuar = () => {
-    if (!pinConfigurado) return;
-
-    if (pinIngresado !== pinConfigurado) {
-      setPinError('PIN incorrecto');
-      return;
-    }
-
-    const accion = accionPendiente;
-    cerrarModalPin();
-
-    if (accion?.type === 'eliminar' && accion.entity === 'pedido') {
-      eliminarPedido(accion.id);
-    } else if (accion?.type === 'retroceder' && accion.entity === 'pedido') {
-      retrocederPedido(accion.id);
-    } else if (accion?.type === 'editar' && accion.entity === 'pedido') {
-      iniciarEdicionPedido(accion.pedido);
-    } else if (accion?.type === 'eliminar' && accion.entity === 'producto') {
-      eliminarProducto(accion.id);
-    } else if (accion?.type === 'editar' && accion.entity === 'producto') {
-      iniciarEdicionProducto(accion.producto);
-    } else if (accion?.type === 'agregar' && accion.entity === 'producto') {
-      setFormularioNuevoProductoDesbloqueado(true);
-    } else if (accion?.type === 'eliminar' && esCategoriaVariante(accion.entity)) {
-      eliminarVariante(accion.entity, accion.id);
-    } else if (accion?.type === 'editar' && esCategoriaVariante(accion.entity)) {
-      setCatalogoTab(accion.entity);
-      iniciarEdicionVariante(accion.entity, accion.item);
-    } else if (accion?.type === 'agregar' && esCategoriaVariante(accion.entity)) {
-      setCatalogoTab(accion.entity);
-      setFormularioNuevoVariante(accion.entity);
-    }
-  };
-
-  const handlePinFormChange = (e) => {
-    const { name, value } = e.target;
-    const soloDigitos = value.replace(/\D/g, '').slice(0, 4);
-    setPinForm((prev) => ({ ...prev, [name]: soloDigitos }));
-    setPinFormError('');
-    setPinFormExito('');
-  };
-
-  const guardarPinConfig = (e) => {
-    e.preventDefault();
-    setPinFormError('');
-    setPinFormExito('');
-
-    if (!/^\d{4}$/.test(pinForm.pin)) {
-      setPinFormError('El PIN debe tener exactamente 4 dígitos');
-      return;
-    }
-
-    if (pinForm.pin !== pinForm.confirmar) {
-      setPinFormError('Los PIN no coinciden');
-      return;
-    }
-
-    guardarPinEnStorage(pinForm.pin);
-    setPinConfigurado(pinForm.pin);
-    setPinForm({ pin: '', confirmar: '' });
-    setPinFormExito('PIN guardado correctamente');
-  };
-
-  const cerrarAjustes = () => {
-    setMostrarAjustes(false);
-    setPinForm({ pin: '', confirmar: '' });
-    setPinFormError('');
-    setPinFormExito('');
   };
 
   const cancelarEdicionPedido = () => {
@@ -2353,7 +2178,7 @@ function Dashboard() {
                                     type="button"
                                     className="editar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => solicitarEditarPedido(pedido)}
+                                    onClick={() => iniciarEdicionPedido(pedido)}
                                   >
                                     Editar
                                   </button>
@@ -2361,7 +2186,7 @@ function Dashboard() {
                                     type="button"
                                     className="eliminar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => solicitarEliminarPedido(pedido.id)}
+                                    onClick={() => eliminarPedido(pedido.id)}
                                   >
                                     Eliminar
                                   </button>
@@ -2428,7 +2253,7 @@ function Dashboard() {
                                     type="button"
                                     className="editar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => solicitarEditarPedido(pedido)}
+                                    onClick={() => iniciarEdicionPedido(pedido)}
                                   >
                                     Editar
                                   </button>
@@ -2436,7 +2261,7 @@ function Dashboard() {
                                     type="button"
                                     className="eliminar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => solicitarEliminarPedido(pedido.id)}
+                                    onClick={() => eliminarPedido(pedido.id)}
                                   >
                                     Eliminar
                                   </button>
@@ -2479,9 +2304,7 @@ function Dashboard() {
                                             type="button"
                                             className="retroceder-btn"
                                             disabled={otroEditando}
-                                            onClick={() =>
-                                              solicitarRetrocederPedido(pedido.id)
-                                            }
+                                            onClick={() => retrocederPedido(pedido.id)}
                                           >
                                             Retroceder
                                           </button>
@@ -2545,7 +2368,7 @@ function Dashboard() {
                                       type="button"
                                       className="editar-btn"
                                       disabled={otroEditando}
-                                      onClick={() => solicitarEditarPedido(pedido)}
+                                      onClick={() => iniciarEdicionPedido(pedido)}
                                     >
                                       Editar
                                     </button>
@@ -2553,7 +2376,7 @@ function Dashboard() {
                                       type="button"
                                       className="eliminar-btn"
                                       disabled={otroEditando}
-                                      onClick={() => solicitarEliminarPedido(pedido.id)}
+                                      onClick={() => eliminarPedido(pedido.id)}
                                     >
                                       Eliminar
                                     </button>
@@ -2578,17 +2401,6 @@ function Dashboard() {
           <h1>
             {esModoPresencial ? 'Modo Caja — Venta presencial' : 'Modo WhatsApp — Pedidos'}
           </h1>
-          <button
-            type="button"
-            className="ajustes-btn"
-            onClick={() => setMostrarAjustes(true)}
-            aria-label="Ajustes"
-          >
-            <span className="ajustes-icono" aria-hidden="true">
-              ⚙
-            </span>
-            Ajustes
-          </button>
         </div>
         <div className="header-stats">
           <div className="header-stat header-stat-principal">
@@ -3030,12 +2842,11 @@ function Dashboard() {
             {catalogoTab === 'productos' && (
               <>
                 <section className="pedido-formulario">
-                  {editandoProductoId || formularioNuevoProductoDesbloqueado ? (
-                    <>
-                      <h2 className="formulario-titulo">
-                        {editandoProductoId ? 'Editar producto' : 'Agregar producto'}
-                      </h2>
-                      <form className="formulario" onSubmit={handleProductoSubmit}>
+                  <>
+                    <h2 className="formulario-titulo">
+                      {editandoProductoId ? 'Editar producto' : 'Agregar producto'}
+                    </h2>
+                    <form className="formulario" onSubmit={handleProductoSubmit}>
                         <div className="formulario-campo">
                           <label htmlFor="nombre">Nombre</label>
                           <input
@@ -3167,22 +2978,7 @@ function Dashboard() {
                           Cancelar
                         </button>
                       </form>
-                    </>
-                  ) : (
-                    <div className="catalogo-agregar">
-                      <h2 className="formulario-titulo">Agregar producto</h2>
-                      <p className="catalogo-agregar-descripcion">
-                        Ingresa tu PIN para registrar un nuevo producto en el catálogo.
-                      </p>
-                      <button
-                        type="button"
-                        className="guardar-btn catalogo-agregar-btn"
-                        onClick={solicitarAgregarProducto}
-                      >
-                        + Agregar producto
-                      </button>
-                    </div>
-                  )}
+                  </>
                 </section>
 
                 <section className="dashboard-lista">
@@ -3206,14 +3002,14 @@ function Dashboard() {
                             <button
                               type="button"
                               className="editar-btn"
-                              onClick={() => solicitarEditarProducto(producto)}
+                              onClick={() => iniciarEdicionProducto(producto)}
                             >
                               Editar
                             </button>
                             <button
                               type="button"
                               className="eliminar-btn"
-                              onClick={() => solicitarEliminarProducto(producto.id)}
+                              onClick={() => eliminarProducto(producto.id)}
                             >
                               Eliminar
                             </button>
@@ -3232,21 +3028,19 @@ function Dashboard() {
               const items = catalogosVariantesOrdenados[key] || [];
               const editandoActual =
                 editandoVariante?.categoria === key ? editandoVariante.id : null;
-              const formularioDesbloqueado = formularioNuevoVariante === key;
               const nombreSingular = label.toLowerCase();
 
               return (
                 <div key={key}>
                   <section className="pedido-formulario">
-                    {editandoActual || formularioDesbloqueado ? (
-                      <>
-                        <h2 className="formulario-titulo">
-                          {editandoActual ? `Editar ${nombreSingular}` : `Agregar ${nombreSingular}`}
-                        </h2>
-                        <form
-                          className="formulario"
-                          onSubmit={(e) => handleVarianteSubmit(e, key)}
-                        >
+                    <>
+                      <h2 className="formulario-titulo">
+                        {editandoActual ? `Editar ${nombreSingular}` : `Agregar ${nombreSingular}`}
+                      </h2>
+                      <form
+                        className="formulario"
+                        onSubmit={(e) => handleVarianteSubmit(e, key)}
+                      >
                           <div className="formulario-campo">
                             <label htmlFor={`${key}-nombre`}>Nombre</label>
                             <input
@@ -3290,23 +3084,7 @@ function Dashboard() {
                             Cancelar
                           </button>
                         </form>
-                      </>
-                    ) : (
-                      <div className="catalogo-agregar">
-                        <h2 className="formulario-titulo">Agregar {nombreSingular}</h2>
-                        <p className="catalogo-agregar-descripcion">
-                          Ingresa tu PIN para registrar un nuevo {nombreSingular} en el
-                          catálogo.
-                        </p>
-                        <button
-                          type="button"
-                          className="guardar-btn catalogo-agregar-btn"
-                          onClick={() => solicitarAgregarVariante(key)}
-                        >
-                          + Agregar {nombreSingular}
-                        </button>
-                      </div>
-                    )}
+                    </>
                   </section>
 
                   <section className="dashboard-lista">
@@ -3327,14 +3105,17 @@ function Dashboard() {
                               <button
                                 type="button"
                                 className="editar-btn"
-                                onClick={() => solicitarEditarVariante(key, item)}
+                                onClick={() => {
+                                  setCatalogoTab(key);
+                                  iniciarEdicionVariante(key, item);
+                                }}
                               >
                                 Editar
                               </button>
                               <button
                                 type="button"
                                 className="eliminar-btn"
-                                onClick={() => solicitarEliminarVariante(key, item.id)}
+                                onClick={() => eliminarVariante(key, item.id)}
                               >
                                 Eliminar
                               </button>
@@ -3350,150 +3131,6 @@ function Dashboard() {
           </>
         )}
       </main>
-
-      {mostrarAjustes && (
-        <div className="modal-overlay" onClick={cerrarAjustes}>
-          <div
-            className="modal-contenido modal-ajustes"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="ajustes-titulo"
-          >
-            <h2 id="ajustes-titulo" className="modal-titulo">
-              Ajustes de seguridad
-            </h2>
-            <p className="modal-descripcion">
-              Establece un PIN de 4 dígitos para proteger la edición y eliminación
-              de pedidos, productos y variantes del catálogo.
-            </p>
-            {pinConfigurado && (
-              <p className="pin-configurado-aviso">PIN configurado</p>
-            )}
-            <form className="pin-config-form" onSubmit={guardarPinConfig}>
-              <div className="formulario-campo">
-                <label htmlFor="pin-nuevo">Nuevo PIN</label>
-                <input
-                  id="pin-nuevo"
-                  name="pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={4}
-                  value={pinForm.pin}
-                  onChange={handlePinFormChange}
-                  placeholder="••••"
-                />
-              </div>
-              <div className="formulario-campo">
-                <label htmlFor="pin-confirmar">Confirmar PIN</label>
-                <input
-                  id="pin-confirmar"
-                  name="confirmar"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={4}
-                  value={pinForm.confirmar}
-                  onChange={handlePinFormChange}
-                  placeholder="••••"
-                />
-              </div>
-              {pinFormError && <p className="pin-error">{pinFormError}</p>}
-              {pinFormExito && <p className="pin-exito">{pinFormExito}</p>}
-              <div className="modal-acciones">
-                <button type="submit" className="guardar-btn">
-                  Guardar PIN
-                </button>
-                <button type="button" className="cancelar-btn" onClick={cerrarAjustes}>
-                  Cerrar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {mostrarModalPin && (
-        <div className="modal-overlay" onClick={cerrarModalPin}>
-          <div
-            className="modal-contenido modal-pin"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="pin-modal-titulo"
-          >
-            {!pinConfigurado ? (
-              <>
-                <h2 id="pin-modal-titulo" className="modal-titulo">
-                  PIN no configurado
-                </h2>
-                <p className="pin-aviso-config">
-                  Configura tu PIN en Ajustes para proteger estas acciones
-                </p>
-                <div className="modal-acciones">
-                  <button
-                    type="button"
-                    className="guardar-btn"
-                    onClick={() => {
-                      cerrarModalPin();
-                      setMostrarAjustes(true);
-                    }}
-                  >
-                    Ir a Ajustes
-                  </button>
-                  <button type="button" className="cancelar-btn" onClick={cerrarModalPin}>
-                    Cerrar
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 id="pin-modal-titulo" className="modal-titulo">
-                  {obtenerTituloModalPin()}
-                </h2>
-                <p className="modal-descripcion">
-                  Ingresa tu PIN de 4 dígitos para continuar
-                </p>
-                <div className="formulario-campo">
-                  <label htmlFor="pin-verificar">PIN</label>
-                  <input
-                    id="pin-verificar"
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={4}
-                    value={pinIngresado}
-                    onChange={(e) => {
-                      setPinIngresado(e.target.value.replace(/\D/g, '').slice(0, 4));
-                      setPinError('');
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        verificarPinYContinuar();
-                      }
-                    }}
-                    placeholder="••••"
-                    autoFocus
-                  />
-                </div>
-                {pinError && <p className="pin-error">{pinError}</p>}
-                <div className="modal-acciones">
-                  <button
-                    type="button"
-                    className="guardar-btn"
-                    onClick={verificarPinYContinuar}
-                  >
-                    Confirmar
-                  </button>
-                  <button type="button" className="cancelar-btn" onClick={cerrarModalPin}>
-                    Cancelar
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
