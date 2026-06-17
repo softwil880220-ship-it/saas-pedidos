@@ -231,8 +231,6 @@ export function payloadStatusCocinasParaStatusGlobal(pedido, statusGlobal) {
 }
 
 export function construirPayloadAvancePedido(pedido) {
-  if (pedido.status === 'en-cocina') return null;
-
   const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
   if (nuevoStatus === pedido.status) return null;
 
@@ -287,7 +285,7 @@ export function formatearProgresoCocinas(pedido) {
 }
 
 export function pedidoVisibleEnCocina(pedido, cocina) {
-  if (pedido.status !== 'en-cocina') return false;
+  if (!['en-cocina'].includes(pedido?.status)) return false;
   if (!pedidoRequiereCocina(pedido, cocina)) return false;
   return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
 }

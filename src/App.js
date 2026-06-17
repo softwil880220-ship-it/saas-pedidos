@@ -255,7 +255,7 @@ function puedeRetrocederPedido(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
       status === 'entregado'
     );
   }
-  return status === 'en-cocina' || status === 'enviado';
+  return status === 'en-cocina' || status === 'enviado' || status === 'entregado';
 }
 
 function mostrarContactoWhatsAppPedido(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
@@ -2399,11 +2399,7 @@ function Dashboard() {
                                         <button
                                           type="button"
                                           className="avanzar-btn"
-                                          disabled={
-                                            esFinal ||
-                                            otroEditando ||
-                                            pedido.status === 'en-cocina'
-                                          }
+                                          disabled={esFinal || otroEditando}
                                           onClick={() => avanzarPedido(pedido.id)}
                                         >
                                           Avanzar
