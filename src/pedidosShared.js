@@ -16,9 +16,34 @@ export const COCINAS_OPCIONES = [
 ];
 
 export function normalizarCocinaProducto(cocina) {
-  if (cocina === COCINAS.COCINA2) return COCINAS.COCINA2;
-  if (cocina === COCINAS.NINGUNA) return COCINAS.NINGUNA;
+  const valor = String(cocina ?? '').trim().toLowerCase();
+  if (valor === COCINAS.COCINA2) return COCINAS.COCINA2;
+  if (valor === COCINAS.NINGUNA) return COCINAS.NINGUNA;
   return COCINAS.COCINA1;
+}
+
+export function coincideCocina(cocinaA, cocinaB) {
+  return normalizarCocinaProducto(cocinaA) === normalizarCocinaProducto(cocinaB);
+}
+
+export function enriquecerLineasDetalleCocina(pedido, productos = []) {
+  if (!pedido?.lineas_detalle?.length || !productos?.length) {
+    return pedido;
+  }
+
+  const lineas = pedido.lineas_detalle.map((linea) => {
+    const producto = productos.find(
+      (item) => String(item.id) === String(linea.productoId)
+    );
+    if (!producto) return linea;
+
+    return {
+      ...linea,
+      cocina: normalizarCocinaProducto(producto.cocina),
+    };
+  });
+
+  return { ...pedido, lineas_detalle: lineas };
 }
 
 export function etiquetaCocinaProducto(cocina) {
@@ -36,8 +61,8 @@ export function filtrarLineasDetallePorCocina(pedido, cocina) {
     return [];
   }
 
-  return pedido.lineas_detalle.filter(
-    (linea) => normalizarCocinaProducto(linea.cocina) === cocina
+  return pedido.lineas_detalle.filter((linea) =>
+    coincideCocina(linea.cocina, cocina)
   );
 }
 
@@ -62,11 +87,7 @@ export function obtenerStatusCocinaPedido(pedido, cocina) {
   const valor = pedido?.[campo];
   if (valor) return valor;
 
-  if (
-    pedido?.status === 'en-cocina' &&
-    cocina === COCINAS.COCINA1 &&
-    pedidoRequiereCocina(pedido, COCINAS.COCINA1)
-  ) {
+  if (pedido?.status === 'en-cocina' && pedidoRequiereCocina(pedido, cocina)) {
     return STATUS_COCINA.EN_COCINA;
   }
 

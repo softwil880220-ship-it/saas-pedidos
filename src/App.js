@@ -8,6 +8,7 @@ import {
   COCINAS_OPCIONES,
   construirPayloadAvancePedido,
   construirPayloadRetrocesoPedido,
+  enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
   formatearProgresoCocinas,
   mergeStatusCocinasEnEdicion,
@@ -1573,8 +1574,13 @@ function Dashboard() {
     const pedido = pedidos.find((p) => p.id === id);
     if (!pedido) return;
 
-    const payload = construirPayloadAvancePedido(pedido);
+    const pedidoConCocina = enriquecerLineasDetalleCocina(pedido, productos);
+    const payload = construirPayloadAvancePedido(pedidoConCocina);
     if (!payload) return;
+
+    if (pedidoConCocina.lineas_detalle !== pedido.lineas_detalle) {
+      payload.lineas_detalle = pedidoConCocina.lineas_detalle;
+    }
 
     const { error } = await supabase
       .from('pedidos')
@@ -1592,8 +1598,13 @@ function Dashboard() {
     const pedido = pedidos.find((p) => p.id === id);
     if (!pedido || !puedeRetrocederPedido(pedido.status, pedido.tipo_entrega)) return;
 
-    const payload = construirPayloadRetrocesoPedido(pedido);
+    const pedidoConCocina = enriquecerLineasDetalleCocina(pedido, productos);
+    const payload = construirPayloadRetrocesoPedido(pedidoConCocina);
     if (!payload) return;
+
+    if (pedidoConCocina.lineas_detalle !== pedido.lineas_detalle) {
+      payload.lineas_detalle = pedidoConCocina.lineas_detalle;
+    }
 
     const { error } = await supabase
       .from('pedidos')

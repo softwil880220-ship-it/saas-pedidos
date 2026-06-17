@@ -3,10 +3,11 @@ import './App.css';
 import {
   DesgloseProductosPedido,
   construirUpdateAlMarcarCocinaLista,
+  enriquecerLineasDetalleCocina,
   pedidoVisibleEnCocina,
 } from './pedidosShared';
 import { supabase } from './supabase';
-import { usePedidosRealtime } from './usePedidosRealtime';
+import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 
 function formatearHora(createdAt) {
   if (!createdAt) return '—';
@@ -17,7 +18,15 @@ function formatearHora(createdAt) {
 }
 
 export default function VistaCocinaBase({ cocina, titulo, channelName, claseVista }) {
-  const filtrarPedidos = (pedido) => pedidoVisibleEnCocina(pedido, cocina);
+  const { productos } = useProductosRealtime({
+    channelName: `${channelName}-productos`,
+  });
+
+  const filtrarPedidos = (pedido) =>
+    pedidoVisibleEnCocina(
+      enriquecerLineasDetalleCocina(pedido, productos),
+      cocina
+    );
   const compararPedidos = (a, b) =>
     new Date(a.created_at || 0) - new Date(b.created_at || 0);
 
@@ -60,14 +69,17 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
         <p className="vista-operativa-vacio">No hay pedidos en {titulo.toLowerCase()}</p>
       ) : (
         <div className="vista-operativa-grid">
-          {pedidos.map((pedido) => (
+          {pedidos.map((pedido) => {
+            const pedidoEnriquecido = enriquecerLineasDetalleCocina(pedido, productos);
+
+            return (
             <article key={pedido.id} className="vista-operativa-tarjeta">
               <div className="vista-operativa-tarjeta-cabecera">
                 <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
                 <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
               </div>
               <DesgloseProductosPedido
-                pedido={pedido}
+                pedido={pedidoEnriquecido}
                 mostrarTotal
                 filtrarCocina={cocina}
               />
@@ -75,12 +87,13 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
                 type="button"
                 className="vista-operativa-btn listo-btn"
                 disabled={actualizandoId === pedido.id}
-                onClick={() => marcarListo(pedido)}
+                onClick={() => marcarListo(pedidoEnriquecido)}
               >
                 {actualizandoId === pedido.id ? 'Guardando...' : 'Listo'}
               </button>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
