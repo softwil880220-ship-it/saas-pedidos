@@ -1351,13 +1351,7 @@ function Dashboard() {
     }
 
     const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
-    const pedidoPreview = {
-      lineas_detalle: detallePedido.lineas,
-      producto: resumen,
-    };
-    const statusPresencial = esPresencial
-      ? determinarStatusInicialPresencial(pedidoPreview)
-      : null;
+    const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
 
     const payload = {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),

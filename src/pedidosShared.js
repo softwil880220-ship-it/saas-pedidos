@@ -137,21 +137,11 @@ export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsa
     : 'enviado';
 }
 
-export function determinarStatusInicialPresencial(pedido) {
-  const cocinas = prepararStatusCocinasAlEntrar(pedido);
-
-  if (!cocinas.requiereAlgunaCocina) {
-    return {
-      status: 'entregado',
-      status_cocina1: null,
-      status_cocina2: null,
-    };
-  }
-
+export function determinarStatusInicialPresencial() {
   return {
-    status: 'en-cocina',
-    status_cocina1: cocinas.status_cocina1,
-    status_cocina2: cocinas.status_cocina2,
+    status: 'entregado',
+    status_cocina1: null,
+    status_cocina2: null,
   };
 }
 
@@ -285,6 +275,7 @@ export function formatearProgresoCocinas(pedido) {
 }
 
 export function pedidoVisibleEnCocina(pedido, cocina) {
+  if (pedido?.tipo === 'presencial') return false;
   if (!['en-cocina'].includes(pedido?.status)) return false;
   if (!pedidoRequiereCocina(pedido, cocina)) return false;
   return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
