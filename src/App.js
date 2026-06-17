@@ -239,6 +239,12 @@ function formatearNombreClientePedido(pedido) {
   return cliente;
 }
 
+const STATUS_DEFAULT_WHATSAPP_FORM = 'en-cocina';
+
+function statusDefaultFormularioPedido(modoActual) {
+  return modoActual === 'presencial' ? 'por-aceptar' : STATUS_DEFAULT_WHATSAPP_FORM;
+}
+
 function normalizarTipoEntrega(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
     ? TIPOS_ENTREGA.SUCURSAL
@@ -1054,7 +1060,7 @@ function Dashboard() {
     formaPago: '',
     referencia: '',
     lineas: [crearLineaPedido(1)],
-    status: 'por-aceptar',
+    status: STATUS_DEFAULT_WHATSAPP_FORM,
   });
   const [productoForm, setProductoForm] = useState({
     nombre: '',
@@ -1145,7 +1151,7 @@ function Dashboard() {
         formaPago: FORMA_PAGO_DEFAULT_CAJA,
         referencia: '',
         lineas: [crearLineaPedido(1)],
-        status: 'por-aceptar',
+        status: statusDefaultFormularioPedido('presencial'),
       });
     }, 2000);
 
@@ -1171,7 +1177,9 @@ function Dashboard() {
     setForm((prev) => {
       if (name === 'tipoEntrega') {
         const flujo = obtenerFlujoStatus(value);
-        const status = flujo.includes(prev.status) ? prev.status : 'por-aceptar';
+        const status = flujo.includes(prev.status)
+          ? prev.status
+          : STATUS_DEFAULT_WHATSAPP_FORM;
         const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
         return {
           ...prev,
@@ -1246,7 +1254,7 @@ function Dashboard() {
       formaPago: modoActual === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : '',
       referencia: '',
       lineas: [crearLineaPedido(1)],
-      status: 'por-aceptar',
+      status: statusDefaultFormularioPedido(modoActual),
     });
   };
 
@@ -1776,7 +1784,9 @@ function Dashboard() {
       if (!prev) return prev;
       if (name === 'tipoEntrega') {
         const flujo = obtenerFlujoStatus(value);
-        const status = flujo.includes(prev.status) ? prev.status : 'por-aceptar';
+        const status = flujo.includes(prev.status)
+          ? prev.status
+          : STATUS_DEFAULT_WHATSAPP_FORM;
         const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
         return {
           ...prev,
@@ -2087,7 +2097,7 @@ function Dashboard() {
                                 {!esPresencialPedido && (
                                   <div className="formulario-campo">
                                     <label htmlFor={`edit-status-${pedido.id}`}>
-                                      Status
+                                      Estatus del pedido
                                     </label>
                                     <select
                                       id={`edit-status-${pedido.id}`}
@@ -2726,7 +2736,7 @@ function Dashboard() {
                     )}
                   {!esModoPresencial && (
                     <div className="formulario-campo">
-                      <label htmlFor="status">Status</label>
+                      <label htmlFor="status">Estatus del pedido</label>
                       <select
                         id="status"
                         name="status"
