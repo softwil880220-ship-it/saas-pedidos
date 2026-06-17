@@ -701,6 +701,38 @@ function combinarVariantesLinea(...listas) {
   return combinadas;
 }
 
+function lineasFormularioDesdePedido(pedido, listaProductos, catalogosVariantes) {
+  if (pedido?.lineas_detalle?.length) {
+    const parsedFromText = parsearLineasDesdeResumen(
+      pedido.producto,
+      listaProductos,
+      catalogosVariantes
+    );
+
+    return pedido.lineas_detalle.map((linea, index) => {
+      const parsed = parsedFromText[index];
+
+      return {
+        id: index + 1,
+        productoId: linea.productoId
+          ? String(linea.productoId)
+          : parsed?.productoId || '',
+        cantidad: String(linea.cantidad ?? parsed?.cantidad ?? 1),
+        variantes: parsed?.variantes || crearVariantesLineaVacias(),
+      };
+    });
+  }
+
+  const lineas = parsearLineasDesdeResumen(
+    pedido.producto,
+    listaProductos,
+    catalogosVariantes
+  );
+  const conProducto = lineas.filter((linea) => linea.productoId);
+
+  return conProducto.length > 0 ? conProducto : lineas;
+}
+
 function parsearLineasDesdeResumen(textoProducto, listaProductos, catalogosVariantes) {
   if (!textoProducto?.trim()) {
     return [crearLineaPedido(1)];
@@ -1622,8 +1654,8 @@ function Dashboard() {
   };
 
   const iniciarEdicionPedido = (pedido) => {
-    const lineas = parsearLineasDesdeResumen(
-      pedido.producto,
+    const lineas = lineasFormularioDesdePedido(
+      pedido,
       productos,
       catalogosVariantes
     );
