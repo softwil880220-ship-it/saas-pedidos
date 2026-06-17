@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import {
+  construirUrlWhatsApp,
   DesgloseProductosPedido,
   esPedidoWhatsapp,
   siguienteStatus,
@@ -54,23 +55,54 @@ export default function VistaRepartidor() {
         <p className="vista-operativa-vacio">No hay pedidos enviados</p>
       ) : (
         <div className="vista-operativa-grid">
-          {pedidos.map((pedido) => (
-            <article key={pedido.id} className="vista-operativa-tarjeta">
-              <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
-              <p className="vista-operativa-direccion">
-                {pedido.direccion?.trim() || 'Sin dirección registrada'}
-              </p>
-              <DesgloseProductosPedido pedido={pedido} mostrarTotal={false} />
-              <button
-                type="button"
-                className="vista-operativa-btn entregado-btn"
-                disabled={actualizandoId === pedido.id}
-                onClick={() => marcarEntregado(pedido)}
-              >
-                {actualizandoId === pedido.id ? 'Guardando...' : 'Entregado'}
-              </button>
-            </article>
-          ))}
+          {pedidos.map((pedido) => {
+            const urlWhatsApp = construirUrlWhatsApp(pedido.telefono);
+
+            return (
+              <article key={pedido.id} className="vista-operativa-tarjeta">
+                <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
+                {pedido.telefono?.trim() && (
+                  <p className="vista-operativa-telefono">{pedido.telefono.trim()}</p>
+                )}
+                <p className="vista-operativa-direccion">
+                  {pedido.direccion?.trim() || 'Sin dirección registrada'}
+                </p>
+                <DesgloseProductosPedido pedido={pedido} mostrarTotal={false} />
+                <div className="vista-repartidor-acciones">
+                  <a
+                    className={`vista-operativa-btn whatsapp-btn repartidor-whatsapp-btn${
+                      urlWhatsApp ? '' : ' whatsapp-btn-deshabilitado'
+                    }`}
+                    href={urlWhatsApp || '#whatsapp'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={!urlWhatsApp}
+                    title={
+                      urlWhatsApp
+                        ? 'Abrir chat de WhatsApp con el cliente'
+                        : 'Este pedido no tiene teléfono registrado'
+                    }
+                    onClick={(e) => {
+                      if (!urlWhatsApp) e.preventDefault();
+                    }}
+                  >
+                    <span className="whatsapp-btn-icono" aria-hidden="true">
+                      💬
+                    </span>
+                    WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    className="vista-operativa-btn entregado-btn"
+                    disabled={actualizandoId === pedido.id}
+                    onClick={() => marcarEntregado(pedido)}
+                  >
+                    {actualizandoId === pedido.id ? 'Guardando...' : 'Entregado'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

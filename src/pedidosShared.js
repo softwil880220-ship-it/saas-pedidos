@@ -315,6 +315,21 @@ export function anteriorStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
   return flujo[indice - 1];
 }
 
+export function normalizarTelefonoWhatsApp(telefono) {
+  if (!telefono) return '';
+  const digits = String(telefono).replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) return `52${digits}`;
+  return digits;
+}
+
+export function construirUrlWhatsApp(telefono, mensaje = '') {
+  const numero = normalizarTelefonoWhatsApp(telefono);
+  if (!numero) return null;
+  if (!mensaje) return `https://wa.me/${numero}`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+}
+
 export function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
 }

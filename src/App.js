@@ -8,6 +8,7 @@ import {
   COCINAS_OPCIONES,
   construirPayloadAvancePedido,
   construirPayloadRetrocesoPedido,
+  construirUrlWhatsApp,
   determinarStatusInicialPresencial,
   enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
@@ -881,20 +882,6 @@ function obtenerMensajeWhatsAppPedido(pedido) {
   const status = pedido.status || 'por-aceptar';
   const plantilla = MENSAJES_WHATSAPP[status] || MENSAJES_WHATSAPP['por-aceptar'];
   return plantilla(nombre);
-}
-
-function normalizarTelefonoWhatsApp(telefono) {
-  if (!telefono) return '';
-  const digits = String(telefono).replace(/\D/g, '');
-  if (!digits) return '';
-  if (digits.length === 10) return `52${digits}`;
-  return digits;
-}
-
-function construirUrlWhatsApp(telefono, mensaje) {
-  const numero = normalizarTelefonoWhatsApp(telefono);
-  if (!numero) return null;
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 }
 
 function formatearClaveFecha(fecha) {

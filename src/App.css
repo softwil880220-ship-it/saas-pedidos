@@ -1598,6 +1598,26 @@
   color: #334155;
 }
 
+.vista-operativa-telefono {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.vista-repartidor-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: auto;
+  width: 100%;
+}
+
+.repartidor-whatsapp-btn {
+  min-height: 3rem;
+  font-size: 1.05rem;
+}
+
 .vista-operativa-btn {
   width: 100%;
   margin-top: auto;
