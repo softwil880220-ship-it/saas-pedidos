@@ -8,6 +8,7 @@ import {
   COCINAS_OPCIONES,
   construirPayloadAvancePedido,
   construirPayloadRetrocesoPedido,
+  determinarStatusInicialPresencial,
   enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
   formatearProgresoCocinas,
@@ -1234,6 +1235,13 @@ function Dashboard() {
 
     const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const esPresencial = modo === 'presencial';
+    const pedidoPreview = {
+      lineas_detalle: detallePedido.lineas,
+      producto: resumen,
+    };
+    const statusPresencial = esPresencial
+      ? determinarStatusInicialPresencial(pedidoPreview)
+      : null;
 
     const payload = {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
@@ -1241,7 +1249,7 @@ function Dashboard() {
       producto: resumen,
       lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
-      status: esPresencial ? 'entregado' : form.status,
+      status: esPresencial ? statusPresencial.status : form.status,
       tipo: esPresencial ? 'presencial' : 'whatsapp',
       tipo_entrega: esPresencial
         ? TIPOS_ENTREGA.DOMICILIO
@@ -1250,6 +1258,12 @@ function Dashboard() {
         esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
           ? null
           : form.direccion.trim() || null,
+      ...(esPresencial
+        ? {
+            status_cocina1: statusPresencial.status_cocina1,
+            status_cocina2: statusPresencial.status_cocina2,
+          }
+        : {}),
     };
 
     const { data, error } = await supabase

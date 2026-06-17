@@ -129,10 +129,30 @@ export function todasCocinasRequeridasListas(pedido) {
   return true;
 }
 
-export function obtenerStatusGlobalTrasCocinas(tipoEntrega) {
+export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsapp') {
+  if (tipoPedido === 'presencial') return 'entregado';
+
   return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'listo-para-recoger'
     : 'enviado';
+}
+
+export function determinarStatusInicialPresencial(pedido) {
+  const cocinas = prepararStatusCocinasAlEntrar(pedido);
+
+  if (!cocinas.requiereAlgunaCocina) {
+    return {
+      status: 'entregado',
+      status_cocina1: null,
+      status_cocina2: null,
+    };
+  }
+
+  return {
+    status: 'en-cocina',
+    status_cocina1: cocinas.status_cocina1,
+    status_cocina2: cocinas.status_cocina2,
+  };
 }
 
 export function construirUpdateAlMarcarCocinaLista(pedido, cocina) {
@@ -148,7 +168,10 @@ export function construirUpdateAlMarcarCocinaLista(pedido, cocina) {
     pedido.status === 'en-cocina' &&
     todasCocinasRequeridasListas(pedidoActualizado)
   ) {
-    update.status = obtenerStatusGlobalTrasCocinas(pedido.tipo_entrega);
+    update.status = obtenerStatusGlobalTrasCocinas(
+      pedido.tipo_entrega,
+      pedido.tipo
+    );
   }
 
   return update;
@@ -221,7 +244,10 @@ export function construirPayloadAvancePedido(pedido) {
   if (nuevoStatus === 'en-cocina') {
     const cocinas = prepararStatusCocinasAlEntrar(pedido);
     if (!cocinas.requiereAlgunaCocina) {
-      payload.status = obtenerStatusGlobalTrasCocinas(pedido.tipo_entrega);
+      payload.status = obtenerStatusGlobalTrasCocinas(
+        pedido.tipo_entrega,
+        pedido.tipo
+      );
       payload.status_cocina1 = null;
       payload.status_cocina2 = null;
     }
@@ -261,7 +287,7 @@ export function formatearProgresoCocinas(pedido) {
 }
 
 export function pedidoVisibleEnCocina(pedido, cocina) {
-  if (!esPedidoWhatsapp(pedido) || pedido.status !== 'en-cocina') return false;
+  if (pedido.status !== 'en-cocina') return false;
   if (!pedidoRequiereCocina(pedido, cocina)) return false;
   return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
 }
