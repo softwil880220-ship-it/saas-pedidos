@@ -91,6 +91,22 @@ function suscribirPostgresChanges(channel, { schema, table, handler }) {
   });
 }
 
+function crearHandlerRealtime({ filtrar, comparar, ordenarLista, setItems }) {
+  return (payload) => {
+    setItems((prev) =>
+      sincronizarListaConEvento(prev, payload, {
+        filtrar,
+        comparar,
+        ordenar: ordenarLista
+          ? (lista) => ordenarLista(lista)
+          : comparar
+            ? (lista) => [...lista].sort(comparar)
+            : null,
+      })
+    );
+  };
+}
+
 function useSupabaseRealtime({
   table,
   channelName,
@@ -114,6 +130,7 @@ function useSupabaseRealtime({
 
   useEffect(() => {
     let activo = true;
+    let channel = null;
 
     const cargarItems = async () => {
       const { data, error } = await supabase
@@ -127,33 +144,45 @@ function useSupabaseRealtime({
       if (activo) setCargando(false);
     };
 
-    cargarItems();
+    const conectarRealtime = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
 
-    const channel = supabase.channel(channelName);
+      channel = supabase.channel(channelName);
+      suscribirPostgresChanges(channel, {
+        schema: 'public',
+        table,
+        handler: crearHandlerRealtime({
+          filtrar,
+          comparar,
+          ordenarLista,
+          setItems,
+        }),
+      });
+      channel.subscribe();
+    };
 
-    suscribirPostgresChanges(channel, {
-      schema: 'public',
-      table,
-      handler: (payload) => {
-        setItems((prev) =>
-          sincronizarListaConEvento(prev, payload, {
-            filtrar,
-            comparar,
-            ordenar: ordenarLista
-              ? (lista) => ordenarLista(lista)
-              : comparar
-                ? (lista) => [...lista].sort(comparar)
-                : null,
-          })
-        );
-      },
-    });
+    const sincronizar = async () => {
+      await cargarItems();
+      if (activo) conectarRealtime();
+    };
 
-    channel.subscribe();
+    sincronizar();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && activo) {
+        sincronizar();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       activo = false;
-      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [
     table,
