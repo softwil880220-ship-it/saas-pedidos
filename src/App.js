@@ -245,6 +245,14 @@ function statusDefaultFormularioPedido(modoActual) {
   return modoActual === 'presencial' ? 'por-aceptar' : STATUS_DEFAULT_WHATSAPP_FORM;
 }
 
+const TIPO_ENTREGA_SIN_SELECCION = '';
+
+function tipoEntregaWhatsAppSeleccionado(tipoEntrega) {
+  return (
+    tipoEntrega === TIPOS_ENTREGA.DOMICILIO || tipoEntrega === TIPOS_ENTREGA.SUCURSAL
+  );
+}
+
 function normalizarTipoEntrega(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
     ? TIPOS_ENTREGA.SUCURSAL
@@ -1023,7 +1031,7 @@ function contadoresPorFlujo(pedidos, flujo) {
 
 function Dashboard() {
   const [seccion, setSeccion] = useState('pedidos');
-  const [modo, setModo] = useState('whatsapp');
+  const [modo, setModo] = useState('presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
@@ -1053,14 +1061,14 @@ function Dashboard() {
   const nextLineaId = useRef(2);
   const nextEditLineaId = useRef(2);
   const [form, setForm] = useState({
-    cliente: '',
+    cliente: CLIENTE_PUBLICO,
     telefono: '',
-    tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+    tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
     direccion: '',
-    formaPago: '',
+    formaPago: FORMA_PAGO_DEFAULT_CAJA,
     referencia: '',
     lineas: [crearLineaPedido(1)],
-    status: STATUS_DEFAULT_WHATSAPP_FORM,
+    status: statusDefaultFormularioPedido('presencial'),
   });
   const [productoForm, setProductoForm] = useState({
     nombre: '',
@@ -1176,6 +1184,14 @@ function Dashboard() {
     const { name, value } = e.target;
     setForm((prev) => {
       if (name === 'tipoEntrega') {
+        if (!value) {
+          return {
+            ...prev,
+            tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+            direccion: '',
+          };
+        }
+
         const flujo = obtenerFlujoStatus(value);
         const status = flujo.includes(prev.status)
           ? prev.status
@@ -1249,7 +1265,8 @@ function Dashboard() {
     setForm({
       cliente: modoActual === 'presencial' ? CLIENTE_PUBLICO : '',
       telefono: '',
-      tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+      tipoEntrega:
+        modoActual === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : TIPO_ENTREGA_SIN_SELECCION,
       direccion: '',
       formaPago: modoActual === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : '',
       referencia: '',
@@ -1326,8 +1343,14 @@ function Dashboard() {
       return;
     }
 
-    const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const esPresencial = modo === 'presencial';
+
+    if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(form.tipoEntrega)) {
+      setGuardando(false);
+      return;
+    }
+
+    const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const pedidoPreview = {
       lineas_detalle: detallePedido.lineas,
       producto: resumen,
@@ -1783,6 +1806,14 @@ function Dashboard() {
     setPedidoEditForm((prev) => {
       if (!prev) return prev;
       if (name === 'tipoEntrega') {
+        if (!value) {
+          return {
+            ...prev,
+            tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+            direccion: '',
+          };
+        }
+
         const flujo = obtenerFlujoStatus(value);
         const status = flujo.includes(prev.status)
           ? prev.status
@@ -2711,7 +2742,9 @@ function Dashboard() {
                         name="tipoEntrega"
                         value={form.tipoEntrega}
                         onChange={handleFormChange}
+                        required
                       >
+                        <option value="">Seleccionar tipo de entrega…</option>
                         {TIPOS_ENTREGA_OPCIONES.map((opcion) => (
                           <option key={opcion.value} value={opcion.value}>
                             {opcion.icono} {opcion.label}
@@ -2734,7 +2767,7 @@ function Dashboard() {
                         />
                       </div>
                     )}
-                  {!esModoPresencial && (
+                  {!esModoPresencial && tipoEntregaWhatsAppSeleccionado(form.tipoEntrega) && (
                     <div className="formulario-campo">
                       <label htmlFor="status">Estatus del pedido</label>
                       <select
