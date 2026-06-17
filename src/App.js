@@ -209,6 +209,36 @@ function obtenerConfigVariante(key) {
 
 const CLIENTE_PUBLICO = 'Público general';
 
+const FORMAS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'tarjeta', label: 'Tarjeta' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'link_pago', label: 'Link de pago' },
+];
+
+const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
+
+function etiquetaFormaPago(valor) {
+  return FORMAS_PAGO.find((forma) => forma.value === valor)?.label || null;
+}
+
+function normalizarFormaPagoPayload(valor) {
+  const forma = String(valor ?? '').trim();
+  if (!forma) return null;
+  return FORMAS_PAGO.some((item) => item.value === forma) ? forma : null;
+}
+
+function formatearNombreClientePedido(pedido) {
+  const cliente = pedido.cliente?.trim() || CLIENTE_PUBLICO;
+  const referencia = pedido.referencia?.trim();
+
+  if (referencia) {
+    return `${cliente} — ${referencia}`;
+  }
+
+  return cliente;
+}
+
 function normalizarTipoEntrega(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
     ? TIPOS_ENTREGA.SUCURSAL
@@ -1021,6 +1051,8 @@ function Dashboard() {
     telefono: '',
     tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
     direccion: '',
+    formaPago: '',
+    referencia: '',
     lineas: [crearLineaPedido(1)],
     status: 'por-aceptar',
   });
@@ -1110,6 +1142,8 @@ function Dashboard() {
         telefono: '',
         tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
         direccion: '',
+        formaPago: FORMA_PAGO_DEFAULT_CAJA,
+        referencia: '',
         lineas: [crearLineaPedido(1)],
         status: 'por-aceptar',
       });
@@ -1209,6 +1243,8 @@ function Dashboard() {
       telefono: '',
       tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
       direccion: '',
+      formaPago: modoActual === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : '',
+      referencia: '',
       lineas: [crearLineaPedido(1)],
       status: 'por-aceptar',
     });
@@ -1307,6 +1343,8 @@ function Dashboard() {
         esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
           ? null
           : form.direccion.trim() || null,
+      forma_pago: normalizarFormaPagoPayload(form.formaPago),
+      referencia: esPresencial ? form.referencia.trim() || null : null,
       ...(esPresencial
         ? {
             status_cocina1: statusPresencial.status_cocina1,
@@ -1334,6 +1372,8 @@ function Dashboard() {
         setResumenVenta({
           producto: resumen,
           total: detallePedido.total,
+          referencia: form.referencia.trim(),
+          formaPago: form.formaPago,
         });
       } else {
         resetFormPedido();
@@ -1721,6 +1761,10 @@ function Dashboard() {
       telefono: pedidoFuente.telefono || '',
       tipoEntrega: normalizarTipoEntrega(pedidoFuente.tipo_entrega),
       direccion: pedidoFuente.direccion || '',
+      formaPago:
+        pedidoFuente.forma_pago ||
+        (pedidoFuente.tipo === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : ''),
+      referencia: pedidoFuente.referencia || '',
       status: pedidoFuente.status || 'por-aceptar',
       lineas,
     });
@@ -1871,14 +1915,17 @@ function Dashboard() {
       producto: resumen,
       lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
+      forma_pago: normalizarFormaPagoPayload(pedidoEditForm.formaPago),
       ...(esPresencial
         ? {
             cliente: CLIENTE_PUBLICO,
+            referencia: pedidoEditForm.referencia?.trim() || null,
             status: 'entregado',
             tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
           }
         : {
             cliente: pedidoEditForm.cliente.trim(),
+            referencia: null,
             telefono: pedidoEditForm.telefono?.trim() || null,
             tipo_entrega: normalizarTipoEntrega(pedidoEditForm.tipoEntrega),
             direccion:
@@ -1999,6 +2046,43 @@ function Dashboard() {
                                       />
                                     </div>
                                   )}
+
+                                {esPresencialPedido && (
+                                  <div className="formulario-campo">
+                                    <label htmlFor={`edit-referencia-${pedido.id}`}>
+                                      Referencia / Nombre
+                                    </label>
+                                    <input
+                                      id={`edit-referencia-${pedido.id}`}
+                                      name="referencia"
+                                      type="text"
+                                      placeholder="Opcional"
+                                      value={pedidoEditForm.referencia}
+                                      onChange={handlePedidoEditChange}
+                                    />
+                                  </div>
+                                )}
+
+                                <div className="formulario-campo">
+                                  <label htmlFor={`edit-forma-pago-${pedido.id}`}>
+                                    Forma de pago
+                                  </label>
+                                  <select
+                                    id={`edit-forma-pago-${pedido.id}`}
+                                    name="formaPago"
+                                    value={pedidoEditForm.formaPago}
+                                    onChange={handlePedidoEditChange}
+                                  >
+                                    {!esPresencialPedido && (
+                                      <option value="">Sin especificar</option>
+                                    )}
+                                    {FORMAS_PAGO.map((forma) => (
+                                      <option key={forma.value} value={forma.value}>
+                                        {forma.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
 
                                 {!esPresencialPedido && (
                                   <div className="formulario-campo">
@@ -2253,7 +2337,9 @@ function Dashboard() {
                                     ? formatearHora(new Date(pedido.created_at))
                                     : '—'}
                                 </span>
-                                <span className="reporte-cliente">{pedido.cliente}</span>
+                                <span className="reporte-cliente">
+                                  {formatearNombreClientePedido(pedido)}
+                                </span>
                                 <span className="reporte-productos">
                                   {pedido.producto || '—'}
                                 </span>
@@ -2312,7 +2398,9 @@ function Dashboard() {
                         return (
                           <article key={pedido.id} className="pedido-tarjeta">
                             <div className="pedido-tarjeta-cabecera">
-                              <h2 className="pedido-cliente">{pedido.cliente}</h2>
+                              <h2 className="pedido-cliente">
+                                {formatearNombreClientePedido(pedido)}
+                              </h2>
                               <time
                                 className="pedido-hora"
                                 dateTime={pedido.created_at}
@@ -2325,6 +2413,11 @@ function Dashboard() {
                               productos={productos}
                               catalogosVariantes={catalogosVariantes}
                             />
+                            {etiquetaFormaPago(pedido.forma_pago) && (
+                              <p className="pedido-forma-pago">
+                                Forma de pago: {etiquetaFormaPago(pedido.forma_pago)}
+                              </p>
+                            )}
                             {!esModoPresencial && (
                               <p className="pedido-tipo-entrega">
                                 {formatearTipoEntrega(pedido.tipo_entrega)}
@@ -2538,7 +2631,18 @@ function Dashboard() {
             {resumenVenta && esModoPresencial && (
               <section className="venta-resumen">
                 <h3 className="venta-resumen-titulo">Venta registrada</h3>
-                <p className="venta-resumen-cliente">Cliente: {CLIENTE_PUBLICO}</p>
+                <p className="venta-resumen-cliente">
+                  Cliente:{' '}
+                  {formatearNombreClientePedido({
+                    cliente: CLIENTE_PUBLICO,
+                    referencia: resumenVenta.referencia,
+                  })}
+                </p>
+                {etiquetaFormaPago(resumenVenta.formaPago) && (
+                  <p className="venta-resumen-forma-pago">
+                    Forma de pago: {etiquetaFormaPago(resumenVenta.formaPago)}
+                  </p>
+                )}
                 <p className="venta-resumen-productos">{resumenVenta.producto}</p>
                 <p className="venta-resumen-total">
                   Total: ${resumenVenta.total.toFixed(2)}
@@ -2637,6 +2741,35 @@ function Dashboard() {
                       </select>
                     </div>
                   )}
+                  {esModoPresencial && (
+                    <div className="formulario-campo">
+                      <label htmlFor="referencia">Referencia / Nombre</label>
+                      <input
+                        id="referencia"
+                        name="referencia"
+                        type="text"
+                        placeholder="Opcional"
+                        value={form.referencia}
+                        onChange={handleFormChange}
+                      />
+                    </div>
+                  )}
+                  <div className="formulario-campo">
+                    <label htmlFor="formaPago">Forma de pago</label>
+                    <select
+                      id="formaPago"
+                      name="formaPago"
+                      value={form.formaPago}
+                      onChange={handleFormChange}
+                    >
+                      {!esModoPresencial && <option value="">Sin especificar</option>}
+                      {FORMAS_PAGO.map((forma) => (
+                        <option key={forma.value} value={forma.value}>
+                          {forma.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="pedido-lineas">
