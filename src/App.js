@@ -701,36 +701,105 @@ function combinarVariantesLinea(...listas) {
   return combinadas;
 }
 
-function lineasFormularioDesdePedido(pedido, listaProductos, catalogosVariantes) {
-  if (pedido?.lineas_detalle?.length) {
-    const parsedFromText = parsearLineasDesdeResumen(
-      pedido.producto,
-      listaProductos,
-      catalogosVariantes
-    );
+function normalizarLineasDetallePedido(pedido) {
+  const raw = pedido?.lineas_detalle;
 
-    return pedido.lineas_detalle.map((linea, index) => {
-      const parsed = parsedFromText[index];
-
-      return {
-        id: index + 1,
-        productoId: linea.productoId
-          ? String(linea.productoId)
-          : parsed?.productoId || '',
-        cantidad: String(linea.cantidad ?? parsed?.cantidad ?? 1),
-        variantes: parsed?.variantes || crearVariantesLineaVacias(),
-      };
-    });
+  if (Array.isArray(raw)) {
+    return raw;
   }
 
-  const lineas = parsearLineasDesdeResumen(
-    pedido.producto,
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function productoIdDesdeLineaDetalle(linea, listaProductos) {
+  if (linea?.productoId != null && linea.productoId !== '') {
+    return String(linea.productoId);
+  }
+
+  if (linea?.nombre) {
+    const producto = listaProductos.find((item) => item.nombre === linea.nombre);
+    if (producto) return String(producto.id);
+  }
+
+  return '';
+}
+
+function variantesFormularioDesdeLineaDetalle(linea, listaProductos, catalogosVariantes) {
+  if (!linea?.descripcion?.trim()) {
+    return crearVariantesLineaVacias();
+  }
+
+  const parsed = parsearLineaPedidoDesdeTexto(
+    linea.descripcion,
     listaProductos,
     catalogosVariantes
   );
-  const conProducto = lineas.filter((linea) => linea.productoId);
 
-  return conProducto.length > 0 ? conProducto : lineas;
+  return parsed?.variantes || crearVariantesLineaVacias();
+}
+
+function lineasFormularioDesdePedido(pedido, listaProductos, catalogosVariantes) {
+  const lineasDetalle = normalizarLineasDetallePedido(pedido);
+
+  if (lineasDetalle.length > 0) {
+    return lineasDetalle.map((linea, index) => ({
+      id: index + 1,
+      productoId: productoIdDesdeLineaDetalle(linea, listaProductos),
+      cantidad: String(Math.max(1, parseInt(linea.cantidad, 10) || 1)),
+      variantes: variantesFormularioDesdeLineaDetalle(
+        linea,
+        listaProductos,
+        catalogosVariantes
+      ),
+    }));
+  }
+
+  return [crearLineaPedido(1)];
+}
+
+function parsearLineaPedidoDesdeTexto(parte, listaProductos, catalogosVariantes, id = 1) {
+  let textoBase = parte;
+  let variantes = crearVariantesLineaVacias();
+
+  const matchVariantes = parte.match(/^(.+?)\s*\((.+)\)$/);
+  if (matchVariantes) {
+    textoBase = matchVariantes[1].trim();
+    const detalles = matchVariantes[2].split('; ').map((d) => d.trim());
+    const variantesParseadas = detalles.map((detalle) =>
+      parsearDetalleVariantes(detalle, catalogosVariantes)
+    );
+    variantes = combinarVariantesLinea(...variantesParseadas);
+  }
+
+  const match = textoBase.match(/^(.+?) x(\d+)$/);
+  let nombre;
+  let cantidad;
+
+  if (match) {
+    nombre = match[1];
+    cantidad = match[2];
+  } else {
+    nombre = textoBase;
+    cantidad = '1';
+  }
+
+  const producto = listaProductos.find((p) => p.nombre === nombre);
+
+  return {
+    id,
+    productoId: producto ? String(producto.id) : '',
+    cantidad,
+    variantes,
+  };
 }
 
 function parsearLineasDesdeResumen(textoProducto, listaProductos, catalogosVariantes) {
@@ -741,41 +810,12 @@ function parsearLineasDesdeResumen(textoProducto, listaProductos, catalogosVaria
   const partes = textoProducto.split(', ').map((s) => s.trim()).filter(Boolean);
   let id = 1;
 
-  return partes.map((parte) => {
-    let textoBase = parte;
-    let variantes = crearVariantesLineaVacias();
-
-    const matchVariantes = parte.match(/^(.+?)\s*\((.+)\)$/);
-    if (matchVariantes) {
-      textoBase = matchVariantes[1].trim();
-      const detalles = matchVariantes[2].split('; ').map((d) => d.trim());
-      const variantesParseadas = detalles.map((detalle) =>
-        parsearDetalleVariantes(detalle, catalogosVariantes)
-      );
-      variantes = combinarVariantesLinea(...variantesParseadas);
-    }
-
-    const match = textoBase.match(/^(.+?) x(\d+)$/);
-    let nombre;
-    let cantidad;
-
-    if (match) {
-      nombre = match[1];
-      cantidad = match[2];
-    } else {
-      nombre = textoBase;
-      cantidad = '1';
-    }
-
-    const producto = listaProductos.find((p) => p.nombre === nombre);
-
-    return {
-      id: id++,
-      productoId: producto ? String(producto.id) : '',
-      cantidad,
-      variantes,
-    };
-  });
+  return partes.map((parte) => parsearLineaPedidoDesdeTexto(
+    parte,
+    listaProductos,
+    catalogosVariantes,
+    id++
+  ));
 }
 
 function esPedidoWhatsapp(pedido) {
@@ -1653,20 +1693,35 @@ function Dashboard() {
     setPedidoEditForm(null);
   };
 
-  const iniciarEdicionPedido = (pedido) => {
+  const iniciarEdicionPedido = async (pedido) => {
+    let pedidoFuente = pedido;
+
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('*')
+      .eq('id', pedido.id)
+      .single();
+
+    if (!error && data) {
+      pedidoFuente = data;
+      setPedidos((prev) =>
+        prev.map((item) => (item.id === data.id ? { ...item, ...data } : item))
+      );
+    }
+
     const lineas = lineasFormularioDesdePedido(
-      pedido,
+      pedidoFuente,
       productos,
       catalogosVariantes
     );
     nextEditLineaId.current = lineas.length + 1;
     setEditandoPedidoId(pedido.id);
     setPedidoEditForm({
-      cliente: pedido.cliente,
-      telefono: pedido.telefono || '',
-      tipoEntrega: normalizarTipoEntrega(pedido.tipo_entrega),
-      direccion: pedido.direccion || '',
-      status: pedido.status || 'por-aceptar',
+      cliente: pedidoFuente.cliente,
+      telefono: pedidoFuente.telefono || '',
+      tipoEntrega: normalizarTipoEntrega(pedidoFuente.tipo_entrega),
+      direccion: pedidoFuente.direccion || '',
+      status: pedidoFuente.status || 'por-aceptar',
       lineas,
     });
   };

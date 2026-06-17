@@ -57,7 +57,7 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
     if (cumple(registro)) {
       if (enLista) {
         const next = [...prev];
-        next[index] = registro;
+        next[index] = { ...prev[index], ...registro };
         return aplicarOrden(next);
       }
       return aplicarOrden([...prev, registro]);
