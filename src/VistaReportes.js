@@ -198,6 +198,12 @@ export default function VistaReportes() {
 
           <div className="reportes-resumen">
             <article className="reportes-resumen-card">
+              <span className="reportes-resumen-label">Período activo</span>
+              <span className="reportes-resumen-valor reportes-resumen-valor-periodo">
+                {etiquetaPeriodoReporte(configPeriodo)}
+              </span>
+            </article>
+            <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Total de pedidos</span>
               <span className="reportes-resumen-valor">{resumen.totalPedidos}</span>
             </article>

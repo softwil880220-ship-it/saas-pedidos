@@ -78,29 +78,35 @@ export function obtenerRangoPeriodoReporte(periodo) {
   return obtenerRangoReporte({ periodo });
 }
 
+const MESES_CORTOS_ES = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+];
+
+export function formatoFechaTarjetaPeriodo(fecha) {
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  const mes = MESES_CORTOS_ES[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+  return `${dia} ${mes} ${anio}`;
+}
+
 export function etiquetaPeriodoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
   const { inicio, fin, tipo } = obtenerRangoReporte({ periodo, fechaDesde, fechaHasta });
-  const formatoCorto = (fecha) =>
-    fecha.toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
 
   if (tipo === 'personalizado') {
     if (inicio.toDateString() === fin.toDateString()) {
-      return `Rango personalizado · ${formatoCorto(inicio)}`;
+      return `Rango personalizado • ${formatoFechaTarjetaPeriodo(inicio)}`;
     }
 
-    return `Rango personalizado · ${formatoCorto(inicio)} – ${formatoCorto(fin)}`;
+    return `Rango personalizado • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
   }
 
   if (tipo === PERIODOS_REPORTE.MES) {
     const mes = inicio.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
-    return `Mes actual (${mes}) · hasta ${formatoCorto(fin)}`;
+    return `Mes actual (${mes}) • hasta ${formatoFechaTarjetaPeriodo(fin)}`;
   }
 
-  return `Semana actual (lun – hoy) · ${formatoCorto(inicio)} – ${formatoCorto(fin)}`;
+  return `Semana actual (lunes - hoy) • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
 }
 
 export function etiquetaFiltroVentaReporte(filtro) {
