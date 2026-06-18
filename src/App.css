@@ -1758,6 +1758,13 @@
   margin-top: 0.65rem;
 }
 
+.reportes-rango-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: #b91c1c;
+  font-weight: 500;
+}
+
 .reportes-fecha-campo {
   display: flex;
   flex-direction: column;
@@ -1870,10 +1877,22 @@
 }
 
 .reportes-resumen-valor-periodo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   font-size: 0.95rem;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.4;
   font-variant-numeric: normal;
+}
+
+.reportes-periodo-descripcion {
+  color: #14532d;
+}
+
+.reportes-periodo-fechas {
+  color: #166534;
+  font-weight: 500;
 }
 
 .reportes-error {

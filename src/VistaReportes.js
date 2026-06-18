@@ -3,10 +3,12 @@ import './App.css';
 import DashboardNav from './DashboardNav';
 import {
   calcularResumenReporte,
+  descripcionPeriodoTarjeta,
   etiquetaFiltroVentaReporte,
   etiquetaPeriodoReporte,
   etiquetaTipoEntregaReporte,
   exportarReportePdf,
+  fechasPeriodoTarjeta,
   FILTROS_VENTA_REPORTE,
   filtrarPedidosReporte,
   formatearClienteReporte,
@@ -14,6 +16,7 @@ import {
   formatearProductosReporte,
   obtenerRangoReporte,
   PERIODOS_REPORTE,
+  rangoFechasInvalido,
   rangoPersonalizadoActivo,
 } from './reportesHelpers';
 import { supabase } from './supabase';
@@ -33,9 +36,18 @@ export default function VistaReportes() {
   );
 
   const usaRangoPersonalizado = rangoPersonalizadoActivo(fechaDesde, fechaHasta);
+  const rangoInvalido = rangoFechasInvalido(fechaDesde, fechaHasta);
+  const reporteDeshabilitado = rangoInvalido;
 
   useEffect(() => {
     let activo = true;
+
+    if (rangoInvalido) {
+      setCargando(false);
+      setError(null);
+      setPedidos([]);
+      return undefined;
+    }
 
     const cargarPedidos = async () => {
       setCargando(true);
@@ -66,7 +78,7 @@ export default function VistaReportes() {
     return () => {
       activo = false;
     };
-  }, [configPeriodo]);
+  }, [configPeriodo, rangoInvalido]);
 
   const pedidosFiltrados = useMemo(
     () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
@@ -162,6 +174,11 @@ export default function VistaReportes() {
                   />
                 </label>
               </div>
+              {rangoInvalido ? (
+                <p className="reportes-rango-error" role="alert">
+                  La fecha inicial no puede ser mayor a la fecha final
+                </p>
+              ) : null}
             </div>
 
             <div className="reportes-control-grupo reportes-control-grupo-filtro">
@@ -186,7 +203,7 @@ export default function VistaReportes() {
               type="button"
               className="reportes-exportar-btn"
               onClick={exportarPdf}
-              disabled={cargando}
+              disabled={cargando || reporteDeshabilitado}
             >
               Exportar PDF
             </button>
@@ -199,9 +216,14 @@ export default function VistaReportes() {
           <div className="reportes-resumen">
             <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Período activo</span>
-              <span className="reportes-resumen-valor reportes-resumen-valor-periodo">
-                {etiquetaPeriodoReporte(configPeriodo)}
-              </span>
+              <div className="reportes-resumen-valor reportes-resumen-valor-periodo">
+                <span className="reportes-periodo-descripcion">
+                  {descripcionPeriodoTarjeta(configPeriodo)}
+                </span>
+                <span className="reportes-periodo-fechas">
+                  {fechasPeriodoTarjeta(configPeriodo)}
+                </span>
+              </div>
             </article>
             <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Total de pedidos</span>
@@ -215,7 +237,11 @@ export default function VistaReportes() {
             </article>
           </div>
 
-          {cargando ? (
+          {reporteDeshabilitado ? (
+            <p className="dashboard-vacio reportes-error">
+              Corrige el rango de fechas para ver el reporte.
+            </p>
+          ) : cargando ? (
             <p className="dashboard-vacio">Cargando pedidos...</p>
           ) : error ? (
             <p className="dashboard-vacio reportes-error">{error}</p>

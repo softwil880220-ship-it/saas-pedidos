@@ -50,14 +50,29 @@ export function rangoPersonalizadoActivo(fechaDesde, fechaHasta) {
   return Boolean(fechaDesde?.trim() && fechaHasta?.trim());
 }
 
+export function rangoFechasInvalido(fechaDesde, fechaHasta) {
+  if (!rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
+    return false;
+  }
+
+  const desde = parsearFechaLocal(fechaDesde);
+  const hasta = parsearFechaLocal(fechaHasta);
+
+  return Boolean(desde && hasta && desde > hasta);
+}
+
 export function obtenerRangoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
   if (rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
     const desde = parsearFechaLocal(fechaDesde);
     const hasta = parsearFechaLocal(fechaHasta);
 
     if (desde && hasta) {
-      const inicio = inicioDelDia(desde <= hasta ? desde : hasta);
-      const fin = finDelDia(desde <= hasta ? hasta : desde);
+      if (desde > hasta) {
+        return { inicio: null, fin: null, tipo: 'personalizado', invalido: true };
+      }
+
+      const inicio = inicioDelDia(desde);
+      const fin = finDelDia(hasta);
       return { inicio, fin, tipo: 'personalizado' };
     }
   }
@@ -90,24 +105,48 @@ export function formatoFechaTarjetaPeriodo(fecha) {
   return `${dia} ${mes} ${anio}`;
 }
 
-export function etiquetaPeriodoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
-  const { inicio, fin, tipo } = obtenerRangoReporte({ periodo, fechaDesde, fechaHasta });
-
-  if (tipo === 'personalizado') {
-    if (inicio.toDateString() === fin.toDateString()) {
-      return `Rango personalizado • ${formatoFechaTarjetaPeriodo(inicio)}`;
-    }
-
-    return `Rango personalizado • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
+function obtenerFechasRangoPeriodo({ periodo, fechaDesde = '', fechaHasta = '' }) {
+  if (rangoFechasInvalido(fechaDesde, fechaHasta)) {
+    const desde = parsearFechaLocal(fechaDesde);
+    const hasta = parsearFechaLocal(fechaHasta);
+    return { inicio: desde, fin: hasta };
   }
 
-  if (tipo === PERIODOS_REPORTE.MES) {
+  const { inicio, fin } = obtenerRangoReporte({ periodo, fechaDesde, fechaHasta });
+  return { inicio, fin };
+}
+
+export function descripcionPeriodoTarjeta({ periodo, fechaDesde = '', fechaHasta = '' }) {
+  if (rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
+    return 'Rango personalizado';
+  }
+
+  if (periodo === PERIODOS_REPORTE.MES) {
+    const hoy = new Date();
+    const inicio = inicioDelDia(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
     const mesNombre = inicio.toLocaleDateString('es-MX', { month: 'long' });
-    const mes = `${mesNombre} ${inicio.getFullYear()}`;
-    return `Mes actual (${mes}) • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
+    return `Mes actual (${mesNombre} ${inicio.getFullYear()})`;
   }
 
-  return `Semana actual (lunes - hoy) • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
+  return 'Semana actual (lunes - hoy)';
+}
+
+export function fechasPeriodoTarjeta(configPeriodo) {
+  const { inicio, fin } = obtenerFechasRangoPeriodo(configPeriodo);
+
+  if (!inicio || !fin) {
+    return '—';
+  }
+
+  if (inicio.toDateString() === fin.toDateString()) {
+    return formatoFechaTarjetaPeriodo(inicio);
+  }
+
+  return `${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
+}
+
+export function etiquetaPeriodoReporte(configPeriodo) {
+  return `${descripcionPeriodoTarjeta(configPeriodo)} ${fechasPeriodoTarjeta(configPeriodo)}`;
 }
 
 export function etiquetaFiltroVentaReporte(filtro) {
@@ -116,8 +155,14 @@ export function etiquetaFiltroVentaReporte(filtro) {
 
 export function pedidoDentroDePeriodo(pedido, configPeriodo) {
   if (!pedido?.created_at) return false;
+  if (rangoFechasInvalido(configPeriodo.fechaDesde, configPeriodo.fechaHasta)) {
+    return false;
+  }
+
   const fecha = new Date(pedido.created_at);
   const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+  if (!inicio || !fin) return false;
+
   return fecha >= inicio && fecha <= fin;
 }
 
