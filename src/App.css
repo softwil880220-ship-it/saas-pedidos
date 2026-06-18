@@ -465,6 +465,13 @@
   border-radius: 6px;
 }
 
+.formulario-error-guardar {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #b91c1c;
+}
+
 .formulario-campo input[readonly] {
   background: #f8fafc;
   color: #64748b;

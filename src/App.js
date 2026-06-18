@@ -1013,6 +1013,20 @@ function contadoresPorFlujo(pedidos, flujo) {
   }));
 }
 
+function crearIdOptimisticoPedido() {
+  return `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ordenarPedidosDesc(pedidos) {
+  return [...pedidos].sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+  );
+}
+
+function clonarFormPedido(form) {
+  return JSON.parse(JSON.stringify(form));
+}
+
 function Dashboard() {
   const location = useLocation();
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
@@ -1067,10 +1081,10 @@ function Dashboard() {
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
   const [pedidoEditForm, setPedidoEditForm] = useState(null);
-  const [guardando, setGuardando] = useState(false);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [guardandoVariante, setGuardandoVariante] = useState(false);
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
+  const [errorGuardarPedido, setErrorGuardarPedido] = useState(null);
   const [pagoRecibido, setPagoRecibido] = useState('');
   const [fechaActual, setFechaActual] = useState(() => Date.now());
 
@@ -1166,6 +1180,7 @@ function Dashboard() {
   }, []);
 
   const handleFormChange = (e) => {
+    setErrorGuardarPedido(null);
     const { name, value } = e.target;
     setForm((prev) => {
       if (name === 'tipoEntrega') {
@@ -1262,6 +1277,7 @@ function Dashboard() {
 
   const cambiarModo = (nuevoModo) => {
     setModo(nuevoModo);
+    setErrorGuardarPedido(null);
     setFiltroDomicilio('todos');
     setFiltroSucursal('todos');
     setFiltroFecha(obtenerFechaHoy());
@@ -1313,9 +1329,9 @@ function Dashboard() {
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setGuardando(true);
+    setErrorGuardarPedido(null);
 
     const detallePedido = calcularDetalleLineasPedido(
       form.lineas,
@@ -1324,19 +1340,20 @@ function Dashboard() {
     );
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
-      setGuardando(false);
       return;
     }
 
     const esPresencial = modo === 'presencial';
 
     if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(form.tipoEntrega)) {
-      setGuardando(false);
       return;
     }
 
     const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
+    const snapshotForm = clonarFormPedido(form);
+    const snapshotPagoRecibido = pagoRecibido;
+    const snapshotResumenVenta = resumenVenta;
 
     const payload = {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
@@ -1363,32 +1380,59 @@ function Dashboard() {
         : {}),
     };
 
-    const { data, error } = await supabase
-      .from('pedidos')
-      .insert(payload)
-      .select()
-      .single();
+    const optimisticId = crearIdOptimisticoPedido();
+    const ahora = new Date().toISOString();
+    const pedidoOptimista = {
+      id: optimisticId,
+      ...payload,
+      created_at: ahora,
+      updated_at: ahora,
+    };
 
-    setGuardando(false);
+    setPedidos((prev) => ordenarPedidosDesc([...prev, pedidoOptimista]));
 
-    if (!error && data) {
-      setPedidos((prev) =>
-        [...prev, data].sort(
-          (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-        )
-      );
-
-      if (esPresencial) {
-        setResumenVenta({
-          producto: resumen,
-          total: detallePedido.total,
-          referencia: form.referencia.trim(),
-          formaPago: form.formaPago,
-        });
-      } else {
-        resetFormPedido();
-      }
+    if (esPresencial) {
+      setResumenVenta({
+        producto: resumen,
+        total: detallePedido.total,
+        referencia: form.referencia.trim(),
+        formaPago: form.formaPago,
+      });
     }
+
+    resetFormPedido();
+
+    const revertirGuardadoOptimista = () => {
+      setPedidos((prev) => prev.filter((pedido) => pedido.id !== optimisticId));
+      setForm(snapshotForm);
+      setPagoRecibido(snapshotPagoRecibido);
+      setResumenVenta(snapshotResumenVenta);
+      setErrorGuardarPedido('No se pudo guardar, intenta de nuevo.');
+    };
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error || !data) {
+        revertirGuardadoOptimista();
+        return;
+      }
+
+      setPedidos((prev) => {
+        const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
+        const existe = sinOptimistico.some((pedido) => pedido.id === data.id);
+
+        if (existe) {
+          return ordenarPedidosDesc(sinOptimistico);
+        }
+
+        return ordenarPedidosDesc([...sinOptimistico, data]);
+      });
+    })();
   };
 
   const resetProductoForm = () => {
@@ -2909,14 +2953,15 @@ function Dashboard() {
                   <button
                     type="submit"
                     className="guardar-btn"
-                    disabled={guardando || productos.length === 0 || totalPedido <= 0}
+                    disabled={productos.length === 0 || totalPedido <= 0}
                   >
-                    {guardando
-                      ? 'Guardando...'
-                      : esModoPresencial
-                        ? 'Registrar venta'
-                        : 'Guardar pedido'}
+                    {esModoPresencial ? 'Registrar venta' : 'Guardar pedido'}
                   </button>
+                  {errorGuardarPedido ? (
+                    <p className="formulario-error-guardar" role="alert">
+                      {errorGuardarPedido}
+                    </p>
+                  ) : null}
                 </div>
               </form>
               {productos.length === 0 && (
