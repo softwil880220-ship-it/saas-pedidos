@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import './App.css';
+import DashboardNav from './DashboardNav';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
@@ -24,6 +25,7 @@ import {
 import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
+import VistaReportes from './VistaReportes';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -73,11 +75,6 @@ function crearFiltrosPorFlujo(flujo) {
 
 const FILTROS_DOMICILIO = crearFiltrosPorFlujo(STATUS_FLOW_DOMICILIO);
 const FILTROS_SUCURSAL = crearFiltrosPorFlujo(STATUS_FLOW_SUCURSAL);
-
-const SECCIONES = [
-  { value: 'pedidos', label: 'Pedidos' },
-  { value: 'catalogo', label: 'Catálogo de productos' },
-];
 
 const MODOS = [
   { value: 'presencial', label: 'Modo Caja' },
@@ -1017,7 +1014,8 @@ function contadoresPorFlujo(pedidos, flujo) {
 }
 
 function Dashboard() {
-  const [seccion, setSeccion] = useState('pedidos');
+  const location = useLocation();
+  const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const [modo, setModo] = useState('presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
@@ -2622,18 +2620,7 @@ function Dashboard() {
       </header>
 
       <main className="dashboard-main">
-        <nav className="dashboard-nav">
-          {SECCIONES.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              className={`nav-btn${seccion === value ? ' activo' : ''}`}
-              onClick={() => setSeccion(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <DashboardNav activo={seccion} />
 
         {seccion === 'pedidos' && (
           <>
@@ -3380,6 +3367,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/catalogo" element={<Dashboard />} />
+        <Route path="/reportes" element={<VistaReportes />} />
         <Route path="/cocina" element={<VistaCocina />} />
         <Route path="/cocina2" element={<VistaCocina2 />} />
         <Route path="/repartidor" element={<VistaRepartidor />} />
