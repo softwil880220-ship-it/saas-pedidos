@@ -12,17 +12,27 @@ import {
   formatearClienteReporte,
   formatearFechaPedidoReporte,
   formatearProductosReporte,
-  obtenerRangoPeriodoReporte,
+  obtenerRangoReporte,
   PERIODOS_REPORTE,
+  rangoPersonalizadoActivo,
 } from './reportesHelpers';
 import { supabase } from './supabase';
 
 export default function VistaReportes() {
   const [periodo, setPeriodo] = useState(PERIODOS_REPORTE.SEMANA);
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [filtroVenta, setFiltroVenta] = useState('todos');
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const configPeriodo = useMemo(
+    () => ({ periodo, fechaDesde, fechaHasta }),
+    [periodo, fechaDesde, fechaHasta]
+  );
+
+  const usaRangoPersonalizado = rangoPersonalizadoActivo(fechaDesde, fechaHasta);
 
   useEffect(() => {
     let activo = true;
@@ -31,11 +41,12 @@ export default function VistaReportes() {
       setCargando(true);
       setError(null);
 
-      const { inicio } = obtenerRangoPeriodoReporte(periodo);
+      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
       const { data, error: errorConsulta } = await supabase
         .from('pedidos')
         .select('*')
         .gte('created_at', inicio.toISOString())
+        .lte('created_at', fin.toISOString())
         .order('created_at', { ascending: false });
 
       if (!activo) return;
@@ -55,11 +66,11 @@ export default function VistaReportes() {
     return () => {
       activo = false;
     };
-  }, [periodo]);
+  }, [configPeriodo]);
 
   const pedidosFiltrados = useMemo(
-    () => filtrarPedidosReporte(pedidos, periodo, filtroVenta),
-    [pedidos, periodo, filtroVenta]
+    () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
+    [pedidos, configPeriodo, filtroVenta]
   );
 
   const resumen = useMemo(
@@ -67,9 +78,21 @@ export default function VistaReportes() {
     [pedidosFiltrados]
   );
 
+  const seleccionarSemana = () => {
+    setPeriodo(PERIODOS_REPORTE.SEMANA);
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
+  const seleccionarMes = () => {
+    setPeriodo(PERIODOS_REPORTE.MES);
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
   const exportarPdf = () => {
     exportarReportePdf({
-      periodo,
+      configPeriodo,
       filtroVenta,
       resumen,
       pedidos: pedidosFiltrados,
@@ -81,7 +104,9 @@ export default function VistaReportes() {
       <header className="dashboard-header">
         <div className="header-top">
           <h1>Reportes</h1>
-          <p className="reportes-periodo-activo">{etiquetaPeriodoReporte(periodo)}</p>
+          <p className="reportes-periodo-activo">
+            {etiquetaPeriodoReporte(configPeriodo)}
+          </p>
         </div>
       </header>
 
@@ -90,28 +115,53 @@ export default function VistaReportes() {
 
         <section className="reportes-vista">
           <div className="reportes-controles">
-            <div className="reportes-control-grupo">
+            <div className="reportes-control-grupo reportes-control-grupo-periodo">
               <span className="reportes-control-etiqueta">Período</span>
               <nav className="reportes-periodo-nav" aria-label="Período del reporte">
                 <button
                   type="button"
                   className={`reportes-periodo-btn${
-                    periodo === PERIODOS_REPORTE.SEMANA ? ' activo' : ''
-                  }`}
-                  onClick={() => setPeriodo(PERIODOS_REPORTE.SEMANA)}
+                    !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.SEMANA
+                      ? ' activo'
+                      : ''
+                  }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                  onClick={seleccionarSemana}
                 >
                   Semana
                 </button>
                 <button
                   type="button"
                   className={`reportes-periodo-btn${
-                    periodo === PERIODOS_REPORTE.MES ? ' activo' : ''
-                  }`}
-                  onClick={() => setPeriodo(PERIODOS_REPORTE.MES)}
+                    !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.MES ? ' activo' : ''
+                  }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                  onClick={seleccionarMes}
                 >
                   Mes
                 </button>
               </nav>
+
+              <div className="reportes-rango-personalizado">
+                <label className="reportes-fecha-campo" htmlFor="reportes-fecha-desde">
+                  <span className="reportes-fecha-etiqueta">De:</span>
+                  <input
+                    id="reportes-fecha-desde"
+                    type="date"
+                    className="reportes-fecha-input"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                  />
+                </label>
+                <label className="reportes-fecha-campo" htmlFor="reportes-fecha-hasta">
+                  <span className="reportes-fecha-etiqueta">Hasta:</span>
+                  <input
+                    id="reportes-fecha-hasta"
+                    type="date"
+                    className="reportes-fecha-input"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="reportes-control-grupo reportes-control-grupo-filtro">

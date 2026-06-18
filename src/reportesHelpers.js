@@ -29,22 +29,57 @@ function finDelDia(fecha) {
   return copia;
 }
 
-export function obtenerRangoPeriodoReporte(periodo) {
+function parsearFechaLocal(valor) {
+  if (!valor) return null;
+
+  const [anio, mes, dia] = valor.split('-').map(Number);
+  if (!anio || !mes || !dia) return null;
+
+  return new Date(anio, mes - 1, dia);
+}
+
+function obtenerLunesSemanaActual(fecha = new Date()) {
+  const copia = inicioDelDia(fecha);
+  const diaSemana = copia.getDay();
+  const diasDesdeLunes = (diaSemana + 6) % 7;
+  copia.setDate(copia.getDate() - diasDesdeLunes);
+  return copia;
+}
+
+export function rangoPersonalizadoActivo(fechaDesde, fechaHasta) {
+  return Boolean(fechaDesde?.trim() && fechaHasta?.trim());
+}
+
+export function obtenerRangoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
+  if (rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
+    const desde = parsearFechaLocal(fechaDesde);
+    const hasta = parsearFechaLocal(fechaHasta);
+
+    if (desde && hasta) {
+      const inicio = inicioDelDia(desde <= hasta ? desde : hasta);
+      const fin = finDelDia(desde <= hasta ? hasta : desde);
+      return { inicio, fin, tipo: 'personalizado' };
+    }
+  }
+
   const hoy = new Date();
   const fin = finDelDia(hoy);
 
   if (periodo === PERIODOS_REPORTE.MES) {
     const inicio = inicioDelDia(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
-    return { inicio, fin };
+    return { inicio, fin, tipo: PERIODOS_REPORTE.MES };
   }
 
-  const inicio = inicioDelDia(hoy);
-  inicio.setDate(inicio.getDate() - 6);
-  return { inicio, fin };
+  const inicio = obtenerLunesSemanaActual(hoy);
+  return { inicio, fin, tipo: PERIODOS_REPORTE.SEMANA };
 }
 
-export function etiquetaPeriodoReporte(periodo) {
-  const { inicio, fin } = obtenerRangoPeriodoReporte(periodo);
+export function obtenerRangoPeriodoReporte(periodo) {
+  return obtenerRangoReporte({ periodo });
+}
+
+export function etiquetaPeriodoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
+  const { inicio, fin, tipo } = obtenerRangoReporte({ periodo, fechaDesde, fechaHasta });
   const formatoCorto = (fecha) =>
     fecha.toLocaleDateString('es-MX', {
       day: 'numeric',
@@ -52,22 +87,30 @@ export function etiquetaPeriodoReporte(periodo) {
       year: 'numeric',
     });
 
-  if (periodo === PERIODOS_REPORTE.MES) {
+  if (tipo === 'personalizado') {
+    if (inicio.toDateString() === fin.toDateString()) {
+      return `Rango personalizado · ${formatoCorto(inicio)}`;
+    }
+
+    return `Rango personalizado · ${formatoCorto(inicio)} – ${formatoCorto(fin)}`;
+  }
+
+  if (tipo === PERIODOS_REPORTE.MES) {
     const mes = inicio.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
     return `Mes actual (${mes}) · hasta ${formatoCorto(fin)}`;
   }
 
-  return `Últimos 7 días · ${formatoCorto(inicio)} – ${formatoCorto(fin)}`;
+  return `Semana actual (lun – hoy) · ${formatoCorto(inicio)} – ${formatoCorto(fin)}`;
 }
 
 export function etiquetaFiltroVentaReporte(filtro) {
   return FILTROS_VENTA_REPORTE.find((item) => item.value === filtro)?.label || 'Todos';
 }
 
-export function pedidoDentroDePeriodo(pedido, periodo) {
+export function pedidoDentroDePeriodo(pedido, configPeriodo) {
   if (!pedido?.created_at) return false;
   const fecha = new Date(pedido.created_at);
-  const { inicio, fin } = obtenerRangoPeriodoReporte(periodo);
+  const { inicio, fin } = obtenerRangoReporte(configPeriodo);
   return fecha >= inicio && fecha <= fin;
 }
 
@@ -91,10 +134,10 @@ export function pedidoCoincideFiltroVenta(pedido, filtro) {
   }
 }
 
-export function filtrarPedidosReporte(pedidos, periodo, filtroVenta) {
+export function filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta) {
   return pedidos.filter(
     (pedido) =>
-      pedidoDentroDePeriodo(pedido, periodo) &&
+      pedidoDentroDePeriodo(pedido, configPeriodo) &&
       pedidoCoincideFiltroVenta(pedido, filtroVenta)
   );
 }
@@ -160,13 +203,13 @@ export function formatearFechaPedidoReporte(createdAt) {
 }
 
 export function exportarReportePdf({
-  periodo,
+  configPeriodo,
   filtroVenta,
   resumen,
   pedidos,
 }) {
   const doc = new jsPDF();
-  const tituloPeriodo = etiquetaPeriodoReporte(periodo);
+  const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
   const tituloFiltro = etiquetaFiltroVentaReporte(filtroVenta);
 
   doc.setFontSize(16);
@@ -201,6 +244,11 @@ export function exportarReportePdf({
     },
   });
 
-  const sufijo = periodo === PERIODOS_REPORTE.MES ? 'mes' : 'semana';
-  doc.save(`reporte-ventas-${sufijo}.pdf`);
+  const { tipo } = obtenerRangoReporte(configPeriodo);
+  const sufijos = {
+    [PERIODOS_REPORTE.MES]: 'mes',
+    [PERIODOS_REPORTE.SEMANA]: 'semana',
+    personalizado: 'personalizado',
+  };
+  doc.save(`reporte-ventas-${sufijos[tipo] || 'reporte'}.pdf`);
 }
