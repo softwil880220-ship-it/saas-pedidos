@@ -2214,10 +2214,7 @@ function Dashboard() {
                                                   key={producto.id}
                                                   value={String(producto.id)}
                                                 >
-                                                  {producto.nombre}
-                                                  {producto.categoria
-                                                    ? ` (${producto.categoria})`
-                                                    : ''}
+                                                  {formatearEtiquetaProducto(producto)}
                                                 </option>
                                               ))}
                                             </select>
