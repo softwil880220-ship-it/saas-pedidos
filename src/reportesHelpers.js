@@ -102,8 +102,9 @@ export function etiquetaPeriodoReporte({ periodo, fechaDesde = '', fechaHasta = 
   }
 
   if (tipo === PERIODOS_REPORTE.MES) {
-    const mes = inicio.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
-    return `Mes actual (${mes}) • hasta ${formatoFechaTarjetaPeriodo(fin)}`;
+    const mesNombre = inicio.toLocaleDateString('es-MX', { month: 'long' });
+    const mes = `${mesNombre} ${inicio.getFullYear()}`;
+    return `Mes actual (${mes}) • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
   }
 
   return `Semana actual (lunes - hoy) • ${formatoFechaTarjetaPeriodo(inicio)} - ${formatoFechaTarjetaPeriodo(fin)}`;
