@@ -2183,6 +2183,20 @@
   font-weight: 500;
 }
 
+@media (min-width: 721px) {
+  .reportes-tabla-fila {
+    align-items: start;
+  }
+
+  .reportes-tabla .reporte-productos {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+}
+
 @media (max-width: 720px) {
   .reportes-resumen {
     grid-template-columns: 1fr;
