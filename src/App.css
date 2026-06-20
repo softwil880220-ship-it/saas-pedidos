@@ -330,6 +330,54 @@
   min-width: 0;
 }
 
+.pedido-producto-select {
+  position: relative;
+}
+
+.pedido-linea-producto-select {
+  width: 100%;
+}
+
+.pedido-linea-producto-select-activo {
+  min-height: 3.5rem;
+  color: transparent;
+  background-color: #fff;
+}
+
+.pedido-linea-producto-select-activo option {
+  color: #1e293b;
+}
+
+.pedido-producto-select-resumen {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  pointer-events: none;
+  line-height: 1.25;
+}
+
+.pedido-producto-select-nombre {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.pedido-producto-select-precio {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #166534;
+  font-variant-numeric: tabular-nums;
+}
+
 .pedido-acciones {
   display: flex;
   flex-wrap: wrap;

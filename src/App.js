@@ -2954,14 +2954,33 @@ function Dashboard() {
                           <div className="pedido-linea-numero">#{indice + 1}</div>
                           <div className="formulario-campo pedido-linea-producto">
                             <label htmlFor={`producto-${linea.id}`}>Producto</label>
-                            <select
-                              id={`producto-${linea.id}`}
-                              value={String(linea.productoId)}
-                              onChange={(e) =>
-                                actualizarLinea(linea.id, 'productoId', e.target.value)
-                              }
-                              required
-                            >
+                            <div className="pedido-producto-select">
+                              {productoSeleccionado ? (
+                                <div
+                                  className="pedido-producto-select-resumen"
+                                  aria-hidden="true"
+                                >
+                                  <span className="pedido-producto-select-nombre">
+                                    {productoSeleccionado.nombre}
+                                  </span>
+                                  <span className="pedido-producto-select-precio">
+                                    — ${Number(productoSeleccionado.precio).toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <select
+                                id={`producto-${linea.id}`}
+                                className={`pedido-linea-producto-select${
+                                  productoSeleccionado
+                                    ? ' pedido-linea-producto-select-activo'
+                                    : ''
+                                }`}
+                                value={String(linea.productoId)}
+                                onChange={(e) =>
+                                  actualizarLinea(linea.id, 'productoId', e.target.value)
+                                }
+                                required
+                              >
                               <option value="">Seleccionar producto...</option>
                               {productosOrdenados.map((producto) => (
                                 <option key={producto.id} value={String(producto.id)}>
@@ -2969,6 +2988,7 @@ function Dashboard() {
                                 </option>
                               ))}
                             </select>
+                            </div>
                           </div>
                           <div className="formulario-campo pedido-linea-cantidad">
                             <span className="pedido-linea-cantidad-label">Cantidad</span>
