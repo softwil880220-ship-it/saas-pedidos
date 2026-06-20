@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import DashboardNav from './DashboardNav';
 import {
+  agruparPedidosPorDia,
   calcularResumenReporte,
   descripcionPeriodoTarjeta,
   etiquetaFiltroVentaReporte,
@@ -13,9 +14,11 @@ import {
   filtrarPedidosReporte,
   formatearClienteReporte,
   formatearFechaPedidoReporte,
+  formatearHoraPedidoLista,
   formatearProductosReporte,
   obtenerRangoReporte,
   PERIODOS_REPORTE,
+  periodoMultiplesDias,
   rangoFechasInvalido,
   rangoPersonalizadoActivo,
 } from './reportesHelpers';
@@ -89,6 +92,12 @@ export default function VistaReportes() {
   const resumen = useMemo(
     () => calcularResumenReporte(pedidosFiltrados),
     [pedidosFiltrados]
+  );
+
+  const multiplesDias = periodoMultiplesDias(configPeriodo);
+  const pedidosAgrupados = useMemo(
+    () => (multiplesDias ? agruparPedidosPorDia(pedidosFiltrados) : []),
+    [multiplesDias, pedidosFiltrados]
   );
 
   const seleccionarSemana = () => {
@@ -251,32 +260,83 @@ export default function VistaReportes() {
               No hay pedidos para el período y tipo de venta seleccionados.
             </p>
           ) : (
-            <div className="reportes-tabla pedidos-reporte">
-              <div className="reportes-tabla-header pedidos-reporte-header">
-                <span>Fecha</span>
-                <span>Cliente</span>
-                <span>Productos</span>
-                <span>Tipo de entrega</span>
-                <span>Total</span>
-              </div>
-              {pedidosFiltrados.map((pedido) => (
-                <div key={pedido.id} className="reportes-tabla-fila pedidos-reporte-fila">
-                  <span className="reporte-fecha">
-                    {formatearFechaPedidoReporte(pedido.created_at)}
-                  </span>
-                  <span className="reporte-cliente">{formatearClienteReporte(pedido)}</span>
-                  <span className="reporte-productos">
-                    {formatearProductosReporte(pedido)}
-                  </span>
-                  <span className="reporte-tipo-entrega">
-                    {etiquetaTipoEntregaReporte(pedido)}
-                  </span>
-                  <span className="reporte-total">
-                    {formatearMoneda(pedido.total)}
-                  </span>
+            <>
+              {multiplesDias ? (
+                pedidosAgrupados.map((grupo) => (
+                  <div key={grupo.clave} className="pedidos-grupo pedidos-grupo-separado">
+                    <div className="pedidos-grupo-encabezado">
+                      <span className="pedidos-grupo-encabezado-linea">
+                        <span className="pedidos-grupo-encabezado-separador" aria-hidden="true">
+                          ──
+                        </span>
+                        {grupo.etiqueta}
+                        <span className="pedidos-grupo-encabezado-separador" aria-hidden="true">
+                          ──
+                        </span>
+                      </span>
+                      <span className="pedidos-grupo-encabezado-total">
+                        Total del día: {formatearMoneda(grupo.totalDelDia)}
+                      </span>
+                    </div>
+                    <div className="reportes-tabla pedidos-reporte">
+                      <div className="reportes-tabla-header pedidos-reporte-header">
+                        <span>Hora</span>
+                        <span>Cliente</span>
+                        <span>Productos</span>
+                        <span>Tipo de entrega</span>
+                        <span>Total</span>
+                      </div>
+                      {grupo.pedidos.map((pedido) => (
+                        <div key={pedido.id} className="reportes-tabla-fila pedidos-reporte-fila">
+                          <span className="reporte-hora">
+                            {formatearHoraPedidoLista(pedido.created_at)}
+                          </span>
+                          <span className="reporte-cliente">
+                            {formatearClienteReporte(pedido)}
+                          </span>
+                          <span className="reporte-productos">
+                            {formatearProductosReporte(pedido)}
+                          </span>
+                          <span className="reporte-tipo-entrega">
+                            {etiquetaTipoEntregaReporte(pedido)}
+                          </span>
+                          <span className="reporte-total">
+                            {formatearMoneda(pedido.total)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="reportes-tabla pedidos-reporte">
+                  <div className="reportes-tabla-header pedidos-reporte-header">
+                    <span>Fecha</span>
+                    <span>Cliente</span>
+                    <span>Productos</span>
+                    <span>Tipo de entrega</span>
+                    <span>Total</span>
+                  </div>
+                  {pedidosFiltrados.map((pedido) => (
+                    <div key={pedido.id} className="reportes-tabla-fila pedidos-reporte-fila">
+                      <span className="reporte-fecha">
+                        {formatearFechaPedidoReporte(pedido.created_at)}
+                      </span>
+                      <span className="reporte-cliente">{formatearClienteReporte(pedido)}</span>
+                      <span className="reporte-productos">
+                        {formatearProductosReporte(pedido)}
+                      </span>
+                      <span className="reporte-tipo-entrega">
+                        {etiquetaTipoEntregaReporte(pedido)}
+                      </span>
+                      <span className="reporte-total">
+                        {formatearMoneda(pedido.total)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </section>
       </main>

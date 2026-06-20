@@ -254,6 +254,69 @@ export function formatearFechaPedidoReporte(createdAt) {
   });
 }
 
+export function claveFechaDesdeDate(fecha) {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatearEncabezadoGrupoFecha(fecha) {
+  const diaSemana = fecha.toLocaleDateString('es-MX', { weekday: 'long' });
+  const diaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+  const dia = fecha.getDate();
+  const mes = MESES_CORTOS_ES[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+
+  return `${diaCapitalizado}, ${dia} ${mes} ${anio}`;
+}
+
+export function formatearHoraPedidoLista(createdAt) {
+  if (!createdAt) return '—';
+
+  return new Date(createdAt).toLocaleTimeString('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export function agruparPedidosPorDia(pedidos) {
+  const grupos = new Map();
+
+  pedidos.forEach((pedido) => {
+    const fecha = pedido.created_at ? new Date(pedido.created_at) : new Date(0);
+    const clave = claveFechaDesdeDate(fecha);
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, { clave, fecha, pedidos: [] });
+    }
+
+    grupos.get(clave).pedidos.push(pedido);
+  });
+
+  return Array.from(grupos.values())
+    .sort((a, b) => b.fecha - a.fecha)
+    .map((grupo) => ({
+      ...grupo,
+      etiqueta: formatearEncabezadoGrupoFecha(grupo.fecha),
+      totalDelDia: grupo.pedidos.reduce(
+        (suma, pedido) => suma + Number(pedido.total || 0),
+        0
+      ),
+      pedidos: grupo.pedidos.sort(
+        (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      ),
+    }));
+}
+
+export function periodoMultiplesDias(configPeriodo) {
+  const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+  if (!inicio || !fin) return false;
+
+  return inicio.toDateString() !== fin.toDateString();
+}
+
 export function exportarReportePdf({
   configPeriodo,
   filtroVenta,
@@ -275,17 +338,46 @@ export function exportarReportePdf({
   doc.text(`Total de pedidos: ${resumen.totalPedidos}`, 14, 40);
   doc.text(`Monto acumulado: ${formatearMoneda(resumen.montoAcumulado)}`, 14, 46);
 
-  const filas = pedidos.map((pedido) => [
-    formatearFechaPedidoReporte(pedido.created_at),
-    formatearClienteReporte(pedido),
-    formatearProductosReporte(pedido),
-    etiquetaTipoEntregaReporte(pedido),
-    formatearMoneda(pedido.total),
-  ]);
+  const multiplesDias = periodoMultiplesDias(configPeriodo);
+  let filas = [];
+
+  if (multiplesDias) {
+    agruparPedidosPorDia(pedidos).forEach((grupo) => {
+      filas.push([
+        {
+          content: `${grupo.etiqueta} — Total del día: ${formatearMoneda(grupo.totalDelDia)}`,
+          colSpan: 5,
+          styles: {
+            fillColor: [236, 253, 245],
+            textColor: [20, 83, 45],
+            fontStyle: 'bold',
+          },
+        },
+      ]);
+
+      grupo.pedidos.forEach((pedido) => {
+        filas.push([
+          formatearHoraPedidoLista(pedido.created_at),
+          formatearClienteReporte(pedido),
+          formatearProductosReporte(pedido),
+          etiquetaTipoEntregaReporte(pedido),
+          formatearMoneda(pedido.total),
+        ]);
+      });
+    });
+  } else {
+    filas = pedidos.map((pedido) => [
+      formatearFechaPedidoReporte(pedido.created_at),
+      formatearClienteReporte(pedido),
+      formatearProductosReporte(pedido),
+      etiquetaTipoEntregaReporte(pedido),
+      formatearMoneda(pedido.total),
+    ]);
+  }
 
   autoTable(doc, {
     startY: 54,
-    head: [['Fecha', 'Cliente', 'Productos', 'Tipo de entrega', 'Total']],
+    head: [[multiplesDias ? 'Hora' : 'Fecha', 'Cliente', 'Productos', 'Tipo de entrega', 'Total']],
     body: filas.length > 0 ? filas : [['—', '—', 'Sin pedidos en el período', '—', '—']],
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [20, 83, 45], textColor: 255 },

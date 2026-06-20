@@ -823,6 +823,50 @@
   margin-bottom: 2rem;
 }
 
+.pedidos-grupo-separado {
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.pedidos-grupo-separado:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.pedidos-grupo-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.pedidos-grupo-encabezado-linea {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.pedidos-grupo-encabezado-separador {
+  margin: 0 0.35rem;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.pedidos-grupo-encabezado-total {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #14532d;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .pedidos-grupo:last-child {
   margin-bottom: 0;
 }
@@ -2168,7 +2212,8 @@
     padding: 0.85rem 0.75rem;
   }
 
-  .reporte-fecha {
+  .reporte-fecha,
+  .reportes-tabla-fila .reporte-hora {
     grid-area: fecha;
   }
 
