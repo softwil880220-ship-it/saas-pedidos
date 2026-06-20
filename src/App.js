@@ -34,6 +34,7 @@ import {
   obtenerClaveCarritoPedido,
   persistirCarritoPedido,
 } from './pedidoCarritoStorage';
+import ProductoSelectDropdown from './ProductoSelectDropdown';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -2954,41 +2955,15 @@ function Dashboard() {
                           <div className="pedido-linea-numero">#{indice + 1}</div>
                           <div className="formulario-campo pedido-linea-producto">
                             <label htmlFor={`producto-${linea.id}`}>Producto</label>
-                            <div className="pedido-producto-select">
-                              {productoSeleccionado ? (
-                                <div
-                                  className="pedido-producto-select-resumen"
-                                  aria-hidden="true"
-                                >
-                                  <span className="pedido-producto-select-nombre">
-                                    {productoSeleccionado.nombre}
-                                  </span>
-                                  <span className="pedido-producto-select-precio">
-                                    — ${Number(productoSeleccionado.precio).toFixed(2)}
-                                  </span>
-                                </div>
-                              ) : null}
-                              <select
-                                id={`producto-${linea.id}`}
-                                className={`pedido-linea-producto-select${
-                                  productoSeleccionado
-                                    ? ' pedido-linea-producto-select-activo'
-                                    : ''
-                                }`}
-                                value={String(linea.productoId)}
-                                onChange={(e) =>
-                                  actualizarLinea(linea.id, 'productoId', e.target.value)
-                                }
-                                required
-                              >
-                              <option value="">Seleccionar producto...</option>
-                              {productosOrdenados.map((producto) => (
-                                <option key={producto.id} value={String(producto.id)}>
-                                  {formatearEtiquetaProducto(producto)}
-                                </option>
-                              ))}
-                            </select>
-                            </div>
+                            <ProductoSelectDropdown
+                              id={`producto-${linea.id}`}
+                              value={String(linea.productoId)}
+                              onChange={(productoId) =>
+                                actualizarLinea(linea.id, 'productoId', productoId)
+                              }
+                              productos={productosOrdenados}
+                              required
+                            />
                           </div>
                           <div className="formulario-campo pedido-linea-cantidad">
                             <span className="pedido-linea-cantidad-label">Cantidad</span>
