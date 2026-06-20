@@ -1337,6 +1337,11 @@ function Dashboard() {
     });
   };
 
+  const limpiarPedidoCaptura = () => {
+    setErrorGuardarPedido(null);
+    resetFormPedido(modo);
+  };
+
   const cambiarModo = (nuevoModo) => {
     persistirCarritoPedido({
       modo,
@@ -3037,13 +3042,22 @@ function Dashboard() {
                         ))}
                     </div>
                   )}
-                  <button
-                    type="submit"
-                    className="guardar-btn"
-                    disabled={productos.length === 0 || totalPedido <= 0}
-                  >
-                    {esModoPresencial ? 'Registrar venta' : 'Guardar pedido'}
-                  </button>
+                  <div className="pedido-acciones-principales">
+                    <button
+                      type="button"
+                      className="limpiar-pedido-btn"
+                      onClick={limpiarPedidoCaptura}
+                    >
+                      Limpiar pedido
+                    </button>
+                    <button
+                      type="submit"
+                      className="guardar-btn"
+                      disabled={productos.length === 0 || totalPedido <= 0}
+                    >
+                      {esModoPresencial ? 'Registrar venta' : 'Guardar pedido'}
+                    </button>
+                  </div>
                   {errorGuardarPedido ? (
                     <p className="formulario-error-guardar" role="alert">
                       {errorGuardarPedido}
