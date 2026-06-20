@@ -867,6 +867,27 @@
   white-space: nowrap;
 }
 
+@media (max-width: 720px) {
+  .dashboard-lista .pedidos-grupo-encabezado,
+  .dashboard-seccion-entrega .pedidos-grupo-encabezado {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .dashboard-lista .pedidos-grupo-encabezado-linea,
+  .dashboard-seccion-entrega .pedidos-grupo-encabezado-linea {
+    width: 100%;
+    text-align: center;
+  }
+
+  .dashboard-lista .pedidos-grupo-encabezado-total,
+  .dashboard-seccion-entrega .pedidos-grupo-encabezado-total {
+    width: 100%;
+    text-align: right;
+  }
+}
+
 .pedidos-grupo:last-child {
   margin-bottom: 0;
 }
