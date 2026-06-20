@@ -258,13 +258,64 @@
 
 .pedido-linea {
   display: grid;
-  grid-template-columns: auto 1fr 100px 120px auto;
+  grid-template-columns: auto 1fr 132px 120px auto;
   gap: 0.75rem;
   align-items: end;
   padding: 0;
   background: transparent;
   border: none;
   border-radius: 0;
+}
+
+.pedido-linea-cantidad-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.cantidad-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.2rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.cantidad-stepper-btn {
+  flex: 0 0 auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #14532d;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cantidad-stepper-btn:hover:not(:disabled) {
+  background: #dcfce7;
+}
+
+.cantidad-stepper-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cantidad-stepper-valor {
+  flex: 1;
+  min-width: 2rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
 }
 
 .pedido-linea-numero {
