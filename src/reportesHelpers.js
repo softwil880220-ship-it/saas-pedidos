@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
+import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
 
 export const PERIODOS_REPORTE = {
   SEMANA: 'semana',
@@ -273,14 +273,14 @@ export function exportarReportePdf({
   doc.text(`Período: ${tituloPeriodo}`, 14, 26);
   doc.text(`Tipo de venta: ${tituloFiltro}`, 14, 32);
   doc.text(`Total de pedidos: ${resumen.totalPedidos}`, 14, 40);
-  doc.text(`Monto acumulado: $${resumen.montoAcumulado.toFixed(2)}`, 14, 46);
+  doc.text(`Monto acumulado: ${formatearMoneda(resumen.montoAcumulado)}`, 14, 46);
 
   const filas = pedidos.map((pedido) => [
     formatearFechaPedidoReporte(pedido.created_at),
     formatearClienteReporte(pedido),
     formatearProductosReporte(pedido),
     etiquetaTipoEntregaReporte(pedido),
-    `$${Number(pedido.total || 0).toFixed(2)}`,
+    formatearMoneda(pedido.total),
   ]);
 
   autoTable(doc, {

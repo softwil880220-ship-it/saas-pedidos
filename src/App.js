@@ -13,6 +13,7 @@ import {
   determinarStatusInicialPresencial,
   enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
+  formatearMoneda,
   formatearProgresoCocinas,
   mergeStatusCocinasEnEdicion,
   normalizarCocinaProducto,
@@ -338,7 +339,7 @@ function buscarProductoPorId(listaProductos, productoId) {
 }
 
 function formatearEtiquetaProducto(producto) {
-  return `${producto.nombre} — $${Number(producto.precio).toFixed(2)}`;
+  return `${producto.nombre} — ${formatearMoneda(producto.precio)}`;
 }
 
 function precioVarianteExtra(item) {
@@ -468,7 +469,7 @@ function VariantesPedido({ linea, producto, catalogosVariantes, onToggleVariante
                 <span>
                   {item.nombre}
                   {Number(item.precio) > 0
-                    ? ` (+$${Number(item.precio).toFixed(2)})`
+                    ? ` (+${formatearMoneda(item.precio)})`
                     : ''}
                 </span>
               </label>
@@ -663,13 +664,13 @@ function DesglosePedido({ pedido, productos, catalogosVariantes }) {
             {linea.precioUnitario != null && (
               <span className="pedido-desglose-precio">
                 {' '}
-                — ${linea.precioUnitario.toFixed(2)}
+                — {formatearMoneda(linea.precioUnitario)}
               </span>
             )}
           </div>
         </div>
       ))}
-      <p className="pedido-desglose-total">Total: ${desglose.total.toFixed(2)}</p>
+      <p className="pedido-desglose-total">Total: {formatearMoneda(desglose.total)}</p>
     </div>
   );
 }
@@ -2357,7 +2358,7 @@ function Dashboard() {
                                               type="text"
                                               value={
                                                 subtotal > 0
-                                                  ? `$${subtotal.toFixed(2)}`
+                                                  ? formatearMoneda(subtotal)
                                                   : ''
                                               }
                                               readOnly
@@ -2403,7 +2404,7 @@ function Dashboard() {
                                 <div className="pedido-edit-total">
                                   <span className="pedido-total-label">Total</span>
                                   <span className="pedido-total-valor">
-                                    ${totalEdicion.toFixed(2)}
+                                    {formatearMoneda(totalEdicion)}
                                   </span>
                                 </div>
 
@@ -2515,7 +2516,7 @@ function Dashboard() {
                                   {pedido.producto || '—'}
                                 </span>
                                 <span className="reporte-total">
-                                  ${Number(pedido.total).toFixed(2)}
+                                  {formatearMoneda(pedido.total)}
                                 </span>
                                 <span className="reporte-acciones">
                                   <button
@@ -2540,7 +2541,7 @@ function Dashboard() {
                           })}
                         </div>
                         <p className="pedidos-reporte-subtotal">
-                          Subtotal del día: ${subtotalGrupo.toFixed(2)}
+                          Subtotal del día: {formatearMoneda(subtotalGrupo)}
                         </p>
                       </>
                     ) : (
@@ -2756,15 +2757,15 @@ function Dashboard() {
               {formatearFechaCompleta(new Date(fechaActual))}
             </span>
             <span className="header-stat-value header-stat-value-total">
-              ${totalVentasHoyTotal.toFixed(2)}
+              {formatearMoneda(totalVentasHoyTotal)}
             </span>
             <p className="header-stat-desglose">
-              Caja: ${totalVentasHoyCaja.toFixed(2)} | WhatsApp: $
-              {totalVentasHoyWhatsApp.toFixed(2)}
+              Caja: {formatearMoneda(totalVentasHoyCaja)} | WhatsApp:{' '}
+              {formatearMoneda(totalVentasHoyWhatsApp)}
             </p>
             <p className="header-stat-desglose header-stat-desglose-whatsapp">
-              🛵 Domicilio: ${totalVentasHoyDomicilio.toFixed(2)} | 🏪 Para recoger: $
-              {totalVentasHoySucursal.toFixed(2)}
+              🛵 Domicilio: {formatearMoneda(totalVentasHoyDomicilio)} | 🏪 Para recoger:{' '}
+              {formatearMoneda(totalVentasHoySucursal)}
             </p>
           </div>
         </div>
@@ -2805,7 +2806,7 @@ function Dashboard() {
                 )}
                 <p className="venta-resumen-productos">{resumenVenta.producto}</p>
                 <p className="venta-resumen-total">
-                  Total: ${resumenVenta.total.toFixed(2)}
+                  Total: {formatearMoneda(resumenVenta.total)}
                 </p>
                 <button
                   type="button"
@@ -3002,7 +3003,7 @@ function Dashboard() {
                             <input
                               id={`subtotal-${linea.id}`}
                               type="text"
-                              value={subtotal > 0 ? `$${subtotal.toFixed(2)}` : ''}
+                              value={subtotal > 0 ? formatearMoneda(subtotal) : ''}
                               readOnly
                             />
                           </div>
@@ -3041,7 +3042,7 @@ function Dashboard() {
                   </button>
                   <div className="pedido-total-pedido">
                     <span className="pedido-total-label">Total del pedido</span>
-                    <span className="pedido-total-valor">${totalPedido.toFixed(2)}</span>
+                    <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
                   </div>
                   {esModoPresencial && (
                     <div className="caja-pago">
@@ -3064,7 +3065,7 @@ function Dashboard() {
                           </p>
                         ) : (
                           <p className="caja-pago-alerta caja-pago-cambio">
-                            Cambio: ${cambio.toFixed(2)}
+                            Cambio: {formatearMoneda(cambio)}
                           </p>
                         ))}
                     </div>
@@ -3120,8 +3121,8 @@ function Dashboard() {
               </button>
               {!esFiltroHoy && (
                 <p className="filtro-fecha-total">
-                  Total del {formatearFechaCortaFiltro(filtroFecha)}: $
-                  {totalVentasFechaFiltro.toFixed(2)}
+                  Total del {formatearFechaCortaFiltro(filtroFecha)}:{' '}
+                  {formatearMoneda(totalVentasFechaFiltro)}
                 </p>
               )}
             </section>
@@ -3174,7 +3175,7 @@ function Dashboard() {
                         <h2 className="seccion-entrega-titulo">{seccionEntrega.titulo}</h2>
                         <div className="seccion-entrega-resumen">
                           <span className="seccion-entrega-total">
-                            Total: ${totalSeccion.toFixed(2)}
+                            Total: {formatearMoneda(totalSeccion)}
                           </span>
                           <span className="seccion-entrega-pedidos">
                             {pedidosTipo.length} pedido
@@ -3342,7 +3343,7 @@ function Dashboard() {
                                           <span>
                                             {item.nombre}
                                             {Number(item.precio) > 0
-                                              ? ` (+$${Number(item.precio).toFixed(2)})`
+                                              ? ` (+${formatearMoneda(item.precio)})`
                                               : ''}
                                           </span>
                                         </label>
@@ -3396,7 +3397,7 @@ function Dashboard() {
                             {etiquetaCocinaProducto(producto.cocina)}
                           </p>
                           <p className="pedido-total">
-                            ${Number(producto.precio).toFixed(2)}
+                            {formatearMoneda(producto.precio)}
                           </p>
                           <div className="tarjeta-acciones">
                             <button
@@ -3499,7 +3500,7 @@ function Dashboard() {
                             <h2 className="pedido-cliente">{item.nombre}</h2>
                             <p className="pedido-producto">Precio adicional</p>
                             <p className="pedido-total">
-                              ${Number(item.precio).toFixed(2)}
+                              {formatearMoneda(item.precio)}
                             </p>
                             <div className="tarjeta-acciones">
                               <button

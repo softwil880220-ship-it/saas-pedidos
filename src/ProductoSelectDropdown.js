@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { formatearMoneda } from './pedidosShared';
+
 function formatearEtiquetaProducto(producto) {
-  return `${producto.nombre} — $${Number(producto.precio).toFixed(2)}`;
+  return `${producto.nombre} — ${formatearMoneda(producto.precio)}`;
 }
 
 export default function ProductoSelectDropdown({
@@ -76,7 +78,7 @@ export default function ProductoSelectDropdown({
               {productoSeleccionado.nombre}
             </span>
             <span className="producto-select-trigger-precio">
-              — ${Number(productoSeleccionado.precio).toFixed(2)}
+              — {formatearMoneda(productoSeleccionado.precio)}
             </span>
           </span>
         ) : (

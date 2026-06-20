@@ -334,6 +334,21 @@ export function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
 }
 
+function redondearMoneda(valor) {
+  return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
+}
+
+export function formatearImporte(valor) {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(redondearMoneda(Number(valor) || 0));
+}
+
+export function formatearMoneda(valor) {
+  return `$${formatearImporte(valor)}`;
+}
+
 export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCocina = null }) {
   if (pedido?.lineas_detalle?.length) {
     const lineas = filtrarCocina
@@ -362,7 +377,7 @@ export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCo
           </div>
         ))}
         {mostrarTotal && (
-          <p className="pedido-desglose-total">Total: ${total.toFixed(2)}</p>
+          <p className="pedido-desglose-total">Total: {formatearMoneda(total)}</p>
         )}
       </div>
     );
@@ -381,13 +396,9 @@ export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCo
       <p className="pedido-desglose-nombre">{pedido.producto}</p>
       {mostrarTotal && (
         <p className="pedido-desglose-total">
-          Total: ${Number(pedido.total).toFixed(2)}
+          Total: {formatearMoneda(pedido.total)}
         </p>
       )}
     </div>
   );
-}
-
-function redondearMoneda(valor) {
-  return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 }

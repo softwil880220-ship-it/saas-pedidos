@@ -19,6 +19,7 @@ import {
   rangoFechasInvalido,
   rangoPersonalizadoActivo,
 } from './reportesHelpers';
+import { formatearMoneda } from './pedidosShared';
 import { supabase } from './supabase';
 
 export default function VistaReportes() {
@@ -232,7 +233,7 @@ export default function VistaReportes() {
             <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Monto acumulado</span>
               <span className="reportes-resumen-valor reportes-resumen-valor-monto">
-                ${resumen.montoAcumulado.toFixed(2)}
+                {formatearMoneda(resumen.montoAcumulado)}
               </span>
             </article>
           </div>
@@ -271,7 +272,7 @@ export default function VistaReportes() {
                     {etiquetaTipoEntregaReporte(pedido)}
                   </span>
                   <span className="reporte-total">
-                    ${Number(pedido.total || 0).toFixed(2)}
+                    {formatearMoneda(pedido.total)}
                   </span>
                 </div>
               ))}
