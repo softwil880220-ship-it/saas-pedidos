@@ -26,6 +26,14 @@ import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
+import {
+  cargarCarritoPedido,
+  cargarEstadoInicialCapturaPedido,
+  limpiarCarritoEnStorage,
+  limpiarCarritoPedido,
+  obtenerClaveCarritoPedido,
+  persistirCarritoPedido,
+} from './pedidoCarritoStorage';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -1057,18 +1065,11 @@ function Dashboard() {
     [catalogosVariantes]
   );
   const [resumenVenta, setResumenVenta] = useState(null);
-  const nextLineaId = useRef(2);
+  const estadoInicialCaptura = cargarEstadoInicialCapturaPedido();
+  const nextLineaId = useRef(estadoInicialCaptura.nextLineaId);
   const nextEditLineaId = useRef(2);
-  const [form, setForm] = useState({
-    cliente: CLIENTE_PUBLICO,
-    telefono: '',
-    tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-    direccion: '',
-    formaPago: FORMA_PAGO_DEFAULT_CAJA,
-    referencia: '',
-    lineas: [crearLineaPedido(1)],
-    status: statusDefaultFormularioPedido('presencial'),
-  });
+  const persistenciaCarritoPausadaRef = useRef(false);
+  const [form, setForm] = useState(estadoInicialCaptura.form);
   const [productoForm, setProductoForm] = useState({
     nombre: '',
     precio: '',
@@ -1085,7 +1086,7 @@ function Dashboard() {
   const [guardandoVariante, setGuardandoVariante] = useState(false);
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
   const [errorGuardarPedido, setErrorGuardarPedido] = useState(null);
-  const [pagoRecibido, setPagoRecibido] = useState('');
+  const [pagoRecibido, setPagoRecibido] = useState(estadoInicialCaptura.pagoRecibido);
   const [fechaActual, setFechaActual] = useState(() => Date.now());
 
   const cargarCatalogosVariantes = async () => {
@@ -1144,22 +1145,22 @@ function Dashboard() {
   }, [seccion]);
 
   useEffect(() => {
+    if (seccion !== 'pedidos' || persistenciaCarritoPausadaRef.current) return;
+
+    persistirCarritoPedido({
+      modo,
+      form,
+      pagoRecibido,
+      nextLineaId: nextLineaId.current,
+    });
+  }, [seccion, modo, form, pagoRecibido]);
+
+  useEffect(() => {
     if (!resumenVenta || modo !== 'presencial') return;
 
     const timer = setTimeout(() => {
       setResumenVenta(null);
-      nextLineaId.current = 2;
-      setPagoRecibido('');
-      setForm({
-        cliente: CLIENTE_PUBLICO,
-        telefono: '',
-        tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
-        direccion: '',
-        formaPago: FORMA_PAGO_DEFAULT_CAJA,
-        referencia: '',
-        lineas: [crearLineaPedido(1)],
-        status: statusDefaultFormularioPedido('presencial'),
-      });
+      resetFormPedido('presencial');
     }, 2000);
 
     return () => clearTimeout(timer);
@@ -1179,9 +1180,63 @@ function Dashboard() {
     };
   }, []);
 
+  const aplicarEstadoCarrito = ({ form: formRestaurado, pagoRecibido: pagoRestaurado, nextLineaId: nextId }) => {
+    setForm(formRestaurado);
+    setPagoRecibido(pagoRestaurado);
+    nextLineaId.current = nextId;
+  };
+
   const handleFormChange = (e) => {
     setErrorGuardarPedido(null);
     const { name, value } = e.target;
+
+    if (name === 'tipoEntrega' && modo === 'whatsapp') {
+      persistirCarritoPedido({
+        modo,
+        form,
+        pagoRecibido,
+        nextLineaId: nextLineaId.current,
+      });
+
+      if (!value) {
+        setForm((prev) => ({
+          ...prev,
+          tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+          direccion: '',
+        }));
+        return;
+      }
+
+      const restaurado = cargarCarritoPedido('whatsapp', value);
+      if (restaurado) {
+        aplicarEstadoCarrito({
+          ...restaurado,
+          form: {
+            ...restaurado.form,
+            tipoEntrega: value,
+          },
+        });
+        return;
+      }
+
+      const flujo = obtenerFlujoStatus(value);
+      setForm({
+        cliente: '',
+        telefono: '',
+        tipoEntrega: value,
+        direccion: '',
+        formaPago: '',
+        referencia: '',
+        lineas: [crearLineaPedido(1)],
+        status: flujo.includes(STATUS_DEFAULT_WHATSAPP_FORM)
+          ? STATUS_DEFAULT_WHATSAPP_FORM
+          : flujo[0],
+      });
+      setPagoRecibido('');
+      nextLineaId.current = 2;
+      return;
+    }
+
     setForm((prev) => {
       if (name === 'tipoEntrega') {
         if (!value) {
@@ -1259,7 +1314,14 @@ function Dashboard() {
     });
   };
 
-  const resetFormPedido = (modoActual = modo) => {
+  const resetFormPedido = (modoActual = modo, { limpiarStorage = true } = {}) => {
+    if (limpiarStorage) {
+      limpiarCarritoPedido(
+        modoActual,
+        modoActual === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
+      );
+    }
+
     nextLineaId.current = 2;
     setPagoRecibido('');
     setForm({
@@ -1276,6 +1338,12 @@ function Dashboard() {
   };
 
   const cambiarModo = (nuevoModo) => {
+    persistirCarritoPedido({
+      modo,
+      form,
+      pagoRecibido,
+      nextLineaId: nextLineaId.current,
+    });
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
     setFiltroDomicilio('todos');
@@ -1284,7 +1352,16 @@ function Dashboard() {
     setResumenVenta(null);
     setEditandoPedidoId(null);
     setPedidoEditForm(null);
-    resetFormPedido(nuevoModo);
+
+    if (nuevoModo === 'presencial') {
+      const restaurado = cargarCarritoPedido('presencial', TIPOS_ENTREGA.DOMICILIO);
+      if (restaurado) {
+        aplicarEstadoCarrito(restaurado);
+        return;
+      }
+    }
+
+    resetFormPedido(nuevoModo, { limpiarStorage: false });
   };
 
   const totalPedido = calcularTotalLineas(form.lineas, productos, catalogosVariantes);
@@ -1354,6 +1431,11 @@ function Dashboard() {
     const snapshotForm = clonarFormPedido(form);
     const snapshotPagoRecibido = pagoRecibido;
     const snapshotResumenVenta = resumenVenta;
+    const snapshotNextLineaId = nextLineaId.current;
+    const claveCarritoGuardado = obtenerClaveCarritoPedido(
+      modo,
+      esPresencial ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
+    );
 
     const payload = {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
@@ -1400,13 +1482,16 @@ function Dashboard() {
       });
     }
 
-    resetFormPedido();
+    persistenciaCarritoPausadaRef.current = true;
+    resetFormPedido(modo, { limpiarStorage: false });
 
     const revertirGuardadoOptimista = () => {
       setPedidos((prev) => prev.filter((pedido) => pedido.id !== optimisticId));
       setForm(snapshotForm);
       setPagoRecibido(snapshotPagoRecibido);
       setResumenVenta(snapshotResumenVenta);
+      nextLineaId.current = snapshotNextLineaId;
+      persistenciaCarritoPausadaRef.current = false;
       setErrorGuardarPedido('No se pudo guardar, intenta de nuevo.');
     };
 
@@ -1421,6 +1506,11 @@ function Dashboard() {
         revertirGuardadoOptimista();
         return;
       }
+
+      if (claveCarritoGuardado) {
+        limpiarCarritoEnStorage(claveCarritoGuardado);
+      }
+      persistenciaCarritoPausadaRef.current = false;
 
       setPedidos((prev) => {
         const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
