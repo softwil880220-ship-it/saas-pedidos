@@ -870,18 +870,19 @@
 @media (max-width: 720px) {
   .dashboard-grupo-encabezado {
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     gap: 0.45rem;
+    text-align: center;
   }
 
   .dashboard-grupo-encabezado-fecha {
     display: block;
-    width: 100%;
     text-align: center;
   }
 
   .dashboard-grupo-encabezado-total {
     display: block;
+    align-self: stretch;
     width: 100%;
     text-align: right;
   }

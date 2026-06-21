@@ -2467,8 +2467,9 @@ function Dashboard() {
                   esMobileDashboard
                     ? {
                         flexDirection: 'column',
-                        alignItems: 'stretch',
+                        alignItems: 'center',
                         gap: '0.45rem',
+                        textAlign: 'center',
                       }
                     : undefined
                 }
@@ -2479,7 +2480,6 @@ function Dashboard() {
                     esMobileDashboard
                       ? {
                           display: 'block',
-                          width: '100%',
                           textAlign: 'center',
                         }
                       : undefined
@@ -2499,6 +2499,7 @@ function Dashboard() {
                     esMobileDashboard
                       ? {
                           display: 'block',
+                          alignSelf: 'stretch',
                           width: '100%',
                           textAlign: 'right',
                         }
