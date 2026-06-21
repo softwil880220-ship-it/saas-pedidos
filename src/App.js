@@ -1005,8 +1005,26 @@ function clonarFormPedido(form) {
   return JSON.parse(JSON.stringify(form));
 }
 
+function useEsMobile(anchoMaximo = 720) {
+  const [esMobile, setEsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia(`(max-width: ${anchoMaximo}px)`).matches;
+  });
+
+  useEffect(() => {
+    const media = window.matchMedia(`(max-width: ${anchoMaximo}px)`);
+    const actualizar = () => setEsMobile(media.matches);
+    actualizar();
+    media.addEventListener('change', actualizar);
+    return () => media.removeEventListener('change', actualizar);
+  }, [anchoMaximo]);
+
+  return esMobile;
+}
+
 function Dashboard() {
   const location = useLocation();
+  const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const [modo, setModo] = useState('presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
@@ -2443,8 +2461,30 @@ function Dashboard() {
         >
           {usarVistaReporte ? (
             <>
-              <div className="pedidos-grupo-encabezado">
-                <span className="pedidos-grupo-encabezado-linea">
+              <div
+                className="pedidos-grupo-encabezado dashboard-grupo-encabezado"
+                style={
+                  esMobileDashboard
+                    ? {
+                        flexDirection: 'column',
+                        alignItems: 'stretch',
+                        gap: '0.45rem',
+                      }
+                    : undefined
+                }
+              >
+                <span
+                  className="pedidos-grupo-encabezado-linea dashboard-grupo-encabezado-fecha"
+                  style={
+                    esMobileDashboard
+                      ? {
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'center',
+                        }
+                      : undefined
+                  }
+                >
                   <span className="pedidos-grupo-encabezado-separador" aria-hidden="true">
                     ──
                   </span>
@@ -2453,7 +2493,18 @@ function Dashboard() {
                     ──
                   </span>
                 </span>
-                <span className="pedidos-grupo-encabezado-total">
+                <span
+                  className="pedidos-grupo-encabezado-total dashboard-grupo-encabezado-total"
+                  style={
+                    esMobileDashboard
+                      ? {
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'right',
+                        }
+                      : undefined
+                  }
+                >
                   Total del día: {formatearMoneda(totalDelDia)}
                 </span>
               </div>
