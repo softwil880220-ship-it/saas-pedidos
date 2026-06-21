@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import './App.css';
 import DashboardNav from './DashboardNav';
+import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
+import useEsMobile from './useEsMobile';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
@@ -1003,23 +1005,6 @@ function ordenarPedidosDesc(pedidos) {
 
 function clonarFormPedido(form) {
   return JSON.parse(JSON.stringify(form));
-}
-
-function useEsMobile(anchoMaximo = 720) {
-  const [esMobile, setEsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(`(max-width: ${anchoMaximo}px)`).matches;
-  });
-
-  useEffect(() => {
-    const media = window.matchMedia(`(max-width: ${anchoMaximo}px)`);
-    const actualizar = () => setEsMobile(media.matches);
-    actualizar();
-    media.addEventListener('change', actualizar);
-    return () => media.removeEventListener('change', actualizar);
-  }, [anchoMaximo]);
-
-  return esMobile;
 }
 
 function Dashboard() {
@@ -2773,6 +2758,9 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
+      {seccion === 'catalogo' ? (
+        <DashboardHeaderReservaMovil />
+      ) : (
       <header className="dashboard-header">
         <div className="header-top">
           <h1>
@@ -2799,6 +2787,7 @@ function Dashboard() {
           </div>
         </div>
       </header>
+      )}
 
       <main className="dashboard-main">
         <DashboardNav activo={seccion} />
