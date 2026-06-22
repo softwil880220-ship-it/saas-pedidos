@@ -5,6 +5,7 @@
 }
 
 .dashboard-header {
+  position: relative;
   background: #14532d;
   color: #fff;
   padding: 1.5rem 2rem;
@@ -26,6 +27,25 @@
   align-items: flex-start;
   gap: 1rem;
   margin-bottom: 1.25rem;
+}
+
+.header-logout-btn {
+  position: absolute;
+  top: 1.5rem;
+  right: 2rem;
+  z-index: 1;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.header-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .header-stats {

@@ -1,3 +1,5 @@
+import BotonCerrarSesion from './BotonCerrarSesion';
+
 export default function DashboardHeaderReservaMovil() {
   return (
     <header className="dashboard-header">
@@ -9,6 +11,7 @@ export default function DashboardHeaderReservaMovil() {
           </p>
         </div>
       </div>
+      <BotonCerrarSesion />
     </header>
   );
 }

@@ -6,6 +6,7 @@ import ProtectedRoute from './ProtectedRoute';
 import VistaLogin from './VistaLogin';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
+import BotonCerrarSesion from './BotonCerrarSesion';
 import useEsMobile from './useEsMobile';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
@@ -2803,6 +2804,7 @@ function Dashboard() {
             </p>
           </div>
         </div>
+        <BotonCerrarSesion />
       </header>
       )}
 
