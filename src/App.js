@@ -45,7 +45,7 @@ import {
   obtenerClaveCarritoPedido,
   persistirCarritoPedido,
 } from './pedidoCarritoStorage';
-import ProductoSelectDropdown from './ProductoSelectDropdown';
+import SelectorProductosPedido from './SelectorProductosPedido';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
@@ -1069,6 +1069,7 @@ function Dashboard() {
   const [errorGuardarPedido, setErrorGuardarPedido] = useState(null);
   const [pagoRecibido, setPagoRecibido] = useState(estadoInicialCaptura.pagoRecibido);
   const [fechaActual, setFechaActual] = useState(() => Date.now());
+  const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
     if (!negocioId) return;
@@ -1301,6 +1302,43 @@ function Dashboard() {
     }));
   };
 
+  const agregarProductoAlPedido = (productoId) => {
+    const idStr = String(productoId);
+
+    setForm((prev) => {
+      const lineaExistente = prev.lineas.find(
+        (linea) => linea.productoId && String(linea.productoId) === idStr
+      );
+
+      if (lineaExistente) {
+        return {
+          ...prev,
+          lineas: prev.lineas.map((linea) =>
+            linea.id === lineaExistente.id
+              ? {
+                  ...linea,
+                  cantidad: String((parseInt(linea.cantidad, 10) || 1) + 1),
+                }
+              : linea
+          ),
+        };
+      }
+
+      const lineasConProducto = prev.lineas.filter((linea) => linea.productoId);
+
+      return {
+        ...prev,
+        lineas: [
+          ...lineasConProducto,
+          {
+            ...crearLineaPedido(nextLineaId.current++),
+            productoId: idStr,
+          },
+        ],
+      };
+    });
+  };
+
   const eliminarLinea = (lineaId) => {
     setForm((prev) => {
       if (prev.lineas.length <= 1) return prev;
@@ -1321,6 +1359,7 @@ function Dashboard() {
 
     nextLineaId.current = 2;
     setPagoRecibido('');
+    setCategoriaPedidoActiva(null);
     setForm({
       cliente: modoActual === 'presencial' ? CLIENTE_PUBLICO : '',
       telefono: '',
@@ -1367,6 +1406,7 @@ function Dashboard() {
   };
 
   const totalPedido = calcularTotalLineas(form.lineas, productos, catalogosVariantes);
+  const lineasPedidoConProducto = form.lineas.filter((linea) => linea.productoId);
   const montoPago = parseFloat(pagoRecibido);
   const pagoValido = pagoRecibido !== '' && !Number.isNaN(montoPago);
   const cambio = pagoValido ? montoPago - totalPedido : null;
@@ -2972,11 +3012,20 @@ function Dashboard() {
                   </div>
                 </div>
 
+                {productos.length > 0 && (
+                  <SelectorProductosPedido
+                    productos={productosOrdenados}
+                    categoriaActiva={categoriaPedidoActiva}
+                    onCategoriaChange={setCategoriaPedidoActiva}
+                    onAgregarProducto={agregarProductoAlPedido}
+                  />
+                )}
+
                 <div className="pedido-lineas">
                   <div className="pedido-lineas-encabezado">
                     <span>Productos del pedido</span>
                   </div>
-                  {form.lineas.map((linea, indice) => {
+                  {lineasPedidoConProducto.map((linea, indice) => {
                     const productoSeleccionado = buscarProductoPorId(
                       productos,
                       linea.productoId
@@ -2992,16 +3041,10 @@ function Dashboard() {
                         <div className="pedido-linea">
                           <div className="pedido-linea-numero">#{indice + 1}</div>
                           <div className="formulario-campo pedido-linea-producto">
-                            <label htmlFor={`producto-${linea.id}`}>Producto</label>
-                            <ProductoSelectDropdown
-                              id={`producto-${linea.id}`}
-                              value={String(linea.productoId)}
-                              onChange={(productoId) =>
-                                actualizarLinea(linea.id, 'productoId', productoId)
-                              }
-                              productos={productosOrdenados}
-                              required
-                            />
+                            <span className="pedido-linea-producto-label">Producto</span>
+                            <span className="pedido-linea-producto-nombre">
+                              {productoSeleccionado?.nombre}
+                            </span>
                           </div>
                           <div className="formulario-campo pedido-linea-cantidad">
                             <span className="pedido-linea-cantidad-label">Cantidad</span>
@@ -3048,7 +3091,7 @@ function Dashboard() {
                             type="button"
                             className="eliminar-linea-btn"
                             onClick={() => eliminarLinea(linea.id)}
-                            disabled={form.lineas.length <= 1}
+                            disabled={lineasPedidoConProducto.length <= 1}
                             aria-label={`Eliminar producto ${indice + 1}`}
                           >
                             ✕
@@ -3069,14 +3112,6 @@ function Dashboard() {
                 </div>
 
                 <div className="pedido-acciones">
-                  <button
-                    type="button"
-                    className="agregar-linea-btn"
-                    onClick={agregarLinea}
-                    disabled={productos.length === 0}
-                  >
-                    + Agregar producto
-                  </button>
                   <div className="pedido-total-pedido">
                     <span className="pedido-total-label">Total del pedido</span>
                     <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
