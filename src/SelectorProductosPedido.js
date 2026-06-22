@@ -1,31 +1,44 @@
 import { useEffect, useMemo } from 'react';
+import {
+  normalizarNombreCategoria,
+  ordenarCategoriasPorFrecuencia,
+} from './categoriaFrecuenciaPedidos';
 import { formatearMoneda } from './pedidosShared';
 
-function agruparProductosPorCategoria(productos) {
+function agruparProductosPorCategoria(productos, frecuenciaCategorias) {
   const map = new Map();
 
   productos.forEach((producto) => {
-    const categoria = (producto.categoria || '').trim() || 'Sin categoría';
+    const categoria = normalizarNombreCategoria(producto.categoria);
     if (!map.has(categoria)) {
       map.set(categoria, []);
     }
     map.get(categoria).push(producto);
   });
 
-  return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
-    .map(([nombre, items]) => ({ nombre, productos: items }));
+  const nombresOrdenados = ordenarCategoriasPorFrecuencia(
+    [...map.keys()],
+    frecuenciaCategorias
+  );
+
+  return nombresOrdenados.map((nombre) => ({
+    nombre,
+    productos: map.get(nombre),
+  }));
 }
 
 export default function SelectorProductosPedido({
   productos,
+  frecuenciaCategorias,
   categoriaActiva,
   onCategoriaChange,
   onAgregarProducto,
 }) {
+  const frecuencia = frecuenciaCategorias ?? new Map();
+
   const categorias = useMemo(
-    () => agruparProductosPorCategoria(productos),
-    [productos]
+    () => agruparProductosPorCategoria(productos, frecuencia),
+    [productos, frecuencia]
   );
 
   useEffect(() => {

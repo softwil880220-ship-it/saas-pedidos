@@ -52,6 +52,7 @@ import {
   obtenerPedidosPendientesSync,
 } from './pedidoPendingSyncStorage';
 import SelectorProductosPedido from './SelectorProductosPedido';
+import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
@@ -1043,6 +1044,10 @@ function Dashboard() {
   const productosOrdenados = useMemo(
     () => ordenarProductos(productos),
     [productos]
+  );
+  const frecuenciaCategoriasPedidos = useFrecuenciaCategoriasPedidos(
+    negocioId,
+    productos
   );
   const catalogosVariantesOrdenados = useMemo(
     () =>
@@ -3078,6 +3083,7 @@ function Dashboard() {
                 {productos.length > 0 && (
                   <SelectorProductosPedido
                     productos={productosOrdenados}
+                    frecuenciaCategorias={frecuenciaCategoriasPedidos}
                     categoriaActiva={categoriaPedidoActiva}
                     onCategoriaChange={setCategoriaPedidoActiva}
                     onAgregarProducto={agregarProductoAlPedido}
