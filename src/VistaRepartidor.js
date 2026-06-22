@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import { useAuth } from './AuthContext';
 import {
   construirUrlWhatsApp,
   DesgloseProductosPedido,
@@ -7,6 +8,7 @@ import {
   siguienteStatus,
 } from './pedidosShared';
 import { supabase } from './supabase';
+import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime } from './usePedidosRealtime';
 
 const filtrarPedidosRepartidor = (pedido) =>
@@ -16,8 +18,10 @@ const compararPedidosRepartidor = (a, b) =>
   new Date(a.created_at || 0) - new Date(b.created_at || 0);
 
 export default function VistaRepartidor() {
+  const { negocioId } = useAuth();
   const { pedidos, setPedidos, cargando } = usePedidosRealtime({
     channelName: 'repartidor-pedidos',
+    negocioId,
     filtrar: filtrarPedidosRepartidor,
     comparar: compararPedidosRepartidor,
   });
@@ -28,10 +32,10 @@ export default function VistaRepartidor() {
     if (nuevoStatus === pedido.status) return;
 
     setActualizandoId(pedido.id);
-    const { error } = await supabase
-      .from('pedidos')
-      .update({ status: nuevoStatus })
-      .eq('id', pedido.id);
+    const { error } = await queryConNegocio(
+      supabase.from('pedidos').update({ status: nuevoStatus }).eq('id', pedido.id),
+      negocioId
+    );
 
     if (!error) {
       setPedidos((prev) => prev.filter((item) => item.id !== pedido.id));

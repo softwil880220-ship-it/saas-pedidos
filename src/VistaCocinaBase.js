@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import { useAuth } from './AuthContext';
 import {
   DesgloseProductosPedido,
   construirUpdateAlMarcarCocinaLista,
@@ -7,6 +8,7 @@ import {
   pedidoVisibleEnCocina,
 } from './pedidosShared';
 import { supabase } from './supabase';
+import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 
 function formatearHora(createdAt) {
@@ -18,8 +20,10 @@ function formatearHora(createdAt) {
 }
 
 export default function VistaCocinaBase({ cocina, titulo, channelName, claseVista }) {
+  const { negocioId } = useAuth();
   const { productos } = useProductosRealtime({
     channelName: `${channelName}-productos`,
+    negocioId,
   });
 
   const filtrarPedidos = (pedido) =>
@@ -32,6 +36,7 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
 
   const { pedidos, setPedidos, cargando } = usePedidosRealtime({
     channelName,
+    negocioId,
     filtrar: filtrarPedidos,
     comparar: compararPedidos,
   });
@@ -42,10 +47,10 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     if (!update) return;
 
     setActualizandoId(pedido.id);
-    const { error } = await supabase
-      .from('pedidos')
-      .update(update)
-      .eq('id', pedido.id);
+    const { error } = await queryConNegocio(
+      supabase.from('pedidos').update(update).eq('id', pedido.id),
+      negocioId
+    );
 
     if (!error) {
       setPedidos((prev) => prev.filter((item) => item.id !== pedido.id));
@@ -78,6 +83,7 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
                 <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
                 <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
               </div>
+
               <DesgloseProductosPedido
                 pedido={pedidoEnriquecido}
                 mostrarTotal

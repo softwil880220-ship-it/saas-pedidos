@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import './App.css';
+import { AuthProvider, useAuth } from './AuthContext';
+import ProtectedRoute from './ProtectedRoute';
+import VistaLogin from './VistaLogin';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import useEsMobile from './useEsMobile';
@@ -42,6 +45,7 @@ import {
   persistirCarritoPedido,
 } from './pedidoCarritoStorage';
 import ProductoSelectDropdown from './ProductoSelectDropdown';
+import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -1009,6 +1013,7 @@ function clonarFormPedido(form) {
 
 function Dashboard() {
   const location = useLocation();
+  const { negocioId } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const [modo, setModo] = useState('presencial');
@@ -1017,9 +1022,11 @@ function Dashboard() {
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
   const { pedidos, setPedidos } = usePedidosRealtime({
     channelName: 'dashboard-pedidos',
+    negocioId,
   });
   const { productos, setProductos } = useProductosRealtime({
     channelName: 'dashboard-productos',
+    negocioId,
   });
   const [catalogosVariantes, setCatalogosVariantes] = useState(
     crearCatalogosVariantesVacios
@@ -1063,12 +1070,14 @@ function Dashboard() {
   const [fechaActual, setFechaActual] = useState(() => Date.now());
 
   const cargarCatalogosVariantes = async () => {
+    if (!negocioId) return;
+
     const resultados = await Promise.all(
       VARIANTES_CATEGORIAS.map(async ({ key, tabla }) => {
-        const { data, error } = await supabase
-          .from(tabla)
-          .select('*')
-          .order('id', { ascending: true });
+        const { data, error } = await queryConNegocio(
+          supabase.from(tabla).select('*'),
+          negocioId
+        ).order('id', { ascending: true });
 
         return { key, data: !error && data ? data : [] };
       })
@@ -1102,13 +1111,13 @@ function Dashboard() {
 
   useEffect(() => {
     cargarCatalogos();
-  }, []);
+  }, [negocioId]);
 
   useEffect(() => {
     if (seccion === 'pedidos' || seccion === 'catalogo') {
       cargarCatalogos();
     }
-  }, [seccion]);
+  }, [seccion, negocioId]);
 
   useEffect(() => {
     if (seccion !== 'catalogo') {
@@ -1458,7 +1467,7 @@ function Dashboard() {
     const ahora = new Date().toISOString();
     const pedidoOptimista = {
       id: optimisticId,
-      ...payload,
+      ...payloadConNegocio(payload, negocioId),
       created_at: ahora,
       updated_at: ahora,
     };
@@ -1490,7 +1499,7 @@ function Dashboard() {
     void (async () => {
       const { data, error } = await supabase
         .from('pedidos')
-        .insert(payload)
+        .insert(payloadConNegocio(payload, negocioId))
         .select()
         .single();
 
@@ -1581,10 +1590,10 @@ function Dashboard() {
     };
 
     if (editandoProductoId) {
-      const { data, error } = await supabase
-        .from('productos')
-        .update(payload)
-        .eq('id', editandoProductoId)
+      const { data, error } = await queryConNegocio(
+        supabase.from('productos').update(payload).eq('id', editandoProductoId),
+        negocioId
+      )
         .select()
         .single();
 
@@ -1603,7 +1612,7 @@ function Dashboard() {
 
     const { data, error } = await supabase
       .from('productos')
-      .insert(payload)
+      .insert(payloadConNegocio(payload, negocioId))
       .select()
       .single();
 
@@ -1633,10 +1642,10 @@ function Dashboard() {
       editandoVariante?.categoria === categoria ? editandoVariante.id : null;
 
     if (editandoId) {
-      const { data, error } = await supabase
-        .from(config.tabla)
-        .update(payload)
-        .eq('id', editandoId)
+      const { data, error } = await queryConNegocio(
+        supabase.from(config.tabla).update(payload).eq('id', editandoId),
+        negocioId
+      )
         .select()
         .single();
 
@@ -1656,7 +1665,7 @@ function Dashboard() {
 
     const { data, error } = await supabase
       .from(config.tabla)
-      .insert(payload)
+      .insert(payloadConNegocio(payload, negocioId))
       .select()
       .single();
 
@@ -1672,7 +1681,10 @@ function Dashboard() {
   };
 
   const eliminarProducto = async (id) => {
-    const { error } = await supabase.from('productos').delete().eq('id', id);
+    const { error } = await queryConNegocio(
+      supabase.from('productos').delete().eq('id', id),
+      negocioId
+    );
 
     if (!error) {
       setProductos((prev) => prev.filter((p) => p.id !== id));
@@ -1694,7 +1706,10 @@ function Dashboard() {
     const config = obtenerConfigVariante(categoria);
     if (!config) return;
 
-    const { error } = await supabase.from(config.tabla).delete().eq('id', id);
+    const { error } = await queryConNegocio(
+      supabase.from(config.tabla).delete().eq('id', id),
+      negocioId
+    );
 
     if (!error) {
       setCatalogosVariantes((prev) => ({
@@ -1817,10 +1832,10 @@ function Dashboard() {
       payload.lineas_detalle = pedidoConCocina.lineas_detalle;
     }
 
-    const { error } = await supabase
-      .from('pedidos')
-      .update(payload)
-      .eq('id', id);
+    const { error } = await queryConNegocio(
+      supabase.from('pedidos').update(payload).eq('id', id),
+      negocioId
+    );
 
     if (!error) {
       setPedidos((prev) =>
@@ -1841,10 +1856,10 @@ function Dashboard() {
       payload.lineas_detalle = pedidoConCocina.lineas_detalle;
     }
 
-    const { error } = await supabase
-      .from('pedidos')
-      .update(payload)
-      .eq('id', id);
+    const { error } = await queryConNegocio(
+      supabase.from('pedidos').update(payload).eq('id', id),
+      negocioId
+    );
 
     if (!error) {
       setPedidos((prev) =>
@@ -1854,7 +1869,10 @@ function Dashboard() {
   };
 
   const eliminarPedido = async (id) => {
-    const { error } = await supabase.from('pedidos').delete().eq('id', id);
+    const { error } = await queryConNegocio(
+      supabase.from('pedidos').delete().eq('id', id),
+      negocioId
+    );
 
     if (!error) {
       setPedidos((prev) => prev.filter((p) => p.id !== id));
@@ -1872,11 +1890,10 @@ function Dashboard() {
   const iniciarEdicionPedido = async (pedido) => {
     let pedidoFuente = pedido;
 
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .eq('id', pedido.id)
-      .single();
+    const { data, error } = await queryConNegocio(
+      supabase.from('pedidos').select('*').eq('id', pedido.id),
+      negocioId
+    ).single();
 
     if (!error && data) {
       pedidoFuente = data;
@@ -2083,10 +2100,10 @@ function Dashboard() {
           }),
     };
 
-    const { data, error } = await supabase
-      .from('pedidos')
-      .update(payload)
-      .eq('id', pedido.id)
+    const { data, error } = await queryConNegocio(
+      supabase.from('pedidos').update(payload).eq('id', pedido.id),
+      negocioId
+    )
       .select()
       .single();
 
@@ -3557,14 +3574,59 @@ function Dashboard() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/catalogo" element={<Dashboard />} />
-        <Route path="/reportes" element={<VistaReportes />} />
-        <Route path="/cocina" element={<VistaCocina />} />
-        <Route path="/cocina2" element={<VistaCocina2 />} />
-        <Route path="/repartidor" element={<VistaRepartidor />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<VistaLogin />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/catalogo"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reportes"
+            element={
+              <ProtectedRoute>
+                <VistaReportes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cocina"
+            element={
+              <ProtectedRoute>
+                <VistaCocina />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cocina2"
+            element={
+              <ProtectedRoute>
+                <VistaCocina2 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/repartidor"
+            element={
+              <ProtectedRoute>
+                <VistaRepartidor />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

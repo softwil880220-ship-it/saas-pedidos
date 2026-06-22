@@ -24,8 +24,11 @@ import {
 } from './reportesHelpers';
 import { formatearMoneda } from './pedidosShared';
 import { supabase } from './supabase';
+import { useAuth } from './AuthContext';
+import { queryConNegocio } from './tenantHelpers';
 
 export default function VistaReportes() {
+  const { negocioId } = useAuth();
   const [periodo, setPeriodo] = useState(PERIODOS_REPORTE.SEMANA);
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -46,6 +49,12 @@ export default function VistaReportes() {
   useEffect(() => {
     let activo = true;
 
+    if (!negocioId) {
+      setPedidos([]);
+      setCargando(false);
+      return undefined;
+    }
+
     if (rangoInvalido) {
       setCargando(false);
       setError(null);
@@ -58,12 +67,14 @@ export default function VistaReportes() {
       setError(null);
 
       const { inicio, fin } = obtenerRangoReporte(configPeriodo);
-      const { data, error: errorConsulta } = await supabase
-        .from('pedidos')
-        .select('*')
-        .gte('created_at', inicio.toISOString())
-        .lte('created_at', fin.toISOString())
-        .order('created_at', { ascending: false });
+      const { data, error: errorConsulta } = await queryConNegocio(
+        supabase
+          .from('pedidos')
+          .select('*')
+          .gte('created_at', inicio.toISOString())
+          .lte('created_at', fin.toISOString()),
+        negocioId
+      ).order('created_at', { ascending: false });
 
       if (!activo) return;
 
@@ -82,7 +93,7 @@ export default function VistaReportes() {
     return () => {
       activo = false;
     };
-  }, [configPeriodo, rangoInvalido]);
+  }, [configPeriodo, rangoInvalido, negocioId]);
 
   const pedidosFiltrados = useMemo(
     () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from './supabase';
+import { perteneceANegocio, queryConNegocio } from './tenantHelpers';
 
 const REALTIME_EVENTOS = ['INSERT', 'UPDATE', 'DELETE'];
 
@@ -27,6 +28,7 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
     filtrar = null,
     comparar = null,
     ordenar = null,
+    negocioId = null,
   } = options;
 
   const eventType = normalizarEventType(payload);
@@ -38,7 +40,8 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
     return lista;
   };
 
-  const cumple = (item) => (item ? !filtrar || filtrar(item) : false);
+  const cumple = (item) =>
+    item ? perteneceANegocio(item, negocioId) && (!filtrar || filtrar(item)) : false;
 
   if (eventType === 'DELETE') {
     const id = obtenerIdRegistro(payload);
@@ -71,10 +74,11 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
   return prev;
 }
 
-export function sincronizarPedidosConEvento(prev, payload, filtrar, comparar) {
+export function sincronizarPedidosConEvento(prev, payload, filtrar, comparar, negocioId) {
   return sincronizarListaConEvento(prev, payload, {
     filtrar,
     comparar,
+    negocioId,
     ordenar: comparar
       ? (lista) => [...lista].sort(comparar)
       : ordenarPedidosDesc,
@@ -91,12 +95,13 @@ function suscribirPostgresChanges(channel, { schema, table, handler }) {
   });
 }
 
-function crearHandlerRealtime({ filtrar, comparar, ordenarLista, setItems }) {
+function crearHandlerRealtime({ filtrar, comparar, ordenarLista, setItems, negocioId }) {
   return (payload) => {
     setItems((prev) =>
       sincronizarListaConEvento(prev, payload, {
         filtrar,
         comparar,
+        negocioId,
         ordenar: ordenarLista
           ? (lista) => ordenarLista(lista)
           : comparar
@@ -110,6 +115,7 @@ function crearHandlerRealtime({ filtrar, comparar, ordenarLista, setItems }) {
 function useSupabaseRealtime({
   table,
   channelName,
+  negocioId = null,
   filtrar = null,
   comparar = null,
   ordenInicial = { column: 'created_at', ascending: false },
@@ -120,23 +126,31 @@ function useSupabaseRealtime({
 
   const aplicarFiltroYOrden = useCallback(
     (lista) => {
-      const filtrada = filtrar ? lista.filter(filtrar) : lista;
-      if (ordenarLista) return ordenarLista(filtrada);
-      if (comparar) return [...filtrada].sort(comparar);
-      return filtrada;
+      const filtrada = lista.filter((item) => perteneceANegocio(item, negocioId));
+      const conFiltro = filtrar ? filtrada.filter(filtrar) : filtrada;
+      if (ordenarLista) return ordenarLista(conFiltro);
+      if (comparar) return [...conFiltro].sort(comparar);
+      return conFiltro;
     },
-    [filtrar, comparar, ordenarLista]
+    [filtrar, comparar, ordenarLista, negocioId]
   );
 
   useEffect(() => {
+    if (!negocioId) {
+      setItems([]);
+      setCargando(false);
+      return undefined;
+    }
+
     let activo = true;
     let channel = null;
 
     const cargarItems = async () => {
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .order(ordenInicial.column, { ascending: ordenInicial.ascending });
+      setCargando(true);
+      const { data, error } = await queryConNegocio(
+        supabase.from(table).select('*'),
+        negocioId
+      ).order(ordenInicial.column, { ascending: ordenInicial.ascending });
 
       if (activo && !error && data) {
         setItems(aplicarFiltroYOrden(data));
@@ -159,6 +173,7 @@ function useSupabaseRealtime({
           comparar,
           ordenarLista,
           setItems,
+          negocioId,
         }),
       });
       channel.subscribe();
@@ -187,6 +202,7 @@ function useSupabaseRealtime({
   }, [
     table,
     channelName,
+    negocioId,
     filtrar,
     comparar,
     aplicarFiltroYOrden,
@@ -199,11 +215,17 @@ function useSupabaseRealtime({
 }
 
 export function usePedidosRealtime(options = {}) {
-  const { channelName = 'pedidos', filtrar = null, comparar = null } = options;
+  const {
+    channelName = 'pedidos',
+    negocioId = null,
+    filtrar = null,
+    comparar = null,
+  } = options;
 
   const { items, setItems, cargando } = useSupabaseRealtime({
     table: 'pedidos',
     channelName,
+    negocioId,
     filtrar,
     comparar,
     ordenInicial: { column: 'created_at', ascending: false },
@@ -216,11 +238,12 @@ export function usePedidosRealtime(options = {}) {
 }
 
 export function useProductosRealtime(options = {}) {
-  const { channelName = 'productos', comparar = null } = options;
+  const { channelName = 'productos', negocioId = null, comparar = null } = options;
 
   const { items, setItems, cargando } = useSupabaseRealtime({
     table: 'productos',
     channelName,
+    negocioId,
     comparar,
     ordenInicial: { column: 'id', ascending: true },
     ordenarLista: comparar
