@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -39,12 +39,18 @@ import {
 } from './reportesHelpers';
 import {
   cargarCarritoPedido,
+  cargarCarritoPresencialDisponible,
+  cargarCarritoWhatsappDisponible,
   cargarEstadoInicialCapturaPedido,
-  limpiarCarritoEnStorage,
   limpiarCarritoPedido,
-  obtenerClaveCarritoPedido,
   persistirCarritoPedido,
+  persistirModoCaptura,
 } from './pedidoCarritoStorage';
+import {
+  eliminarPedidoPendienteSync,
+  guardarPedidoPendienteSync,
+  obtenerPedidosPendientesSync,
+} from './pedidoPendingSyncStorage';
 import SelectorProductosPedido from './SelectorProductosPedido';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
@@ -1017,7 +1023,8 @@ function Dashboard() {
   const { negocioId } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
-  const [modo, setModo] = useState('presencial');
+  const estadoInicialCaptura = cargarEstadoInicialCapturaPedido();
+  const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
@@ -1046,7 +1053,6 @@ function Dashboard() {
     [catalogosVariantes]
   );
   const [resumenVenta, setResumenVenta] = useState(null);
-  const estadoInicialCaptura = cargarEstadoInicialCapturaPedido();
   const nextLineaId = useRef(estadoInicialCaptura.nextLineaId);
   const nextEditLineaId = useRef(2);
   const persistenciaCarritoPausadaRef = useRef(false);
@@ -1098,6 +1104,35 @@ function Dashboard() {
     await cargarCatalogosVariantes();
   };
 
+  const sincronizarPedidosPendientes = useCallback(async () => {
+    if (!negocioId) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+    const pendientes = obtenerPedidosPendientesSync(negocioId);
+
+    for (const item of pendientes) {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .insert(item.payload)
+        .select()
+        .single();
+
+      if (error || !data) continue;
+
+      eliminarPedidoPendienteSync(item.localId);
+      setPedidos((prev) => {
+        const sinOptimistico = prev.filter((pedido) => pedido.id !== item.localId);
+        const existe = sinOptimistico.some((pedido) => pedido.id === data.id);
+
+        if (existe) {
+          return ordenarPedidosDesc(sinOptimistico);
+        }
+
+        return ordenarPedidosDesc([...sinOptimistico, data]);
+      });
+    }
+  }, [negocioId, setPedidos]);
+
   const resetFormulariosCatalogo = () => {
     setEditandoProductoId(null);
     setEditandoVariante(null);
@@ -1138,6 +1173,38 @@ function Dashboard() {
       nextLineaId: nextLineaId.current,
     });
   }, [seccion, modo, form, pagoRecibido]);
+
+  useEffect(() => {
+    if (!negocioId) return;
+
+    const pendientes = obtenerPedidosPendientesSync(negocioId);
+    if (pendientes.length === 0) return;
+
+    setPedidos((prev) => {
+      let next = [...prev];
+
+      pendientes.forEach((item) => {
+        if (!next.some((pedido) => pedido.id === item.localId)) {
+          next = [...next, item.pedidoOptimista];
+        }
+      });
+
+      return ordenarPedidosDesc(next);
+    });
+
+    void sincronizarPedidosPendientes();
+  }, [negocioId, setPedidos, sincronizarPedidosPendientes]);
+
+  useEffect(() => {
+    if (!negocioId) return undefined;
+
+    const handleOnline = () => {
+      void sincronizarPedidosPendientes();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [negocioId, sincronizarPedidosPendientes]);
 
   useEffect(() => {
     if (!resumenVenta || modo !== 'presencial') return;
@@ -1382,6 +1449,7 @@ function Dashboard() {
       pagoRecibido,
       nextLineaId: nextLineaId.current,
     });
+    persistirModoCaptura(nuevoModo);
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
     setFiltroDomicilio('todos');
@@ -1392,7 +1460,13 @@ function Dashboard() {
     setPedidoEditForm(null);
 
     if (nuevoModo === 'presencial') {
-      const restaurado = cargarCarritoPedido('presencial', TIPOS_ENTREGA.DOMICILIO);
+      const restaurado = cargarCarritoPresencialDisponible();
+      if (restaurado) {
+        aplicarEstadoCarrito(restaurado);
+        return;
+      }
+    } else {
+      const restaurado = cargarCarritoWhatsappDisponible();
       if (restaurado) {
         aplicarEstadoCarrito(restaurado);
         return;
@@ -1467,14 +1541,6 @@ function Dashboard() {
 
     const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
-    const snapshotForm = clonarFormPedido(form);
-    const snapshotPagoRecibido = pagoRecibido;
-    const snapshotResumenVenta = resumenVenta;
-    const snapshotNextLineaId = nextLineaId.current;
-    const claveCarritoGuardado = obtenerClaveCarritoPedido(
-      modo,
-      esPresencial ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
-    );
 
     const payload = {
       cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
@@ -1503,12 +1569,20 @@ function Dashboard() {
 
     const optimisticId = crearIdOptimisticoPedido();
     const ahora = new Date().toISOString();
+    const payloadInsert = payloadConNegocio(payload, negocioId);
     const pedidoOptimista = {
       id: optimisticId,
-      ...payloadConNegocio(payload, negocioId),
+      ...payloadInsert,
       created_at: ahora,
       updated_at: ahora,
     };
+
+    guardarPedidoPendienteSync({
+      localId: optimisticId,
+      payload: payloadInsert,
+      pedidoOptimista,
+      negocioId,
+    });
 
     setPedidos((prev) => ordenarPedidosDesc([...prev, pedidoOptimista]));
 
@@ -1522,33 +1596,25 @@ function Dashboard() {
     }
 
     persistenciaCarritoPausadaRef.current = true;
-    resetFormPedido(modo, { limpiarStorage: false });
-
-    const revertirGuardadoOptimista = () => {
-      setPedidos((prev) => prev.filter((pedido) => pedido.id !== optimisticId));
-      setForm(snapshotForm);
-      setPagoRecibido(snapshotPagoRecibido);
-      setResumenVenta(snapshotResumenVenta);
-      nextLineaId.current = snapshotNextLineaId;
-      persistenciaCarritoPausadaRef.current = false;
-      setErrorGuardarPedido('No se pudo guardar, intenta de nuevo.');
-    };
+    resetFormPedido(modo);
 
     void (async () => {
       const { data, error } = await supabase
         .from('pedidos')
-        .insert(payloadConNegocio(payload, negocioId))
+        .insert(payloadInsert)
         .select()
         .single();
 
       if (error || !data) {
-        revertirGuardadoOptimista();
+        setErrorGuardarPedido(
+          'Pedido guardado localmente. Se sincronizará cuando haya conexión.'
+        );
+        persistenciaCarritoPausadaRef.current = false;
         return;
       }
 
-      if (claveCarritoGuardado) {
-        limpiarCarritoEnStorage(claveCarritoGuardado);
-      }
+      eliminarPedidoPendienteSync(optimisticId);
+      setErrorGuardarPedido(null);
       persistenciaCarritoPausadaRef.current = false;
 
       setPedidos((prev) => {

@@ -2,8 +2,10 @@ import { TIPOS_ENTREGA } from './pedidosShared';
 
 export const STORAGE_KEYS = {
   CAJA: 'pos_carrito_caja',
+  WHATSAPP_BORRADOR: 'pos_carrito_whatsapp_borrador',
   WHATSAPP_DOMICILIO: 'pos_carrito_whatsapp_domicilio',
   WHATSAPP_SUCURSAL: 'pos_carrito_whatsapp_sucursal',
+  MODO_CAPTURA: 'pos_modo_captura',
 };
 
 const CLIENTE_PUBLICO = 'Público general';
@@ -65,7 +67,7 @@ export function obtenerClaveCarritoPedido(modo, tipoEntrega) {
     return STORAGE_KEYS.WHATSAPP_SUCURSAL;
   }
 
-  return null;
+  return STORAGE_KEYS.WHATSAPP_BORRADOR;
 }
 
 function normalizarVariantesLinea(variantes) {
@@ -110,9 +112,10 @@ function esCarritoVacio({ form, pagoRecibido }, modo, tipoEntrega) {
   if (!clave) return true;
 
   const lineas = Array.isArray(form?.lineas) ? form.lineas : [];
-  const soloLineaVacia = lineas.length <= 1 && lineas.every(lineaEstaVacia);
+  const sinProductos =
+    lineas.length === 0 || lineas.every(lineaEstaVacia);
 
-  if (!soloLineaVacia) {
+  if (!sinProductos) {
     return false;
   }
 
@@ -143,7 +146,26 @@ function esCarritoVacio({ form, pagoRecibido }, modo, tipoEntrega) {
     );
   }
 
-  return true;
+  return (
+    !form?.cliente?.trim() &&
+    !form?.telefono?.trim() &&
+    !form?.direccion?.trim() &&
+    !form?.formaPago?.trim() &&
+    (form?.status || STATUS_DEFAULT_WHATSAPP) === STATUS_DEFAULT_WHATSAPP
+  );
+}
+
+function carritoGuardadoTieneContenido(restaurado, modo) {
+  if (!restaurado) return false;
+
+  const tipoEntrega =
+    modo === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : restaurado.form?.tipoEntrega;
+
+  return !esCarritoVacio(
+    { form: restaurado.form, pagoRecibido: restaurado.pagoRecibido },
+    modo,
+    tipoEntrega
+  );
 }
 
 export function limpiarCarritoEnStorage(clave) {
@@ -169,6 +191,30 @@ function serializarCarrito({ form, pagoRecibido, nextLineaId }) {
   });
 }
 
+export function persistirModoCaptura(modo) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEYS.MODO_CAPTURA,
+      modo === 'whatsapp' ? 'whatsapp' : 'presencial'
+    );
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarModoCaptura() {
+  if (typeof window === 'undefined') return 'presencial';
+
+  try {
+    const modo = window.localStorage.getItem(STORAGE_KEYS.MODO_CAPTURA);
+    return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
+  } catch {
+    return 'presencial';
+  }
+}
+
 export function persistirCarritoPedido({ modo, form, pagoRecibido, nextLineaId }) {
   if (typeof window === 'undefined') return;
 
@@ -188,6 +234,13 @@ export function persistirCarritoPedido({ modo, form, pagoRecibido, nextLineaId }
       clave,
       serializarCarrito({ form, pagoRecibido, nextLineaId })
     );
+
+    if (
+      clave === STORAGE_KEYS.WHATSAPP_DOMICILIO ||
+      clave === STORAGE_KEYS.WHATSAPP_SUCURSAL
+    ) {
+      limpiarCarritoEnStorage(STORAGE_KEYS.WHATSAPP_BORRADOR);
+    }
   } catch {
     // Ignorar errores de almacenamiento local.
   }
@@ -206,9 +259,9 @@ export function cargarCarritoPedido(modo, tipoEntrega) {
       return null;
     }
 
-    const lineas = Array.isArray(parsed.form.lineas) && parsed.form.lineas.length
+    const lineas = Array.isArray(parsed.form.lineas)
       ? parsed.form.lineas.map(normalizarLineaGuardada)
-      : [crearLineaPedidoVacia(1)];
+      : [];
 
     const formDefault = crearFormularioPedidoDefault(modo, tipoEntrega);
 
@@ -220,7 +273,7 @@ export function cargarCarritoPedido(modo, tipoEntrega) {
           modo === 'presencial'
             ? TIPOS_ENTREGA.DOMICILIO
             : tipoEntrega || parsed.form.tipoEntrega || TIPO_ENTREGA_SIN_SELECCION,
-        lineas,
+        lineas: lineas.length ? lineas : [crearLineaPedidoVacia(1)],
       },
       pagoRecibido: parsed.pagoRecibido ?? '',
       nextLineaId: parsed.nextLineaId ?? calcularNextLineaId(lineas),
@@ -230,16 +283,54 @@ export function cargarCarritoPedido(modo, tipoEntrega) {
   }
 }
 
-export function cargarEstadoInicialCapturaPedido() {
+export function cargarCarritoWhatsappDisponible() {
+  const opciones = [
+    TIPOS_ENTREGA.DOMICILIO,
+    TIPOS_ENTREGA.SUCURSAL,
+    TIPO_ENTREGA_SIN_SELECCION,
+  ];
+
+  for (const tipoEntrega of opciones) {
+    const restaurado = cargarCarritoPedido('whatsapp', tipoEntrega);
+    if (carritoGuardadoTieneContenido(restaurado, 'whatsapp')) {
+      return restaurado;
+    }
+  }
+
+  return null;
+}
+
+export function cargarCarritoPresencialDisponible() {
   const restaurado = cargarCarritoPedido('presencial', TIPOS_ENTREGA.DOMICILIO);
 
-  if (restaurado) {
+  if (carritoGuardadoTieneContenido(restaurado, 'presencial')) {
     return restaurado;
   }
+
+  return null;
+}
+
+export function cargarEstadoInicialCapturaPedido() {
+  const whatsappRestaurado = cargarCarritoWhatsappDisponible();
+
+  if (whatsappRestaurado) {
+    persistirModoCaptura('whatsapp');
+    return { ...whatsappRestaurado, modo: 'whatsapp' };
+  }
+
+  const cajaRestaurado = cargarCarritoPresencialDisponible();
+
+  if (cajaRestaurado) {
+    persistirModoCaptura('presencial');
+    return { ...cajaRestaurado, modo: 'presencial' };
+  }
+
+  persistirModoCaptura('presencial');
 
   return {
     form: crearFormularioPedidoDefault('presencial'),
     pagoRecibido: '',
     nextLineaId: 2,
+    modo: 'presencial',
   };
 }
