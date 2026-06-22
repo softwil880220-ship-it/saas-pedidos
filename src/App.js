@@ -1340,13 +1340,10 @@ function Dashboard() {
   };
 
   const eliminarLinea = (lineaId) => {
-    setForm((prev) => {
-      if (prev.lineas.length <= 1) return prev;
-      return {
-        ...prev,
-        lineas: prev.lineas.filter((linea) => linea.id !== lineaId),
-      };
-    });
+    setForm((prev) => ({
+      ...prev,
+      lineas: prev.lineas.filter((linea) => linea.id !== lineaId),
+    }));
   };
 
   const resetFormPedido = (modoActual = modo, { limpiarStorage = true } = {}) => {
@@ -3043,7 +3040,9 @@ function Dashboard() {
                           <div className="formulario-campo pedido-linea-producto">
                             <span className="pedido-linea-producto-label">Producto</span>
                             <span className="pedido-linea-producto-nombre">
-                              {productoSeleccionado?.nombre}
+                              {productoSeleccionado
+                                ? `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} c/u`
+                                : ''}
                             </span>
                           </div>
                           <div className="formulario-campo pedido-linea-cantidad">
@@ -3091,7 +3090,6 @@ function Dashboard() {
                             type="button"
                             className="eliminar-linea-btn"
                             onClick={() => eliminarLinea(linea.id)}
-                            disabled={lineasPedidoConProducto.length <= 1}
                             aria-label={`Eliminar producto ${indice + 1}`}
                           >
                             ✕
