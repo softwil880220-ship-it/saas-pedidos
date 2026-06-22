@@ -1045,10 +1045,8 @@ function Dashboard() {
     () => ordenarProductos(productos),
     [productos]
   );
-  const frecuenciaCategoriasPedidos = useFrecuenciaCategoriasPedidos(
-    negocioId,
-    productos
-  );
+  const { frecuenciaCategorias: frecuenciaCategoriasPedidos, frecuenciaLista } =
+    useFrecuenciaCategoriasPedidos(negocioId, productos);
   const catalogosVariantesOrdenados = useMemo(
     () =>
       VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
@@ -3084,6 +3082,7 @@ function Dashboard() {
                   <SelectorProductosPedido
                     productos={productosOrdenados}
                     frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                    frecuenciaLista={frecuenciaLista}
                     categoriaActiva={categoriaPedidoActiva}
                     onCategoriaChange={setCategoriaPedidoActiva}
                     onAgregarProducto={agregarProductoAlPedido}

@@ -5,14 +5,17 @@ import { queryConNegocio } from './tenantHelpers';
 
 export function useFrecuenciaCategoriasPedidos(negocioId, productos) {
   const [frecuenciaCategorias, setFrecuenciaCategorias] = useState(() => new Map());
+  const [frecuenciaLista, setFrecuenciaLista] = useState(false);
 
   useEffect(() => {
     if (!negocioId) {
       setFrecuenciaCategorias(new Map());
+      setFrecuenciaLista(false);
       return undefined;
     }
 
     let activo = true;
+    setFrecuenciaLista(false);
 
     const cargarFrecuencia = async () => {
       const { data, error } = await queryConNegocio(
@@ -24,10 +27,11 @@ export function useFrecuenciaCategoriasPedidos(negocioId, productos) {
 
       if (error || !data) {
         setFrecuenciaCategorias(new Map());
-        return;
+      } else {
+        setFrecuenciaCategorias(calcularFrecuenciaCategoriasDesdePedidos(data, productos));
       }
 
-      setFrecuenciaCategorias(calcularFrecuenciaCategoriasDesdePedidos(data, productos));
+      setFrecuenciaLista(true);
     };
 
     cargarFrecuencia();
@@ -37,5 +41,5 @@ export function useFrecuenciaCategoriasPedidos(negocioId, productos) {
     };
   }, [negocioId, productos]);
 
-  return frecuenciaCategorias;
+  return { frecuenciaCategorias, frecuenciaLista };
 }

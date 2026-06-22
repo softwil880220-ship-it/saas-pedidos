@@ -30,6 +30,7 @@ function agruparProductosPorCategoria(productos, frecuenciaCategorias) {
 export default function SelectorProductosPedido({
   productos,
   frecuenciaCategorias,
+  frecuenciaLista = false,
   categoriaActiva,
   onCategoriaChange,
   onAgregarProducto,
@@ -42,7 +43,7 @@ export default function SelectorProductosPedido({
   );
 
   useEffect(() => {
-    if (categorias.length === 0) return;
+    if (categorias.length === 0 || !frecuenciaLista) return;
 
     const categoriaValida = categorias.some(
       (categoria) => categoria.nombre === categoriaActiva
@@ -51,7 +52,7 @@ export default function SelectorProductosPedido({
     if (!categoriaActiva || !categoriaValida) {
       onCategoriaChange(categorias[0].nombre);
     }
-  }, [categorias, categoriaActiva, onCategoriaChange]);
+  }, [categorias, categoriaActiva, onCategoriaChange, frecuenciaLista]);
 
   const categoriaSeleccionada = categorias.find(
     (categoria) => categoria.nombre === categoriaActiva
