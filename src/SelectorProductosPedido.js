@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   normalizarNombreCategoria,
   ordenarCategoriasPorFrecuencia,
@@ -36,6 +36,7 @@ export default function SelectorProductosPedido({
   onAgregarProducto,
 }) {
   const frecuencia = frecuenciaCategorias ?? new Map();
+  const seleccionPorFrecuenciaAplicadaRef = useRef(false);
 
   const categorias = useMemo(
     () => agruparProductosPorCategoria(productos, frecuencia),
@@ -43,7 +44,19 @@ export default function SelectorProductosPedido({
   );
 
   useEffect(() => {
+    if (!frecuenciaLista) {
+      seleccionPorFrecuenciaAplicadaRef.current = false;
+    }
+  }, [frecuenciaLista]);
+
+  useEffect(() => {
     if (categorias.length === 0 || !frecuenciaLista) return;
+
+    if (!seleccionPorFrecuenciaAplicadaRef.current) {
+      seleccionPorFrecuenciaAplicadaRef.current = true;
+      onCategoriaChange(categorias[0].nombre);
+      return;
+    }
 
     const categoriaValida = categorias.some(
       (categoria) => categoria.nombre === categoriaActiva

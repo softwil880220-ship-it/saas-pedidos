@@ -8,7 +8,7 @@ export function useFrecuenciaCategoriasPedidos(negocioId, productos) {
   const [frecuenciaLista, setFrecuenciaLista] = useState(false);
 
   useEffect(() => {
-    if (!negocioId) {
+    if (!negocioId || productos.length === 0) {
       setFrecuenciaCategorias(new Map());
       setFrecuenciaLista(false);
       return undefined;
