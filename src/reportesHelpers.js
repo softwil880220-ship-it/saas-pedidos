@@ -227,19 +227,32 @@ export function etiquetaTipoEntregaReporte(pedido) {
 }
 
 export function formatearProductosReporte(pedido) {
+  const lineas = Array.isArray(pedido.lineas_detalle) ? pedido.lineas_detalle : [];
+
+  if (lineas.length > 0) {
+    return lineas
+      .map((linea) => {
+        const descripcion = (linea.descripcion || linea.nombre || 'Producto').trim();
+        const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+        const precioUnitario = linea.precio_unitario;
+
+        if (
+          precioUnitario != null &&
+          precioUnitario !== '' &&
+          Number.isFinite(Number(precioUnitario))
+        ) {
+          return `${descripcion} x${cantidad} — ${formatearMoneda(precioUnitario)} c/u`;
+        }
+
+        return `${descripcion} x${cantidad}`;
+      })
+      .join(', ');
+  }
+
   const resumen = pedido.producto?.trim();
   if (resumen) return resumen;
 
-  const lineas = Array.isArray(pedido.lineas_detalle) ? pedido.lineas_detalle : [];
-  if (!lineas.length) return '—';
-
-  return lineas
-    .map((linea) => {
-      const cantidad = Number(linea.cantidad) || 1;
-      const descripcion = linea.descripcion?.trim() || 'Producto';
-      return `${cantidad}x ${descripcion}`;
-    })
-    .join(', ');
+  return '—';
 }
 
 export function formatearFechaPedidoReporte(createdAt) {
