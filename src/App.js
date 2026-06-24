@@ -2811,8 +2811,11 @@ function Dashboard() {
   );
 
   const diferenciaArqueoTotal = useMemo(
-    () => redondearMoneda(totalArqueoContado - fondoFijoDelDia - arqueoSistema.total),
-    [totalArqueoContado, fondoFijoDelDia, arqueoSistema.total]
+    () =>
+      redondearMoneda(
+        arqueoSistema.total - totalArqueoContado - fondoFijoDelDia - retirosDelDia
+      ),
+    [arqueoSistema.total, totalArqueoContado, fondoFijoDelDia, retirosDelDia]
   );
 
   const cargarRetirosDelDia = async () => {
@@ -3654,12 +3657,10 @@ function Dashboard() {
                 {FORMAS_PAGO.map(({ value, label }) => {
                   const sistema = arqueoSistema[value];
                   const contado = Number.parseFloat(arqueoContado[value]);
-                  const contadoAjustado =
-                    value === 'efectivo' ? contado - fondoFijoDelDia : contado;
                   const diferencia =
                     arqueoContado[value] === '' || !Number.isFinite(contado)
                       ? null
-                      : redondearMoneda(contadoAjustado - sistema);
+                      : redondearMoneda(sistema - contado);
                   const diferenciaFmt =
                     diferencia == null ? null : formatearDiferenciaArqueo(diferencia);
 
