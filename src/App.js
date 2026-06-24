@@ -1044,17 +1044,21 @@ function formatearFechaCortaFiltro(claveFecha) {
   return texto.replace(/\.$/, '');
 }
 
+function formatearHoraRelojDashboard(fecha = new Date()) {
+  const horas12 = fecha.getHours() % 12 || 12;
+  const minutos = String(fecha.getMinutes()).padStart(2, '0');
+  const periodo = fecha.getHours() >= 12 ? 'p.m.' : 'a.m.';
+
+  return `${horas12}:${minutos} ${periodo}`;
+}
+
 function formatearFechaCompleta(fecha = new Date()) {
   const diaSemana = fecha.toLocaleDateString('es-MX', { weekday: 'long' });
   const dia = fecha.getDate();
   const mes = fecha.toLocaleDateString('es-MX', { month: 'long' });
   const anio = fecha.getFullYear();
   const diaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
-  const hora = fecha.toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  const hora = formatearHoraRelojDashboard(fecha);
 
   return `${diaCapitalizado} ${dia} de ${mes} de ${anio} • ${hora}`;
 }
