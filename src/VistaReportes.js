@@ -36,6 +36,9 @@ const REPORTES_TABS = [
   { value: 'retiros', label: 'Retiros de efectivo' },
 ];
 
+const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
+  'No puedes eliminar este retiro porque existe un arqueo registrado para este día. Elimina el arqueo primero, luego el retiro, y vuelve a hacer el arqueo.';
+
 const FORMAS_PAGO_ARQUEO = [
   { label: 'Efectivo', sistema: 'efectivo_sistema', contado: 'efectivo_contado' },
   { label: 'Tarjeta', sistema: 'tarjeta_sistema', contado: 'tarjeta_contado' },
@@ -109,6 +112,8 @@ export default function VistaReportes() {
   const [errorRetiros, setErrorRetiros] = useState(null);
   const [retiroConfirmarEliminar, setRetiroConfirmarEliminar] = useState(null);
   const [eliminandoRetiroId, setEliminandoRetiroId] = useState(null);
+  const [arqueosHistorial, setArqueosHistorial] = useState([]);
+  const [retiroMensajeBloqueo, setRetiroMensajeBloqueo] = useState(null);
 
   const configPeriodo = useMemo(
     () => ({ periodo, fechaDesde, fechaHasta }),
@@ -221,19 +226,29 @@ export default function VistaReportes() {
     const cargarRetiros = async () => {
       setCargandoRetiros(true);
       setErrorRetiros(null);
+      setRetiroMensajeBloqueo(null);
+      setRetiroConfirmarEliminar(null);
 
-      const { data, error } = await queryConNegocio(
-        supabase.from('retiros').select('*').order('created_at', { ascending: false }),
-        negocioId
-      );
+      const [retirosRes, arqueosRes] = await Promise.all([
+        queryConNegocio(
+          supabase.from('retiros').select('*').order('created_at', { ascending: false }),
+          negocioId
+        ),
+        queryConNegocio(
+          supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
+          negocioId
+        ),
+      ]);
 
       if (!activo) return;
 
-      if (error) {
+      if (retirosRes.error || arqueosRes.error) {
         setErrorRetiros('No se pudo cargar el historial de retiros.');
         setRetirosHistorial([]);
+        setArqueosHistorial([]);
       } else {
-        setRetirosHistorial(data || []);
+        setRetirosHistorial(retirosRes.data || []);
+        setArqueosHistorial(arqueosRes.data || []);
       }
 
       setCargandoRetiros(false);
@@ -257,6 +272,20 @@ export default function VistaReportes() {
     () => filtrarArqueosReporte(retirosHistorial, configPeriodo),
     [retirosHistorial, configPeriodo]
   );
+
+  const diasConArqueo = useMemo(() => {
+    const dias = new Set();
+
+    (arqueosHistorial || []).forEach((arqueo) => {
+      dias.add(
+        claveFechaDesdeDate(
+          arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
+        )
+      );
+    });
+
+    return dias;
+  }, [arqueosHistorial]);
 
   const pedidosFiltrados = useMemo(
     () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
@@ -325,8 +354,36 @@ export default function VistaReportes() {
     setArqueos((prev) => prev.filter((item) => item.id !== arqueoId));
   };
 
+  const existeArqueoDelDiaRetiro = (retiro) => {
+    const claveDia = claveFechaDesdeDate(
+      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
+    );
+
+    return diasConArqueo.has(claveDia);
+  };
+
+  const intentarEliminarRetiro = (retiro) => {
+    setRetiroConfirmarEliminar(null);
+
+    if (existeArqueoDelDiaRetiro(retiro)) {
+      setRetiroMensajeBloqueo(retiro.id);
+      return;
+    }
+
+    setRetiroMensajeBloqueo(null);
+    setRetiroConfirmarEliminar(retiro.id);
+  };
+
   const confirmarEliminarRetiro = async (retiroId) => {
     if (!negocioId || eliminandoRetiroId) return;
+
+    const retiro = retirosHistorial.find((item) => item.id === retiroId);
+
+    if (retiro && existeArqueoDelDiaRetiro(retiro)) {
+      setRetiroConfirmarEliminar(null);
+      setRetiroMensajeBloqueo(retiroId);
+      return;
+    }
 
     setEliminandoRetiroId(retiroId);
     setErrorRetiros(null);
@@ -470,7 +527,18 @@ export default function VistaReportes() {
           </span>
         </div>
         <div className="reportes-arqueo-cabecera-acciones">
-          {retiroConfirmarEliminar === retiro.id ? (
+          {retiroMensajeBloqueo === retiro.id ? (
+            <div className="reportes-arqueo-confirmar-eliminar">
+              <span>{MENSAJE_RETIRO_BLOQUEADO_ARQUEO}</span>
+              <button
+                type="button"
+                className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-cancelar"
+                onClick={() => setRetiroMensajeBloqueo(null)}
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : retiroConfirmarEliminar === retiro.id ? (
             <div className="reportes-arqueo-confirmar-eliminar">
               <span>¿Eliminar este retiro?</span>
               <button
@@ -494,10 +562,11 @@ export default function VistaReportes() {
             <button
               type="button"
               className="reportes-arqueo-eliminar-btn"
-              onClick={() => setRetiroConfirmarEliminar(retiro.id)}
+              onClick={() => intentarEliminarRetiro(retiro)}
               disabled={
                 eliminandoRetiroId !== null ||
-                (retiroConfirmarEliminar !== null && retiroConfirmarEliminar !== retiro.id)
+                (retiroConfirmarEliminar !== null && retiroConfirmarEliminar !== retiro.id) ||
+                (retiroMensajeBloqueo !== null && retiroMensajeBloqueo !== retiro.id)
               }
             >
               Eliminar
