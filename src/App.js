@@ -281,10 +281,10 @@ function obtenerRangoFechaClave(claveFecha) {
 
 function crearArqueoContadoVacio() {
   return {
-    efectivo: '',
-    tarjeta: '',
-    transferencia: '',
-    link_pago: '',
+    efectivo: '0',
+    tarjeta: '0',
+    transferencia: '0',
+    link_pago: '0',
   };
 }
 
@@ -2804,7 +2804,7 @@ function Dashboard() {
         FORMAS_PAGO.reduce(
           (suma, { value }) => suma + (Number.parseFloat(arqueoContado[value]) || 0),
           0
-        ) + fondoFijoDelDia
+        ) - fondoFijoDelDia
       ),
     [arqueoContado, fondoFijoDelDia]
   );
@@ -3732,7 +3732,7 @@ function Dashboard() {
                 <div className="arqueo-modal-fila">
                   <label>Fondo fijo</label>
                   <span className="arqueo-modal-sistema">—</span>
-                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
+                  <span className="arqueo-modal-sistema">{formatearMoneda(-fondoFijoDelDia)}</span>
                   <span>—</span>
                 </div>
               </div>
