@@ -466,9 +466,6 @@ export default function VistaReportes() {
             {formatearFechaPedidoReporte(retiro.created_at)}
           </time>
           <span className="reportes-arqueo-usuario">
-            {formatearHoraPedidoLista(retiro.created_at)}
-          </span>
-          <span className="reportes-arqueo-usuario">
             {retiro.usuario?.trim() || '—'}
           </span>
         </div>
