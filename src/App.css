@@ -1060,6 +1060,7 @@
   font-size: 0.85rem;
   color: #1e293b;
   border-bottom: 1px solid #f1f5f9;
+  align-items: start;
 }
 
 .pedidos-reporte-fila:last-child {
@@ -1084,6 +1085,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pedidos-reporte .reporte-productos {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
 }
 
 .reporte-total {
