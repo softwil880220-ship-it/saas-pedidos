@@ -409,3 +409,141 @@ export function exportarReportePdf({
   };
   doc.save(`reporte-ventas-${sufijos[tipo] || 'reporte'}.pdf`);
 }
+
+const FORMAS_PAGO_ARQUEO_PDF = [
+  { label: 'Efectivo', sistema: 'efectivo_sistema', contado: 'efectivo_contado' },
+  { label: 'Tarjeta', sistema: 'tarjeta_sistema', contado: 'tarjeta_contado' },
+  {
+    label: 'Transferencia',
+    sistema: 'transferencia_sistema',
+    contado: 'transferencia_contado',
+  },
+  { label: 'Link de pago', sistema: 'link_sistema', contado: 'link_contado' },
+];
+
+export function filtrarArqueosReporte(arqueos, configPeriodo) {
+  if (rangoFechasInvalido(configPeriodo.fechaDesde, configPeriodo.fechaHasta)) {
+    return [];
+  }
+
+  const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+  if (!inicio || !fin) return [];
+
+  return (arqueos || [])
+    .filter((arqueo) => {
+      const fecha = new Date(arqueo.created_at || 0);
+      return fecha >= inicio && fecha <= fin;
+    })
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+function agruparRetirosPorDiaPdf(retiros) {
+  const grupos = new Map();
+
+  (retiros || []).forEach((retiro) => {
+    const clave = claveFechaDesdeDate(
+      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
+    );
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, []);
+    }
+
+    grupos.get(clave).push(retiro);
+  });
+
+  return grupos;
+}
+
+function formatearDesgloseArqueoPdf(arqueo) {
+  return FORMAS_PAGO_ARQUEO_PDF.map(
+    ({ label, sistema, contado }) =>
+      `${label}: sistema ${formatearMoneda(arqueo[sistema])}, contado ${formatearMoneda(arqueo[contado])}`
+  ).join('\n');
+}
+
+function formatearRetirosArqueoPdf(arqueo, retirosDelDia) {
+  const lineas = [`Retiros del día: ${formatearMoneda(arqueo.retiros_del_dia)}`];
+
+  if (!retirosDelDia.length) {
+    lineas.push('Sin retiros registrados ese día.');
+    return lineas.join('\n');
+  }
+
+  retirosDelDia.forEach((retiro) => {
+    lineas.push(
+      `${formatearHoraPedidoLista(retiro.created_at)} — ${retiro.motivo?.trim() || 'Sin motivo'} — ${formatearMoneda(retiro.monto)}`
+    );
+  });
+
+  return lineas.join('\n');
+}
+
+function formatearDiferenciaArqueoPdf(valor) {
+  const diferencia = Number(valor) || 0;
+  const prefijo = diferencia > 0 ? '+' : '';
+  return `${prefijo}${formatearMoneda(diferencia)}`;
+}
+
+export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
+  const doc = new jsPDF();
+  const arqueosFiltrados = filtrarArqueosReporte(arqueos, configPeriodo);
+  const retirosPorDia = agruparRetirosPorDiaPdf(retiros);
+  const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
+
+  doc.setFontSize(16);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte de arqueos', 14, 18);
+
+  doc.setFontSize(10);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Período: ${tituloPeriodo}`, 14, 26);
+  doc.text(`Total de arqueos: ${arqueosFiltrados.length}`, 14, 32);
+
+  const filas = arqueosFiltrados.map((arqueo) => {
+    const claveDia = claveFechaDesdeDate(
+      arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
+    );
+    const retirosDelDia = retirosPorDia.get(claveDia) || [];
+
+    return [
+      formatearFechaPedidoReporte(arqueo.created_at),
+      arqueo.usuario?.trim() || '—',
+      formatearDesgloseArqueoPdf(arqueo),
+      formatearRetirosArqueoPdf(arqueo, retirosDelDia),
+      formatearDiferenciaArqueoPdf(arqueo.diferencia),
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 40,
+    head: [
+      [
+        'Fecha y hora',
+        'Usuario',
+        'Desglose (sistema / contado)',
+        'Retiros del día',
+        'Diferencia',
+      ],
+    ],
+    body:
+      filas.length > 0 ? filas : [['—', '—', 'Sin arqueos en el período', '—', '—']],
+    styles: { fontSize: 7, cellPadding: 2, valign: 'top' },
+    headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+    alternateRowStyles: { fillColor: [236, 253, 245] },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      2: { cellWidth: 52 },
+      3: { cellWidth: 48 },
+      4: { halign: 'right', cellWidth: 22 },
+    },
+  });
+
+  const { tipo } = obtenerRangoReporte(configPeriodo);
+  const sufijos = {
+    [PERIODOS_REPORTE.MES]: 'mes',
+    [PERIODOS_REPORTE.SEMANA]: 'semana',
+    personalizado: 'personalizado',
+  };
+  doc.save(`reporte-arqueos-${sufijos[tipo] || 'reporte'}.pdf`);
+}

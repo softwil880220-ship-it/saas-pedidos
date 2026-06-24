@@ -9,9 +9,11 @@ import {
   descripcionPeriodoTarjeta,
   etiquetaFiltroVentaReporte,
   etiquetaTipoEntregaReporte,
+  exportarArqueosPdf,
   exportarReportePdf,
   fechasPeriodoTarjeta,
   FILTROS_VENTA_REPORTE,
+  filtrarArqueosReporte,
   filtrarPedidosReporte,
   formatearClienteReporte,
   formatearFechaPedidoReporte,
@@ -203,6 +205,11 @@ export default function VistaReportes() {
 
   const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
 
+  const arqueosFiltrados = useMemo(
+    () => filtrarArqueosReporte(arqueos, configPeriodo),
+    [arqueos, configPeriodo]
+  );
+
   const pedidosFiltrados = useMemo(
     () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
     [pedidos, configPeriodo, filtroVenta]
@@ -238,6 +245,88 @@ export default function VistaReportes() {
       resumen,
       pedidos: pedidosFiltrados,
     });
+  };
+
+  const exportarPdfArqueos = () => {
+    exportarArqueosPdf({
+      configPeriodo,
+      arqueos,
+      retiros,
+    });
+  };
+
+  const renderTarjetaArqueo = (arqueo) => {
+    const claveDia = claveFechaDesdeDate(
+      arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
+    );
+    const retirosDelDia = retirosPorDia.get(claveDia) || [];
+
+    return (
+      <article key={arqueo.id} className="reportes-arqueo-card">
+        <header className="reportes-arqueo-cabecera">
+          <time className="reportes-arqueo-fecha">
+            {formatearFechaPedidoReporte(arqueo.created_at)}
+          </time>
+          <span className="reportes-arqueo-usuario">
+            {arqueo.usuario?.trim() || '—'}
+          </span>
+        </header>
+
+        <div className="reportes-arqueo-desglose">
+          <div className="reportes-arqueo-desglose-encabezado">
+            <span>Forma de pago</span>
+            <span>Sistema</span>
+            <span>Contado</span>
+          </div>
+          {FORMAS_PAGO_ARQUEO.map(({ label, sistema, contado }) => (
+            <div key={sistema} className="reportes-arqueo-desglose-fila">
+              <span>{label}</span>
+              <span>{formatearMoneda(arqueo[sistema])}</span>
+              <span>{formatearMoneda(arqueo[contado])}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="reportes-arqueo-retiros">
+          <p className="reportes-arqueo-retiros-resumen">
+            Retiros del día: {formatearMoneda(arqueo.retiros_del_dia)}
+          </p>
+          {retirosDelDia.length > 0 ? (
+            <ul className="reportes-arqueo-retiros-lista">
+              {retirosDelDia.map((retiro) => (
+                <li key={retiro.id}>
+                  {formatearHoraPedidoLista(retiro.created_at)} —{' '}
+                  {retiro.motivo?.trim() || 'Sin motivo'} —{' '}
+                  {formatearMoneda(retiro.monto)}
+                  {retiro.usuario ? ` (${retiro.usuario})` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="reportes-arqueo-retiros-vacio">
+              Sin retiros registrados ese día.
+            </p>
+          )}
+        </div>
+
+        <div className="reportes-arqueo-totales">
+          <div className="reportes-arqueo-total-fila">
+            <span>Total sistema</span>
+            <strong>{formatearMoneda(arqueo.total_sistema)}</strong>
+          </div>
+          <div className="reportes-arqueo-total-fila">
+            <span>Total contado</span>
+            <strong>{formatearMoneda(arqueo.total_contado)}</strong>
+          </div>
+          <div className="reportes-arqueo-total-fila">
+            <span>Diferencia</span>
+            <strong className={claseDiferenciaArqueoReporte(arqueo.diferencia)}>
+              {formatearDiferenciaArqueoReporte(arqueo.diferencia)}
+            </strong>
+          </div>
+        </div>
+      </article>
+    );
   };
 
   return (
@@ -470,87 +559,90 @@ export default function VistaReportes() {
 
           {tabReportes === 'arqueos' ? (
             <>
-              {cargandoArqueos ? (
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+                  <nav className="reportes-periodo-nav" aria-label="Período de arqueos">
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.SEMANA
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarSemana}
+                    >
+                      Semana
+                    </button>
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.MES
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarMes}
+                    >
+                      Mes
+                    </button>
+                  </nav>
+
+                  <div className="reportes-rango-personalizado">
+                    <label className="reportes-fecha-campo" htmlFor="reportes-arqueos-fecha-desde">
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-arqueos-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(e) => setFechaDesde(e.target.value)}
+                      />
+                    </label>
+                    <label className="reportes-fecha-campo" htmlFor="reportes-arqueos-fecha-hasta">
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-arqueos-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(e) => setFechaHasta(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfArqueos}
+                  disabled={cargandoArqueos || reporteDeshabilitado}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+
+              {reporteDeshabilitado ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : cargandoArqueos ? (
                 <p className="dashboard-vacio">Cargando arqueos...</p>
               ) : errorArqueos ? (
                 <p className="dashboard-vacio reportes-error">{errorArqueos}</p>
               ) : arqueos.length === 0 ? (
                 <p className="dashboard-vacio">No hay arqueos registrados.</p>
+              ) : arqueosFiltrados.length === 0 ? (
+                <p className="dashboard-vacio">
+                  No hay arqueos para el período seleccionado.
+                </p>
               ) : (
                 <div className="reportes-arqueos-lista">
-                  {arqueos.map((arqueo) => {
-                    const claveDia = claveFechaDesdeDate(
-                      arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
-                    );
-                    const retirosDelDia = retirosPorDia.get(claveDia) || [];
-
-                    return (
-                      <article key={arqueo.id} className="reportes-arqueo-card">
-                        <header className="reportes-arqueo-cabecera">
-                          <time className="reportes-arqueo-fecha">
-                            {formatearFechaPedidoReporte(arqueo.created_at)}
-                          </time>
-                          <span className="reportes-arqueo-usuario">
-                            {arqueo.usuario?.trim() || '—'}
-                          </span>
-                        </header>
-
-                        <div className="reportes-arqueo-desglose">
-                          <div className="reportes-arqueo-desglose-encabezado">
-                            <span>Forma de pago</span>
-                            <span>Sistema</span>
-                            <span>Contado</span>
-                          </div>
-                          {FORMAS_PAGO_ARQUEO.map(({ label, sistema, contado }) => (
-                            <div key={sistema} className="reportes-arqueo-desglose-fila">
-                              <span>{label}</span>
-                              <span>{formatearMoneda(arqueo[sistema])}</span>
-                              <span>{formatearMoneda(arqueo[contado])}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="reportes-arqueo-retiros">
-                          <p className="reportes-arqueo-retiros-resumen">
-                            Retiros del día: {formatearMoneda(arqueo.retiros_del_dia)}
-                          </p>
-                          {retirosDelDia.length > 0 ? (
-                            <ul className="reportes-arqueo-retiros-lista">
-                              {retirosDelDia.map((retiro) => (
-                                <li key={retiro.id}>
-                                  {formatearHoraPedidoLista(retiro.created_at)} —{' '}
-                                  {retiro.motivo?.trim() || 'Sin motivo'} —{' '}
-                                  {formatearMoneda(retiro.monto)}
-                                  {retiro.usuario ? ` (${retiro.usuario})` : ''}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="reportes-arqueo-retiros-vacio">
-                              Sin retiros registrados ese día.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="reportes-arqueo-totales">
-                          <div className="reportes-arqueo-total-fila">
-                            <span>Total sistema</span>
-                            <strong>{formatearMoneda(arqueo.total_sistema)}</strong>
-                          </div>
-                          <div className="reportes-arqueo-total-fila">
-                            <span>Total contado</span>
-                            <strong>{formatearMoneda(arqueo.total_contado)}</strong>
-                          </div>
-                          <div className="reportes-arqueo-total-fila">
-                            <span>Diferencia</span>
-                            <strong className={claseDiferenciaArqueoReporte(arqueo.diferencia)}>
-                              {formatearDiferenciaArqueoReporte(arqueo.diferencia)}
-                            </strong>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  {arqueosFiltrados.map((arqueo) => renderTarjetaArqueo(arqueo))}
                 </div>
               )}
             </>
