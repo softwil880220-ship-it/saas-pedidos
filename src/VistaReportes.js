@@ -508,7 +508,7 @@ export default function VistaReportes() {
 
       <div className="reportes-arqueo-retiros">
         <p className="reportes-arqueo-retiros-resumen">
-          {retiro.motivo?.trim() || 'Sin motivo'}
+          Motivo: {retiro.motivo?.trim() || 'Sin motivo'}
         </p>
         <p className="reportes-arqueo-retiros-resumen">
           Monto: {formatearMoneda(retiro.monto)}
