@@ -2094,6 +2094,11 @@ function Dashboard() {
     };
   }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
 
+  const totalArqueoSistema = useMemo(
+    () => redondearMoneda(arqueoSistema.total + fondoFijoDelDia),
+    [arqueoSistema.total, fondoFijoDelDia]
+  );
+
   const pedidosPorFecha = pedidosModoActual.filter(
     (pedido) =>
       pedido.created_at &&
@@ -2867,6 +2872,32 @@ function Dashboard() {
     };
   };
 
+  useEffect(() => {
+    if (!negocioId) {
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      return undefined;
+    }
+
+    let activo = true;
+
+    cargarFondoFijoDelDia()
+      .then((fondoFijo) => {
+        if (!activo) return;
+        setFondoFijoDelDia(fondoFijo.monto);
+        setFondoFijoHoyId(fondoFijo.id);
+      })
+      .catch(() => {
+        if (!activo) return;
+        setFondoFijoDelDia(0);
+        setFondoFijoHoyId(null);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId, hoyClave]);
+
   const abrirModalFondoFijo = async () => {
     setModalFondoFijoAbierto(true);
     setFondoFijoForm({ monto: '' });
@@ -2962,22 +2993,37 @@ function Dashboard() {
     setErrorArqueo(null);
     setCargandoArqueoDatos(true);
 
-    try {
-      const [totalRetiros, fondoFijo] = await Promise.all([
-        cargarRetirosDelDia(),
-        cargarFondoFijoDelDia(),
-      ]);
-      setRetirosDelDia(totalRetiros);
-      setFondoFijoDelDia(fondoFijo.monto);
-      setFondoFijoHoyId(fondoFijo.id);
-    } catch (err) {
-      setErrorArqueo(err.message || 'No se pudieron cargar los datos del día.');
+    const errores = [];
+    const [retirosResult, fondoResult] = await Promise.allSettled([
+      cargarRetirosDelDia(),
+      cargarFondoFijoDelDia(),
+    ]);
+
+    if (retirosResult.status === 'fulfilled') {
+      setRetirosDelDia(retirosResult.value);
+    } else {
       setRetirosDelDia(0);
+      errores.push(
+        retirosResult.reason?.message || 'No se pudieron cargar los retiros del día.'
+      );
+    }
+
+    if (fondoResult.status === 'fulfilled') {
+      setFondoFijoDelDia(fondoResult.value.monto);
+      setFondoFijoHoyId(fondoResult.value.id);
+    } else {
       setFondoFijoDelDia(0);
       setFondoFijoHoyId(null);
-    } finally {
-      setCargandoArqueoDatos(false);
+      errores.push(
+        fondoResult.reason?.message || 'No se pudo cargar el fondo fijo del día.'
+      );
     }
+
+    if (errores.length > 0) {
+      setErrorArqueo(errores.join(' '));
+    }
+
+    setCargandoArqueoDatos(false);
   };
 
   const cerrarModalArqueo = () => {
@@ -3014,7 +3060,7 @@ function Dashboard() {
           transferencia_contado: transferenciaContado,
           link_sistema: arqueoSistema.link_pago,
           link_contado: linkContado,
-          total_sistema: arqueoSistema.total,
+          total_sistema: totalArqueoSistema,
           total_contado: totalArqueoContado,
           diferencia: diferenciaArqueoTotal,
           retiros_del_dia: retirosDelDia,
@@ -3645,7 +3691,7 @@ function Dashboard() {
             </p>
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
-            ) : null}
+            ) : (
             <form onSubmit={handleGuardarArqueo}>
               <div className="arqueo-modal-tabla">
                 <div className="arqueo-modal-tabla-encabezado">
@@ -3686,7 +3732,7 @@ function Dashboard() {
                   );
                 })}
                 <div className="arqueo-modal-fila">
-                  <span>Fondo fijo</span>
+                  <label>Fondo fijo</label>
                   <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
                   <span>—</span>
                   <span>—</span>
@@ -3695,9 +3741,7 @@ function Dashboard() {
               <div className="arqueo-modal-totales">
                 <div className="arqueo-modal-total-fila">
                   <span>Total sistema</span>
-                  <strong>
-                    {formatearMoneda(redondearMoneda(arqueoSistema.total + fondoFijoDelDia))}
-                  </strong>
+                  <strong>{formatearMoneda(totalArqueoSistema)}</strong>
                 </div>
                 <div className="arqueo-modal-total-fila">
                   <span>Total contado</span>
@@ -3742,6 +3786,7 @@ function Dashboard() {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       ) : null}
