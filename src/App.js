@@ -1079,7 +1079,7 @@ function clonarFormPedido(form) {
 
 function Dashboard() {
   const location = useLocation();
-  const { negocioId } = useAuth();
+  const { negocioId, session } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const estadoInicialCaptura = cargarEstadoInicialCapturaPedido();
@@ -1137,6 +1137,10 @@ function Dashboard() {
   const [pagoRecibido, setPagoRecibido] = useState(estadoInicialCaptura.pagoRecibido);
   const [fechaActual, setFechaActual] = useState(() => Date.now());
   const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
+  const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
+  const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
+  const [guardandoRetiro, setGuardandoRetiro] = useState(false);
+  const [errorRetiro, setErrorRetiro] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
     if (!negocioId) return;
@@ -2599,6 +2603,52 @@ function Dashboard() {
     );
   };
 
+  const retiroFormValido =
+    Number.parseFloat(retiroForm.monto) > 0 && retiroForm.motivo.trim().length > 0;
+
+  const cerrarModalRetiro = () => {
+    setModalRetiroAbierto(false);
+    setRetiroForm({ monto: '', motivo: '' });
+    setErrorRetiro(null);
+  };
+
+  const handleRetiroFormChange = (e) => {
+    const { name, value } = e.target;
+    setRetiroForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleGuardarRetiro = async (e) => {
+    e.preventDefault();
+    if (!retiroFormValido || !negocioId || guardandoRetiro) return;
+
+    setGuardandoRetiro(true);
+    setErrorRetiro(null);
+
+    const { error } = await supabase.from('retiros').insert(
+      payloadConNegocio(
+        {
+          monto: Number.parseFloat(retiroForm.monto),
+          motivo: retiroForm.motivo.trim(),
+          usuario:
+            session?.user?.email ||
+            session?.user?.user_metadata?.full_name ||
+            session?.user?.id ||
+            null,
+        },
+        negocioId
+      )
+    );
+
+    setGuardandoRetiro(false);
+
+    if (error) {
+      setErrorRetiro(error.message);
+      return;
+    }
+
+    cerrarModalRetiro();
+  };
+
   const renderPedidosLista = (pedidosAgrupados, filtroActivo, totalPedidosTipo) => {
     if (totalPedidosTipo === 0) {
       return (
@@ -2976,11 +3026,88 @@ function Dashboard() {
               🛵 Domicilio: {formatearMoneda(totalVentasHoyDomicilio)} | 🏪 Para recoger:{' '}
               {formatearMoneda(totalVentasHoySucursal)}
             </p>
+            <div className="header-acciones-caja">
+              <button
+                type="button"
+                className="header-retiro-btn"
+                onClick={() => setModalRetiroAbierto(true)}
+              >
+                Retiro de efectivo
+              </button>
+            </div>
           </div>
         </div>
         <BotonCerrarSesion />
       </header>
       )}
+
+      {modalRetiroAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalRetiro}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retiro-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="retiro-modal-titulo" className="retiro-modal-titulo">
+              Retiro de efectivo
+            </h2>
+            <form onSubmit={handleGuardarRetiro}>
+              <div className="retiro-modal-campo">
+                <label htmlFor="retiro-monto">Monto</label>
+                <input
+                  id="retiro-monto"
+                  name="monto"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={retiroForm.monto}
+                  onChange={handleRetiroFormChange}
+                  required
+                />
+              </div>
+              <div className="retiro-modal-campo">
+                <label htmlFor="retiro-motivo">Motivo</label>
+                <input
+                  id="retiro-motivo"
+                  name="motivo"
+                  type="text"
+                  value={retiroForm.motivo}
+                  onChange={handleRetiroFormChange}
+                  required
+                />
+              </div>
+              {errorRetiro ? (
+                <p className="retiro-modal-error" role="alert">
+                  {errorRetiro}
+                </p>
+              ) : null}
+              <div className="retiro-modal-acciones">
+                <button
+                  type="button"
+                  className="retiro-modal-cancelar"
+                  onClick={cerrarModalRetiro}
+                  disabled={guardandoRetiro}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="retiro-modal-guardar"
+                  disabled={!retiroFormValido || guardandoRetiro || !negocioId}
+                >
+                  {guardandoRetiro ? 'Guardando...' : 'Guardar retiro'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <main className="dashboard-main">
         <DashboardNav activo={seccion} />

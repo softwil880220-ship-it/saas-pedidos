@@ -105,6 +105,119 @@
   color: #bbf7d0;
 }
 
+.header-acciones-caja {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.header-retiro-btn {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.header-retiro-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.header-retiro-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.retiro-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.retiro-modal {
+  width: 100%;
+  max-width: 400px;
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.retiro-modal-titulo {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #14532d;
+}
+
+.retiro-modal-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.retiro-modal-campo label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.retiro-modal-campo input {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.retiro-modal-error {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.retiro-modal-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.retiro-modal-cancelar {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.retiro-modal-guardar {
+  padding: 0.5rem 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: #14532d;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retiro-modal-guardar:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .header-contadores {
   display: flex;
   flex-wrap: wrap;
