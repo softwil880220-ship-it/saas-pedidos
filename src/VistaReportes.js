@@ -33,6 +33,7 @@ import { queryConNegocio } from './tenantHelpers';
 const REPORTES_TABS = [
   { value: 'ventas', label: 'Ventas' },
   { value: 'arqueos', label: 'Arqueos' },
+  { value: 'retiros', label: 'Retiros de efectivo' },
 ];
 
 const FORMAS_PAGO_ARQUEO = [
@@ -103,6 +104,11 @@ export default function VistaReportes() {
   const [errorArqueos, setErrorArqueos] = useState(null);
   const [arqueoConfirmarEliminar, setArqueoConfirmarEliminar] = useState(null);
   const [eliminandoArqueoId, setEliminandoArqueoId] = useState(null);
+  const [retirosHistorial, setRetirosHistorial] = useState([]);
+  const [cargandoRetiros, setCargandoRetiros] = useState(false);
+  const [errorRetiros, setErrorRetiros] = useState(null);
+  const [retiroConfirmarEliminar, setRetiroConfirmarEliminar] = useState(null);
+  const [eliminandoRetiroId, setEliminandoRetiroId] = useState(null);
 
   const configPeriodo = useMemo(
     () => ({ periodo, fechaDesde, fechaHasta }),
@@ -205,11 +211,51 @@ export default function VistaReportes() {
     };
   }, [tabReportes, negocioId]);
 
+  useEffect(() => {
+    let activo = true;
+
+    if (tabReportes !== 'retiros' || !negocioId) {
+      return undefined;
+    }
+
+    const cargarRetiros = async () => {
+      setCargandoRetiros(true);
+      setErrorRetiros(null);
+
+      const { data, error } = await queryConNegocio(
+        supabase.from('retiros').select('*').order('created_at', { ascending: false }),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (error) {
+        setErrorRetiros('No se pudo cargar el historial de retiros.');
+        setRetirosHistorial([]);
+      } else {
+        setRetirosHistorial(data || []);
+      }
+
+      setCargandoRetiros(false);
+    };
+
+    cargarRetiros();
+
+    return () => {
+      activo = false;
+    };
+  }, [tabReportes, negocioId]);
+
   const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
 
   const arqueosFiltrados = useMemo(
     () => filtrarArqueosReporte(arqueos, configPeriodo),
     [arqueos, configPeriodo]
+  );
+
+  const retirosFiltrados = useMemo(
+    () => filtrarArqueosReporte(retirosHistorial, configPeriodo),
+    [retirosHistorial, configPeriodo]
   );
 
   const pedidosFiltrados = useMemo(
@@ -277,6 +323,28 @@ export default function VistaReportes() {
     }
 
     setArqueos((prev) => prev.filter((item) => item.id !== arqueoId));
+  };
+
+  const confirmarEliminarRetiro = async (retiroId) => {
+    if (!negocioId || eliminandoRetiroId) return;
+
+    setEliminandoRetiroId(retiroId);
+    setErrorRetiros(null);
+
+    const { error } = await queryConNegocio(
+      supabase.from('retiros').delete().eq('id', retiroId),
+      negocioId
+    );
+
+    setEliminandoRetiroId(null);
+    setRetiroConfirmarEliminar(null);
+
+    if (error) {
+      setErrorRetiros('No se pudo eliminar el retiro.');
+      return;
+    }
+
+    setRetirosHistorial((prev) => prev.filter((item) => item.id !== retiroId));
   };
 
   const renderTarjetaArqueo = (arqueo) => {
@@ -389,6 +457,65 @@ export default function VistaReportes() {
       </article>
     );
   };
+
+  const renderTarjetaRetiro = (retiro) => (
+    <article key={retiro.id} className="reportes-arqueo-card">
+      <header className="reportes-arqueo-cabecera">
+        <div className="reportes-arqueo-cabecera-info">
+          <time className="reportes-arqueo-fecha">
+            {formatearFechaPedidoReporte(retiro.created_at)}
+          </time>
+          <span className="reportes-arqueo-usuario">
+            {formatearHoraPedidoLista(retiro.created_at)}
+          </span>
+        </div>
+        <div className="reportes-arqueo-cabecera-acciones">
+          {retiroConfirmarEliminar === retiro.id ? (
+            <div className="reportes-arqueo-confirmar-eliminar">
+              <span>¿Eliminar este retiro?</span>
+              <button
+                type="button"
+                className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-cancelar"
+                onClick={() => setRetiroConfirmarEliminar(null)}
+                disabled={eliminandoRetiroId === retiro.id}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-aceptar"
+                onClick={() => confirmarEliminarRetiro(retiro.id)}
+                disabled={eliminandoRetiroId === retiro.id}
+              >
+                {eliminandoRetiroId === retiro.id ? 'Eliminando...' : 'Confirmar'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="reportes-arqueo-eliminar-btn"
+              onClick={() => setRetiroConfirmarEliminar(retiro.id)}
+              disabled={
+                eliminandoRetiroId !== null ||
+                (retiroConfirmarEliminar !== null && retiroConfirmarEliminar !== retiro.id)
+              }
+            >
+              Eliminar
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="reportes-arqueo-retiros">
+        <p className="reportes-arqueo-retiros-resumen">
+          {retiro.motivo?.trim() || 'Sin motivo'}
+        </p>
+        <p className="reportes-arqueo-retiros-resumen">
+          Monto: {formatearMoneda(retiro.monto)}
+        </p>
+      </div>
+    </article>
+  );
 
   return (
     <div className="dashboard">
@@ -704,6 +831,88 @@ export default function VistaReportes() {
               ) : (
                 <div className="reportes-arqueos-lista">
                   {arqueosFiltrados.map((arqueo) => renderTarjetaArqueo(arqueo))}
+                </div>
+              )}
+            </>
+          ) : null}
+
+          {tabReportes === 'retiros' ? (
+            <>
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+                  <nav className="reportes-periodo-nav" aria-label="Período de retiros">
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.SEMANA
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarSemana}
+                    >
+                      Semana
+                    </button>
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.MES
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarMes}
+                    >
+                      Mes
+                    </button>
+                  </nav>
+
+                  <div className="reportes-rango-personalizado">
+                    <label className="reportes-fecha-campo" htmlFor="reportes-retiros-fecha-desde">
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-retiros-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(e) => setFechaDesde(e.target.value)}
+                      />
+                    </label>
+                    <label className="reportes-fecha-campo" htmlFor="reportes-retiros-fecha-hasta">
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-retiros-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(e) => setFechaHasta(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              {reporteDeshabilitado ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : cargandoRetiros ? (
+                <p className="dashboard-vacio">Cargando retiros...</p>
+              ) : errorRetiros ? (
+                <p className="dashboard-vacio reportes-error">{errorRetiros}</p>
+              ) : retirosHistorial.length === 0 ? (
+                <p className="dashboard-vacio">No hay retiros registrados.</p>
+              ) : retirosFiltrados.length === 0 ? (
+                <p className="dashboard-vacio">
+                  No hay retiros para el período seleccionado.
+                </p>
+              ) : (
+                <div className="reportes-arqueos-lista">
+                  {retirosFiltrados.map((retiro) => renderTarjetaRetiro(retiro))}
                 </div>
               )}
             </>
