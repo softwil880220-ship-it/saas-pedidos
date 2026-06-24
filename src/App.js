@@ -574,6 +574,7 @@ function calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes) {
     precioBase,
     extras,
     precioUnitario,
+    precio_unitario: precioUnitario,
     subtotal,
     descripcion,
     cocina: normalizarCocinaProducto(producto.cocina),
@@ -819,6 +820,32 @@ function normalizarLineasDetallePedido(pedido) {
   }
 
   return [];
+}
+
+function formatearLineaDetalleReporteHistorico(linea) {
+  const descripcion = (linea.descripcion || linea.nombre || 'Producto').trim();
+  const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+  const precioUnitario = linea.precio_unitario;
+
+  if (
+    precioUnitario != null &&
+    precioUnitario !== '' &&
+    Number.isFinite(Number(precioUnitario))
+  ) {
+    return `${descripcion} x${cantidad} — ${formatearMoneda(precioUnitario)} c/u`;
+  }
+
+  return `${descripcion} x${cantidad}`;
+}
+
+function formatearProductosPedidoReporteHistorico(pedido) {
+  const lineas = normalizarLineasDetallePedido(pedido);
+
+  if (lineas.length === 0) {
+    return pedido.producto || '—';
+  }
+
+  return lineas.map(formatearLineaDetalleReporteHistorico).join(', ');
 }
 
 function productoIdDesdeLineaDetalle(linea, listaProductos) {
@@ -2695,7 +2722,7 @@ function Dashboard() {
                         {formatearNombreClientePedido(pedido)}
                       </span>
                       <span className="reporte-productos">
-                        {pedido.producto || '—'}
+                        {formatearProductosPedidoReporteHistorico(pedido)}
                       </span>
                       <span className="reporte-total">
                         {formatearMoneda(pedido.total)}
