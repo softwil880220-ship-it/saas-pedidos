@@ -218,6 +218,98 @@
   cursor: not-allowed;
 }
 
+.arqueo-modal {
+  max-width: 560px;
+}
+
+.arqueo-modal-descripcion {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.arqueo-modal-tabla {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.arqueo-modal-tabla-encabezado,
+.arqueo-modal-fila {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 1.1fr) minmax(4.5rem, 1fr) minmax(4.5rem, 1fr) minmax(4.5rem, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.arqueo-modal-tabla-encabezado {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.arqueo-modal-fila label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.arqueo-modal-sistema,
+.arqueo-modal-diferencia {
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+.arqueo-modal-diferencia-negativa {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.arqueo-modal-diferencia-positiva {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.arqueo-modal-contado input {
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+
+.arqueo-modal-totales {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.arqueo-modal-total-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.arqueo-modal-total-fila strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.arqueo-modal-cargando {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 .header-contadores {
   display: flex;
   flex-wrap: wrap;

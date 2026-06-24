@@ -254,6 +254,61 @@ function normalizarFormaPagoPayload(valor) {
   return FORMAS_PAGO.some((item) => item.value === forma) ? forma : null;
 }
 
+function calcularVentasPorFormaPago(pedidosLista) {
+  const totales = {
+    efectivo: 0,
+    tarjeta: 0,
+    transferencia: 0,
+    link_pago: 0,
+  };
+
+  (pedidosLista || []).forEach((pedido) => {
+    const forma = normalizarFormaPagoPayload(pedido.forma_pago);
+    if (!forma) return;
+    totales[forma] = redondearMoneda(totales[forma] + (Number(pedido.total) || 0));
+  });
+
+  return totales;
+}
+
+function obtenerRangoFechaClave(claveFecha) {
+  const [year, month, day] = claveFecha.split('-').map(Number);
+  return {
+    inicio: new Date(year, month - 1, day, 0, 0, 0, 0),
+    fin: new Date(year, month - 1, day, 23, 59, 59, 999),
+  };
+}
+
+function crearArqueoContadoVacio() {
+  return {
+    efectivo: '',
+    tarjeta: '',
+    transferencia: '',
+    link_pago: '',
+  };
+}
+
+function usuarioSesionActual(session) {
+  return (
+    session?.user?.email ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.id ||
+    null
+  );
+}
+
+function formatearDiferenciaArqueo(valor) {
+  const diferencia = redondearMoneda(valor);
+  const clase =
+    diferencia < 0
+      ? 'arqueo-modal-diferencia arqueo-modal-diferencia-negativa'
+      : diferencia > 0
+        ? 'arqueo-modal-diferencia arqueo-modal-diferencia-positiva'
+        : 'arqueo-modal-diferencia';
+  const prefijo = diferencia > 0 ? '+' : '';
+  return { texto: `${prefijo}${formatearMoneda(diferencia)}`, clase };
+}
+
 function formatearNombreClientePedido(pedido) {
   const cliente = pedido.cliente?.trim() || CLIENTE_PUBLICO;
   const referencia = pedido.referencia?.trim();
@@ -1141,6 +1196,12 @@ function Dashboard() {
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
   const [guardandoRetiro, setGuardandoRetiro] = useState(false);
   const [errorRetiro, setErrorRetiro] = useState(null);
+  const [modalArqueoAbierto, setModalArqueoAbierto] = useState(false);
+  const [arqueoContado, setArqueoContado] = useState(crearArqueoContadoVacio);
+  const [retirosDelDia, setRetirosDelDia] = useState(0);
+  const [cargandoArqueoDatos, setCargandoArqueoDatos] = useState(false);
+  const [guardandoArqueo, setGuardandoArqueo] = useState(false);
+  const [errorArqueo, setErrorArqueo] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
     if (!negocioId) return;
@@ -1950,6 +2011,27 @@ function Dashboard() {
   const totalVentasHoyTotal = totalVentasHoyCaja + totalVentasHoyWhatsApp;
   const totalVentasHoyDomicilio = totalVentasPedidos(pedidosHoyDomicilio);
   const totalVentasHoySucursal = totalVentasPedidos(pedidosHoySucursal);
+  const ventasBrutasPorFormaPago = useMemo(
+    () => calcularVentasPorFormaPago(pedidosHoyTodos),
+    [pedidosHoyTodos]
+  );
+  const arqueoSistema = useMemo(() => {
+    const efectivoNeto = redondearMoneda(
+      ventasBrutasPorFormaPago.efectivo - retirosDelDia
+    );
+    const tarjeta = ventasBrutasPorFormaPago.tarjeta;
+    const transferencia = ventasBrutasPorFormaPago.transferencia;
+    const linkPago = ventasBrutasPorFormaPago.link_pago;
+
+    return {
+      efectivo: efectivoNeto,
+      tarjeta,
+      transferencia,
+      link_pago: linkPago,
+      total: redondearMoneda(efectivoNeto + tarjeta + transferencia + linkPago),
+      ventasEfectivoBruto: ventasBrutasPorFormaPago.efectivo,
+    };
+  }, [ventasBrutasPorFormaPago, retirosDelDia]);
 
   const pedidosPorFecha = pedidosModoActual.filter(
     (pedido) =>
@@ -2649,6 +2731,121 @@ function Dashboard() {
     cerrarModalRetiro();
   };
 
+  const arqueoContadoValido = FORMAS_PAGO.every(({ value }) => {
+    const raw = arqueoContado[value];
+    if (raw === '') return false;
+    const monto = Number.parseFloat(raw);
+    return Number.isFinite(monto) && monto >= 0;
+  });
+
+  const totalArqueoContado = useMemo(
+    () =>
+      redondearMoneda(
+        FORMAS_PAGO.reduce(
+          (suma, { value }) => suma + (Number.parseFloat(arqueoContado[value]) || 0),
+          0
+        )
+      ),
+    [arqueoContado]
+  );
+
+  const diferenciaArqueoTotal = useMemo(
+    () => redondearMoneda(totalArqueoContado - arqueoSistema.total),
+    [totalArqueoContado, arqueoSistema.total]
+  );
+
+  const cargarRetirosDelDia = async () => {
+    if (!negocioId) return 0;
+
+    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('retiros')
+        .select('monto')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fin.toISOString()),
+      negocioId
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return redondearMoneda(
+      (data || []).reduce((suma, retiro) => suma + (Number(retiro.monto) || 0), 0)
+    );
+  };
+
+  const abrirModalArqueo = async () => {
+    setModalArqueoAbierto(true);
+    setArqueoContado(crearArqueoContadoVacio());
+    setErrorArqueo(null);
+    setCargandoArqueoDatos(true);
+
+    try {
+      const totalRetiros = await cargarRetirosDelDia();
+      setRetirosDelDia(totalRetiros);
+    } catch (err) {
+      setErrorArqueo(err.message || 'No se pudieron cargar los retiros del día.');
+      setRetirosDelDia(0);
+    } finally {
+      setCargandoArqueoDatos(false);
+    }
+  };
+
+  const cerrarModalArqueo = () => {
+    setModalArqueoAbierto(false);
+    setArqueoContado(crearArqueoContadoVacio());
+    setErrorArqueo(null);
+  };
+
+  const handleArqueoContadoChange = (formaPago, value) => {
+    setArqueoContado((prev) => ({ ...prev, [formaPago]: value }));
+  };
+
+  const handleGuardarArqueo = async (e) => {
+    e.preventDefault();
+    if (!arqueoContadoValido || !negocioId || guardandoArqueo || cargandoArqueoDatos) return;
+
+    setGuardandoArqueo(true);
+    setErrorArqueo(null);
+
+    const efectivoContado = Number.parseFloat(arqueoContado.efectivo);
+    const tarjetaContado = Number.parseFloat(arqueoContado.tarjeta);
+    const transferenciaContado = Number.parseFloat(arqueoContado.transferencia);
+    const linkContado = Number.parseFloat(arqueoContado.link_pago);
+
+    const { error } = await supabase.from('arqueos').insert(
+      payloadConNegocio(
+        {
+          usuario: usuarioSesionActual(session),
+          efectivo_sistema: arqueoSistema.efectivo,
+          efectivo_contado: efectivoContado,
+          tarjeta_sistema: arqueoSistema.tarjeta,
+          tarjeta_contado: tarjetaContado,
+          transferencia_sistema: arqueoSistema.transferencia,
+          transferencia_contado: transferenciaContado,
+          link_sistema: arqueoSistema.link_pago,
+          link_contado: linkContado,
+          total_sistema: arqueoSistema.total,
+          total_contado: totalArqueoContado,
+          diferencia: diferenciaArqueoTotal,
+          retiros_del_dia: retirosDelDia,
+        },
+        negocioId
+      )
+    );
+
+    setGuardandoArqueo(false);
+
+    if (error) {
+      setErrorArqueo(error.message);
+      return;
+    }
+
+    cerrarModalArqueo();
+  };
+
   const renderPedidosLista = (pedidosAgrupados, filtroActivo, totalPedidosTipo) => {
     if (totalPedidosTipo === 0) {
       return (
@@ -3034,6 +3231,13 @@ function Dashboard() {
               >
                 Retiro de efectivo
               </button>
+              <button
+                type="button"
+                className="header-retiro-btn"
+                onClick={abrirModalArqueo}
+              >
+                Arqueo de caja
+              </button>
             </div>
           </div>
         </div>
@@ -3102,6 +3306,122 @@ function Dashboard() {
                   disabled={!retiroFormValido || guardandoRetiro || !negocioId}
                 >
                   {guardandoRetiro ? 'Guardando...' : 'Guardar retiro'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {modalArqueoAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalArqueo}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal arqueo-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="arqueo-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="arqueo-modal-titulo" className="retiro-modal-titulo">
+              Arqueo de caja
+            </h2>
+            <p className="arqueo-modal-descripcion">
+              Ventas del día por forma de pago. Efectivo esperado = ventas en efectivo (
+              {formatearMoneda(arqueoSistema.ventasEfectivoBruto)}) − retiros del día (
+              {formatearMoneda(retirosDelDia)}).
+            </p>
+            {cargandoArqueoDatos ? (
+              <p className="arqueo-modal-cargando">Calculando retiros del día...</p>
+            ) : null}
+            <form onSubmit={handleGuardarArqueo}>
+              <div className="arqueo-modal-tabla">
+                <div className="arqueo-modal-tabla-encabezado">
+                  <span>Forma</span>
+                  <span>Sistema</span>
+                  <span>Contado</span>
+                  <span>Diferencia</span>
+                </div>
+                {FORMAS_PAGO.map(({ value, label }) => {
+                  const sistema = arqueoSistema[value];
+                  const contado = Number.parseFloat(arqueoContado[value]);
+                  const diferencia =
+                    arqueoContado[value] === '' || !Number.isFinite(contado)
+                      ? null
+                      : redondearMoneda(contado - sistema);
+                  const diferenciaFmt =
+                    diferencia == null ? null : formatearDiferenciaArqueo(diferencia);
+
+                  return (
+                    <div key={value} className="arqueo-modal-fila">
+                      <label htmlFor={`arqueo-contado-${value}`}>{label}</label>
+                      <span className="arqueo-modal-sistema">{formatearMoneda(sistema)}</span>
+                      <div className="arqueo-modal-contado">
+                        <input
+                          id={`arqueo-contado-${value}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={arqueoContado[value]}
+                          onChange={(e) => handleArqueoContadoChange(value, e.target.value)}
+                          required
+                        />
+                      </div>
+                      <span className={diferenciaFmt?.clase || 'arqueo-modal-diferencia'}>
+                        {diferenciaFmt?.texto || '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="arqueo-modal-totales">
+                <div className="arqueo-modal-total-fila">
+                  <span>Total sistema</span>
+                  <strong>{formatearMoneda(arqueoSistema.total)}</strong>
+                </div>
+                <div className="arqueo-modal-total-fila">
+                  <span>Total contado</span>
+                  <strong>
+                    {arqueoContadoValido ? formatearMoneda(totalArqueoContado) : '—'}
+                  </strong>
+                </div>
+                <div className="arqueo-modal-total-fila">
+                  <span>Diferencia total</span>
+                  <strong className={formatearDiferenciaArqueo(diferenciaArqueoTotal).clase}>
+                    {arqueoContadoValido
+                      ? formatearDiferenciaArqueo(diferenciaArqueoTotal).texto
+                      : '—'}
+                  </strong>
+                </div>
+              </div>
+              {errorArqueo ? (
+                <p className="retiro-modal-error" role="alert">
+                  {errorArqueo}
+                </p>
+              ) : null}
+              <div className="retiro-modal-acciones">
+                <button
+                  type="button"
+                  className="retiro-modal-cancelar"
+                  onClick={cerrarModalArqueo}
+                  disabled={guardandoArqueo}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="retiro-modal-guardar"
+                  disabled={
+                    !arqueoContadoValido ||
+                    guardandoArqueo ||
+                    cargandoArqueoDatos ||
+                    !negocioId
+                  }
+                >
+                  {guardandoArqueo ? 'Guardando...' : 'Guardar arqueo'}
                 </button>
               </div>
             </form>
