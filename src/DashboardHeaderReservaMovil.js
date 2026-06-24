@@ -7,29 +7,35 @@ import useEsMobile from './useEsMobile';
 const PADDING_HEADER_CERRAR_SESION = '7.75rem';
 
 function estiloNombreNegocioHeaderDelgado(esMobile) {
-  const base = {
+  if (esMobile) {
+    return {
+      flex: 1,
+      minWidth: 0,
+      paddingRight: PADDING_HEADER_CERRAR_SESION,
+      color: '#fff',
+      fontWeight: 600,
+      fontSize: '14px',
+      lineHeight: 1.4,
+      display: 'block',
+      whiteSpace: 'normal',
+      wordBreak: 'normal',
+      overflow: 'visible',
+      writingMode: 'horizontal-tb',
+      textOrientation: 'mixed',
+    };
+  }
+
+  return {
     flex: 1,
     minWidth: 0,
     paddingRight: PADDING_HEADER_CERRAR_SESION,
     color: '#fff',
     fontWeight: 600,
-    wordBreak: 'break-word',
-    display: 'block',
-    whiteSpace: 'normal',
-  };
-
-  if (esMobile) {
-    return {
-      ...base,
-      fontSize: '0.875rem',
-      lineHeight: 1.4,
-    };
-  }
-
-  return {
-    ...base,
     fontSize: '1.25rem',
     lineHeight: 1.35,
+    display: 'block',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
   };
 }
 
