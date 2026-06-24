@@ -1225,6 +1225,14 @@ function Dashboard() {
   const [modalArqueoAbierto, setModalArqueoAbierto] = useState(false);
   const [arqueoContado, setArqueoContado] = useState(crearArqueoContadoVacio);
   const [retirosDelDia, setRetirosDelDia] = useState(0);
+  const [fondoFijoDelDia, setFondoFijoDelDia] = useState(0);
+  const [fondoFijoHoyId, setFondoFijoHoyId] = useState(null);
+  const [modalFondoFijoAbierto, setModalFondoFijoAbierto] = useState(false);
+  const [fondoFijoForm, setFondoFijoForm] = useState({ monto: '' });
+  const [cargandoFondoFijoDatos, setCargandoFondoFijoDatos] = useState(false);
+  const [guardandoFondoFijo, setGuardandoFondoFijo] = useState(false);
+  const [errorFondoFijo, setErrorFondoFijo] = useState(null);
+  const [confirmarEliminarFondoFijo, setConfirmarEliminarFondoFijo] = useState(false);
   const [cargandoArqueoDatos, setCargandoArqueoDatos] = useState(false);
   const [guardandoArqueo, setGuardandoArqueo] = useState(false);
   const [errorArqueo, setErrorArqueo] = useState(null);
@@ -2070,7 +2078,7 @@ function Dashboard() {
   );
   const arqueoSistema = useMemo(() => {
     const efectivoNeto = redondearMoneda(
-      ventasBrutasPorFormaPago.efectivo - retirosDelDia
+      ventasBrutasPorFormaPago.efectivo - retirosDelDia - fondoFijoDelDia
     );
     const tarjeta = ventasBrutasPorFormaPago.tarjeta;
     const transferencia = ventasBrutasPorFormaPago.transferencia;
@@ -2084,7 +2092,7 @@ function Dashboard() {
       total: redondearMoneda(efectivoNeto + tarjeta + transferencia + linkPago),
       ventasEfectivoBruto: ventasBrutasPorFormaPago.efectivo,
     };
-  }, [ventasBrutasPorFormaPago, retirosDelDia]);
+  }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
 
   const pedidosPorFecha = pedidosModoActual.filter(
     (pedido) =>
@@ -2803,8 +2811,8 @@ function Dashboard() {
   );
 
   const diferenciaArqueoTotal = useMemo(
-    () => redondearMoneda(totalArqueoContado - arqueoSistema.total),
-    [totalArqueoContado, arqueoSistema.total]
+    () => redondearMoneda(totalArqueoContado - fondoFijoDelDia - arqueoSistema.total),
+    [totalArqueoContado, fondoFijoDelDia, arqueoSistema.total]
   );
 
   const cargarRetirosDelDia = async () => {
@@ -2829,6 +2837,122 @@ function Dashboard() {
     );
   };
 
+  const cargarFondoFijoDelDia = async () => {
+    if (!negocioId) return { monto: 0, id: null };
+
+    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('fondos_fijos')
+        .select('id, monto')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fin.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1),
+      negocioId
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const registro = (data || [])[0];
+
+    return {
+      monto: registro ? redondearMoneda(Number(registro.monto) || 0) : 0,
+      id: registro?.id ?? null,
+    };
+  };
+
+  const abrirModalFondoFijo = async () => {
+    setModalFondoFijoAbierto(true);
+    setFondoFijoForm({ monto: '' });
+    setErrorFondoFijo(null);
+    setConfirmarEliminarFondoFijo(false);
+    setCargandoFondoFijoDatos(true);
+
+    try {
+      const fondoFijo = await cargarFondoFijoDelDia();
+      setFondoFijoDelDia(fondoFijo.monto);
+      setFondoFijoHoyId(fondoFijo.id);
+    } catch (err) {
+      setErrorFondoFijo(err.message || 'No se pudo cargar el fondo fijo del día.');
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+    } finally {
+      setCargandoFondoFijoDatos(false);
+    }
+  };
+
+  const cerrarModalFondoFijo = () => {
+    setModalFondoFijoAbierto(false);
+    setFondoFijoForm({ monto: '' });
+    setErrorFondoFijo(null);
+    setConfirmarEliminarFondoFijo(false);
+  };
+
+  const handleFondoFijoFormChange = (e) => {
+    setFondoFijoForm({ monto: e.target.value });
+  };
+
+  const fondoFijoFormValido = Number.parseFloat(fondoFijoForm.monto) > 0;
+
+  const handleGuardarFondoFijo = async (e) => {
+    e.preventDefault();
+    if (!fondoFijoFormValido || !negocioId || guardandoFondoFijo || fondoFijoHoyId) return;
+
+    setGuardandoFondoFijo(true);
+    setErrorFondoFijo(null);
+
+    const { data, error } = await supabase
+      .from('fondos_fijos')
+      .insert(
+        payloadConNegocio(
+          {
+            monto: Number.parseFloat(fondoFijoForm.monto),
+            usuario: usuarioSesionActual(session),
+          },
+          negocioId
+        )
+      )
+      .select('id, monto')
+      .single();
+
+    setGuardandoFondoFijo(false);
+
+    if (error) {
+      setErrorFondoFijo(error.message);
+      return;
+    }
+
+    setFondoFijoDelDia(redondearMoneda(Number(data?.monto) || 0));
+    setFondoFijoHoyId(data?.id ?? null);
+    setFondoFijoForm({ monto: '' });
+  };
+
+  const handleEliminarFondoFijo = async () => {
+    if (!negocioId || !fondoFijoHoyId || guardandoFondoFijo) return;
+
+    setGuardandoFondoFijo(true);
+    setErrorFondoFijo(null);
+
+    const { error } = await queryConNegocio(
+      supabase.from('fondos_fijos').delete().eq('id', fondoFijoHoyId),
+      negocioId
+    );
+
+    setGuardandoFondoFijo(false);
+    setConfirmarEliminarFondoFijo(false);
+
+    if (error) {
+      setErrorFondoFijo(error.message);
+      return;
+    }
+
+    setFondoFijoDelDia(0);
+    setFondoFijoHoyId(null);
+  };
+
   const abrirModalArqueo = async () => {
     setModalArqueoAbierto(true);
     setArqueoContado(crearArqueoContadoVacio());
@@ -2836,11 +2960,18 @@ function Dashboard() {
     setCargandoArqueoDatos(true);
 
     try {
-      const totalRetiros = await cargarRetirosDelDia();
+      const [totalRetiros, fondoFijo] = await Promise.all([
+        cargarRetirosDelDia(),
+        cargarFondoFijoDelDia(),
+      ]);
       setRetirosDelDia(totalRetiros);
+      setFondoFijoDelDia(fondoFijo.monto);
+      setFondoFijoHoyId(fondoFijo.id);
     } catch (err) {
-      setErrorArqueo(err.message || 'No se pudieron cargar los retiros del día.');
+      setErrorArqueo(err.message || 'No se pudieron cargar los datos del día.');
       setRetirosDelDia(0);
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
     } finally {
       setCargandoArqueoDatos(false);
     }
@@ -2884,6 +3015,7 @@ function Dashboard() {
           total_contado: totalArqueoContado,
           diferencia: diferenciaArqueoTotal,
           retiros_del_dia: retirosDelDia,
+          fondo_fijo_del_dia: fondoFijoDelDia,
         },
         negocioId
       )
@@ -3282,6 +3414,13 @@ function Dashboard() {
               <button
                 type="button"
                 className="header-retiro-btn"
+                onClick={abrirModalFondoFijo}
+              >
+                Fondo fijo
+              </button>
+              <button
+                type="button"
+                className="header-retiro-btn"
                 onClick={() => setModalRetiroAbierto(true)}
               >
                 Retiro de efectivo
@@ -3368,6 +3507,118 @@ function Dashboard() {
         </div>
       ) : null}
 
+      {modalFondoFijoAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalFondoFijo}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fondo-fijo-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="fondo-fijo-modal-titulo" className="retiro-modal-titulo">
+              Fondo fijo
+            </h2>
+            {cargandoFondoFijoDatos ? (
+              <p className="arqueo-modal-cargando">Cargando fondo fijo del día...</p>
+            ) : fondoFijoHoyId ? (
+              <>
+                <p className="arqueo-modal-descripcion">
+                  Fondo fijo registrado hoy: {formatearMoneda(fondoFijoDelDia)}
+                </p>
+                {confirmarEliminarFondoFijo ? (
+                  <div className="retiro-modal-acciones">
+                    <p className="arqueo-modal-descripcion">¿Eliminar el fondo fijo de hoy?</p>
+                    <button
+                      type="button"
+                      className="retiro-modal-cancelar"
+                      onClick={() => setConfirmarEliminarFondoFijo(false)}
+                      disabled={guardandoFondoFijo}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="retiro-modal-guardar"
+                      onClick={handleEliminarFondoFijo}
+                      disabled={guardandoFondoFijo || !negocioId}
+                    >
+                      {guardandoFondoFijo ? 'Eliminando...' : 'Confirmar'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="retiro-modal-acciones">
+                    <button
+                      type="button"
+                      className="retiro-modal-cancelar"
+                      onClick={cerrarModalFondoFijo}
+                      disabled={guardandoFondoFijo}
+                    >
+                      Cerrar
+                    </button>
+                    <button
+                      type="button"
+                      className="retiro-modal-guardar"
+                      onClick={() => setConfirmarEliminarFondoFijo(true)}
+                      disabled={guardandoFondoFijo || !negocioId}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <form onSubmit={handleGuardarFondoFijo}>
+                <div className="retiro-modal-campo">
+                  <label htmlFor="fondo-fijo-monto">Monto</label>
+                  <input
+                    id="fondo-fijo-monto"
+                    name="monto"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={fondoFijoForm.monto}
+                    onChange={handleFondoFijoFormChange}
+                    required
+                  />
+                </div>
+                {errorFondoFijo ? (
+                  <p className="retiro-modal-error" role="alert">
+                    {errorFondoFijo}
+                  </p>
+                ) : null}
+                <div className="retiro-modal-acciones">
+                  <button
+                    type="button"
+                    className="retiro-modal-cancelar"
+                    onClick={cerrarModalFondoFijo}
+                    disabled={guardandoFondoFijo}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="retiro-modal-guardar"
+                    disabled={!fondoFijoFormValido || guardandoFondoFijo || !negocioId}
+                  >
+                    {guardandoFondoFijo ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </form>
+            )}
+            {fondoFijoHoyId && errorFondoFijo ? (
+              <p className="retiro-modal-error" role="alert">
+                {errorFondoFijo}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {modalArqueoAbierto ? (
         <div
           className="retiro-modal-overlay"
@@ -3385,12 +3636,12 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
-              Ventas del día por forma de pago. Efectivo esperado = ventas en efectivo (
+              Ventas del día por forma de pago. Efectivo esperado = total del día cobrado (
               {formatearMoneda(arqueoSistema.ventasEfectivoBruto)}) − retiros del día (
-              {formatearMoneda(retirosDelDia)}).
+              {formatearMoneda(retirosDelDia)}) − fondo fijo ({formatearMoneda(fondoFijoDelDia)}).
             </p>
             {cargandoArqueoDatos ? (
-              <p className="arqueo-modal-cargando">Calculando retiros del día...</p>
+              <p className="arqueo-modal-cargando">Calculando datos del día...</p>
             ) : null}
             <form onSubmit={handleGuardarArqueo}>
               <div className="arqueo-modal-tabla">
@@ -3403,10 +3654,12 @@ function Dashboard() {
                 {FORMAS_PAGO.map(({ value, label }) => {
                   const sistema = arqueoSistema[value];
                   const contado = Number.parseFloat(arqueoContado[value]);
+                  const contadoAjustado =
+                    value === 'efectivo' ? contado - fondoFijoDelDia : contado;
                   const diferencia =
                     arqueoContado[value] === '' || !Number.isFinite(contado)
                       ? null
-                      : redondearMoneda(contado - sistema);
+                      : redondearMoneda(contadoAjustado - sistema);
                   const diferenciaFmt =
                     diferencia == null ? null : formatearDiferenciaArqueo(diferencia);
 
