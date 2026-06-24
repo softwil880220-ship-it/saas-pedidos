@@ -2467,6 +2467,163 @@
   color: #14532d;
 }
 
+.reportes-seccion-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+}
+
+.reportes-seccion-tab {
+  flex-shrink: 0;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.reportes-seccion-tab:hover {
+  background: #f8fafc;
+}
+
+.reportes-seccion-tab.activo {
+  background: #14532d;
+  border-color: #14532d;
+  color: #fff;
+}
+
+.reportes-arqueos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.reportes-arqueo-card {
+  padding: 1rem 1.1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.reportes-arqueo-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.reportes-arqueo-fecha {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #14532d;
+}
+
+.reportes-arqueo-usuario {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.reportes-arqueo-desglose {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.reportes-arqueo-desglose-encabezado,
+.reportes-arqueo-desglose-fila {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1.2fr) minmax(4.5rem, 1fr) minmax(4.5rem, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.reportes-arqueo-desglose-encabezado {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.reportes-arqueo-desglose-fila {
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.reportes-arqueo-desglose-fila span:not(:first-child) {
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+.reportes-arqueo-retiros {
+  margin-bottom: 0.85rem;
+}
+
+.reportes-arqueo-retiros-resumen {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.reportes-arqueo-retiros-lista {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.84rem;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.reportes-arqueo-retiros-vacio {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.reportes-arqueo-totales {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem 0.85rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.reportes-arqueo-total-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.reportes-arqueo-total-fila strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.reportes-arqueo-diferencia {
+  font-variant-numeric: tabular-nums;
+}
+
+.reportes-arqueo-diferencia-negativa {
+  color: #b91c1c;
+}
+
+.reportes-arqueo-diferencia-positiva {
+  color: #15803d;
+}
+
 .reportes-resumen {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2611,6 +2768,33 @@
 
   .reporte-total {
     grid-area: total;
+  }
+
+  .reportes-arqueo-cabecera {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reportes-arqueo-desglose-encabezado,
+  .reportes-arqueo-desglose-fila {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .reportes-arqueo-desglose-encabezado {
+    display: none;
+  }
+
+  .reportes-arqueo-desglose-fila span:nth-child(2)::before {
+    content: 'Sistema: ';
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .reportes-arqueo-desglose-fila span:nth-child(3)::before {
+    content: 'Contado: ';
+    color: #64748b;
+    font-weight: 600;
   }
 }
 
