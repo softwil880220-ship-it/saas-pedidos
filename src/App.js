@@ -2077,27 +2077,21 @@ function Dashboard() {
     [pedidosHoyTodos]
   );
   const arqueoSistema = useMemo(() => {
-    const efectivoNeto = redondearMoneda(
-      ventasBrutasPorFormaPago.efectivo - retirosDelDia - fondoFijoDelDia
-    );
+    const efectivo = ventasBrutasPorFormaPago.efectivo;
     const tarjeta = ventasBrutasPorFormaPago.tarjeta;
     const transferencia = ventasBrutasPorFormaPago.transferencia;
     const linkPago = ventasBrutasPorFormaPago.link_pago;
+    const ventasTotal = redondearMoneda(efectivo + tarjeta + transferencia + linkPago);
 
     return {
-      efectivo: efectivoNeto,
+      efectivo,
       tarjeta,
       transferencia,
       link_pago: linkPago,
-      total: redondearMoneda(efectivoNeto + tarjeta + transferencia + linkPago),
-      ventasEfectivoBruto: ventasBrutasPorFormaPago.efectivo,
+      total: redondearMoneda(ventasTotal - retirosDelDia),
+      ventasEfectivoBruto: efectivo,
     };
-  }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
-
-  const totalArqueoSistema = useMemo(
-    () => redondearMoneda(arqueoSistema.total + fondoFijoDelDia),
-    [arqueoSistema.total, fondoFijoDelDia]
-  );
+  }, [ventasBrutasPorFormaPago, retirosDelDia]);
 
   const pedidosPorFecha = pedidosModoActual.filter(
     (pedido) =>
@@ -2810,17 +2804,14 @@ function Dashboard() {
         FORMAS_PAGO.reduce(
           (suma, { value }) => suma + (Number.parseFloat(arqueoContado[value]) || 0),
           0
-        )
+        ) + fondoFijoDelDia
       ),
-    [arqueoContado]
+    [arqueoContado, fondoFijoDelDia]
   );
 
   const diferenciaArqueoTotal = useMemo(
-    () =>
-      redondearMoneda(
-        arqueoSistema.total - totalArqueoContado - fondoFijoDelDia - retirosDelDia
-      ),
-    [arqueoSistema.total, totalArqueoContado, fondoFijoDelDia, retirosDelDia]
+    () => redondearMoneda(totalArqueoContado - arqueoSistema.total),
+    [totalArqueoContado, arqueoSistema.total]
   );
 
   const cargarRetirosDelDia = async () => {
@@ -3060,7 +3051,7 @@ function Dashboard() {
           transferencia_contado: transferenciaContado,
           link_sistema: arqueoSistema.link_pago,
           link_contado: linkContado,
-          total_sistema: totalArqueoSistema,
+          total_sistema: arqueoSistema.total,
           total_contado: totalArqueoContado,
           diferencia: diferenciaArqueoTotal,
           retiros_del_dia: retirosDelDia,
@@ -3685,9 +3676,8 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
-              Ventas del día por forma de pago. Efectivo esperado = total del día cobrado (
-              {formatearMoneda(arqueoSistema.ventasEfectivoBruto)}) − retiros del día (
-              {formatearMoneda(retirosDelDia)}) − fondo fijo ({formatearMoneda(fondoFijoDelDia)}).
+              Sistema: ventas del día por forma de pago y retiros del día (monto negativo). Contado:
+              lo capturado en caja más el fondo fijo del día (solo lectura).
             </p>
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
@@ -3706,7 +3696,7 @@ function Dashboard() {
                   const diferencia =
                     arqueoContado[value] === '' || !Number.isFinite(contado)
                       ? null
-                      : redondearMoneda(sistema - contado);
+                      : redondearMoneda(contado - sistema);
                   const diferenciaFmt =
                     diferencia == null ? null : formatearDiferenciaArqueo(diferencia);
 
@@ -3732,16 +3722,24 @@ function Dashboard() {
                   );
                 })}
                 <div className="arqueo-modal-fila">
-                  <label>Fondo fijo</label>
-                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
+                  <label>Retiros del día</label>
+                  <span className="arqueo-modal-sistema">
+                    {formatearMoneda(-retirosDelDia)}
+                  </span>
                   <span>—</span>
+                  <span>—</span>
+                </div>
+                <div className="arqueo-modal-fila">
+                  <label>Fondo fijo</label>
+                  <span className="arqueo-modal-sistema">—</span>
+                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
                   <span>—</span>
                 </div>
               </div>
               <div className="arqueo-modal-totales">
                 <div className="arqueo-modal-total-fila">
                   <span>Total sistema</span>
-                  <strong>{formatearMoneda(totalArqueoSistema)}</strong>
+                  <strong>{formatearMoneda(arqueoSistema.total)}</strong>
                 </div>
                 <div className="arqueo-modal-total-fila">
                   <span>Total contado</span>
