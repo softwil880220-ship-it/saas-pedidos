@@ -101,6 +101,8 @@ export default function VistaReportes() {
   const [retiros, setRetiros] = useState([]);
   const [cargandoArqueos, setCargandoArqueos] = useState(false);
   const [errorArqueos, setErrorArqueos] = useState(null);
+  const [arqueoConfirmarEliminar, setArqueoConfirmarEliminar] = useState(null);
+  const [eliminandoArqueoId, setEliminandoArqueoId] = useState(null);
 
   const configPeriodo = useMemo(
     () => ({ periodo, fechaDesde, fechaHasta }),
@@ -255,6 +257,28 @@ export default function VistaReportes() {
     });
   };
 
+  const confirmarEliminarArqueo = async (arqueoId) => {
+    if (!negocioId || eliminandoArqueoId) return;
+
+    setEliminandoArqueoId(arqueoId);
+    setErrorArqueos(null);
+
+    const { error } = await queryConNegocio(
+      supabase.from('arqueos').delete().eq('id', arqueoId),
+      negocioId
+    );
+
+    setEliminandoArqueoId(null);
+    setArqueoConfirmarEliminar(null);
+
+    if (error) {
+      setErrorArqueos('No se pudo eliminar el arqueo.');
+      return;
+    }
+
+    setArqueos((prev) => prev.filter((item) => item.id !== arqueoId));
+  };
+
   const renderTarjetaArqueo = (arqueo) => {
     const claveDia = claveFechaDesdeDate(
       arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
@@ -264,12 +288,49 @@ export default function VistaReportes() {
     return (
       <article key={arqueo.id} className="reportes-arqueo-card">
         <header className="reportes-arqueo-cabecera">
-          <time className="reportes-arqueo-fecha">
-            {formatearFechaPedidoReporte(arqueo.created_at)}
-          </time>
-          <span className="reportes-arqueo-usuario">
-            {arqueo.usuario?.trim() || '—'}
-          </span>
+          <div className="reportes-arqueo-cabecera-info">
+            <time className="reportes-arqueo-fecha">
+              {formatearFechaPedidoReporte(arqueo.created_at)}
+            </time>
+            <span className="reportes-arqueo-usuario">
+              {arqueo.usuario?.trim() || '—'}
+            </span>
+          </div>
+          <div className="reportes-arqueo-cabecera-acciones">
+            {arqueoConfirmarEliminar === arqueo.id ? (
+              <div className="reportes-arqueo-confirmar-eliminar">
+                <span>¿Eliminar este arqueo?</span>
+                <button
+                  type="button"
+                  className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-cancelar"
+                  onClick={() => setArqueoConfirmarEliminar(null)}
+                  disabled={eliminandoArqueoId === arqueo.id}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-aceptar"
+                  onClick={() => confirmarEliminarArqueo(arqueo.id)}
+                  disabled={eliminandoArqueoId === arqueo.id}
+                >
+                  {eliminandoArqueoId === arqueo.id ? 'Eliminando...' : 'Confirmar'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="reportes-arqueo-eliminar-btn"
+                onClick={() => setArqueoConfirmarEliminar(arqueo.id)}
+                disabled={
+                  eliminandoArqueoId !== null ||
+                  (arqueoConfirmarEliminar !== null && arqueoConfirmarEliminar !== arqueo.id)
+                }
+              >
+                Eliminar
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="reportes-arqueo-desglose">

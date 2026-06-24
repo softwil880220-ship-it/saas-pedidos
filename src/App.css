@@ -2535,6 +2535,76 @@
   color: #64748b;
 }
 
+.reportes-arqueo-cabecera-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.reportes-arqueo-cabecera-acciones {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+.reportes-arqueo-eliminar-btn {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reportes-arqueo-eliminar-btn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.reportes-arqueo-eliminar-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reportes-arqueo-confirmar-eliminar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem 0.45rem;
+  max-width: 16rem;
+  font-size: 0.78rem;
+  color: #64748b;
+  text-align: right;
+}
+
+.reportes-arqueo-confirmar-btn {
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.reportes-arqueo-confirmar-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reportes-arqueo-confirmar-cancelar {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+}
+
+.reportes-arqueo-confirmar-aceptar {
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .reportes-arqueo-desglose {
   display: grid;
   gap: 0.35rem;
@@ -2773,6 +2843,17 @@
   .reportes-arqueo-cabecera {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .reportes-arqueo-cabecera-acciones {
+    align-self: stretch;
+    justify-content: flex-start;
+  }
+
+  .reportes-arqueo-confirmar-eliminar {
+    max-width: none;
+    justify-content: flex-start;
+    text-align: left;
   }
 
   .reportes-arqueo-desglose-encabezado,
