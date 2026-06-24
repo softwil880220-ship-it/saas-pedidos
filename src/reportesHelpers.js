@@ -547,3 +547,58 @@ export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
   };
   doc.save(`reporte-arqueos-${sufijos[tipo] || 'reporte'}.pdf`);
 }
+
+function formatearFechaSoloRetiroPdf(createdAt) {
+  if (!createdAt) return '—';
+
+  return new Date(createdAt).toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+export function exportarRetirosPdf({ configPeriodo, retiros }) {
+  const doc = new jsPDF();
+  const retirosFiltrados = filtrarArqueosReporte(retiros, configPeriodo);
+  const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
+
+  doc.setFontSize(16);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte de retiros de efectivo', 14, 18);
+
+  doc.setFontSize(10);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Período: ${tituloPeriodo}`, 14, 26);
+  doc.text(`Total de retiros: ${retirosFiltrados.length}`, 14, 32);
+
+  const filas = retirosFiltrados.map((retiro) => [
+    formatearFechaSoloRetiroPdf(retiro.created_at),
+    formatearHoraPedidoLista(retiro.created_at),
+    retiro.usuario?.trim() || '—',
+    retiro.motivo?.trim() || 'Sin motivo',
+    formatearMoneda(retiro.monto),
+  ]);
+
+  autoTable(doc, {
+    startY: 40,
+    head: [['Fecha', 'Hora', 'Usuario', 'Motivo', 'Monto']],
+    body:
+      filas.length > 0 ? filas : [['—', '—', 'Sin retiros en el período', '—', '—']],
+    styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
+    headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+    alternateRowStyles: { fillColor: [236, 253, 245] },
+    columnStyles: {
+      3: { cellWidth: 60 },
+      4: { halign: 'right', cellWidth: 24 },
+    },
+  });
+
+  const { tipo } = obtenerRangoReporte(configPeriodo);
+  const sufijos = {
+    [PERIODOS_REPORTE.MES]: 'mes',
+    [PERIODOS_REPORTE.SEMANA]: 'semana',
+    personalizado: 'personalizado',
+  };
+  doc.save(`reporte-retiros-${sufijos[tipo] || 'reporte'}.pdf`);
+}

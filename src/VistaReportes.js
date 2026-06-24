@@ -11,6 +11,7 @@ import {
   etiquetaTipoEntregaReporte,
   exportarArqueosPdf,
   exportarReportePdf,
+  exportarRetirosPdf,
   fechasPeriodoTarjeta,
   FILTROS_VENTA_REPORTE,
   filtrarArqueosReporte,
@@ -329,6 +330,13 @@ export default function VistaReportes() {
       configPeriodo,
       arqueos,
       retiros,
+    });
+  };
+
+  const exportarPdfRetiros = () => {
+    exportarRetirosPdf({
+      configPeriodo,
+      retiros: retirosHistorial,
     });
   };
 
@@ -963,6 +971,15 @@ export default function VistaReportes() {
                     </p>
                   ) : null}
                 </div>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfRetiros}
+                  disabled={cargandoRetiros || reporteDeshabilitado}
+                >
+                  Exportar PDF
+                </button>
               </div>
 
               {reporteDeshabilitado ? (
