@@ -3685,11 +3685,19 @@ function Dashboard() {
                     </div>
                   );
                 })}
+                <div className="arqueo-modal-fila">
+                  <span>Fondo fijo</span>
+                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
+                  <span>—</span>
+                  <span>—</span>
+                </div>
               </div>
               <div className="arqueo-modal-totales">
                 <div className="arqueo-modal-total-fila">
                   <span>Total sistema</span>
-                  <strong>{formatearMoneda(arqueoSistema.total)}</strong>
+                  <strong>
+                    {formatearMoneda(redondearMoneda(arqueoSistema.total + fondoFijoDelDia))}
+                  </strong>
                 </div>
                 <div className="arqueo-modal-total-fila">
                   <span>Total contado</span>
