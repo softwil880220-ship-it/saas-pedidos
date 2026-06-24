@@ -3732,7 +3732,7 @@ function Dashboard() {
                 <div className="arqueo-modal-fila">
                   <label>Fondo fijo</label>
                   <span className="arqueo-modal-sistema">—</span>
-                  <span className="arqueo-modal-sistema">{formatearMoneda(-fondoFijoDelDia)}</span>
+                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
                   <span>—</span>
                 </div>
               </div>
