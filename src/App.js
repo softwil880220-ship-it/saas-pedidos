@@ -1169,6 +1169,7 @@ function Dashboard() {
     [catalogosVariantes]
   );
   const [resumenVenta, setResumenVenta] = useState(null);
+  const [nombreNegocio, setNombreNegocio] = useState('');
   const nextLineaId = useRef(estadoInicialCaptura.nextLineaId);
   const nextEditLineaId = useRef(2);
   const persistenciaCarritoPausadaRef = useRef(false);
@@ -1274,6 +1275,33 @@ function Dashboard() {
 
   useEffect(() => {
     cargarCatalogos();
+  }, [negocioId]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (!negocioId) {
+      setNombreNegocio('');
+      return undefined;
+    }
+
+    const cargarNombreNegocio = async () => {
+      const { data, error } = await supabase
+        .from('negocios')
+        .select('nombre')
+        .eq('id', negocioId)
+        .maybeSingle();
+
+      if (!activo) return;
+
+      setNombreNegocio(!error && data?.nombre?.trim() ? data.nombre.trim() : '');
+    };
+
+    cargarNombreNegocio();
+
+    return () => {
+      activo = false;
+    };
   }, [negocioId]);
 
   useEffect(() => {
@@ -3198,13 +3226,16 @@ function Dashboard() {
   return (
     <div className="dashboard">
       {seccion === 'catalogo' ? (
-        <DashboardHeaderReservaMovil />
+        <DashboardHeaderReservaMovil nombreNegocio={nombreNegocio} />
       ) : (
       <header className="dashboard-header">
         <div className="header-top">
-          <h1>
-            {esModoPresencial ? 'Modo Caja — Venta presencial' : 'Modo WhatsApp — Pedidos'}
-          </h1>
+          <div>
+            <h1>{nombreNegocio || '—'}</h1>
+            <p className="reportes-periodo-activo">
+              {esModoPresencial ? 'Modo Caja — Venta presencial' : 'Modo WhatsApp — Pedidos'}
+            </p>
+          </div>
         </div>
         <div className="header-stats">
           <div className="header-stat header-stat-principal">
