@@ -3250,14 +3250,11 @@ function Dashboard() {
         <DashboardHeaderReservaMovil nombreNegocio={nombreNegocio} />
       ) : (
       <header className="dashboard-header">
-        <div className="header-top">
+        <div className="header-top" style={{ marginBottom: '0.5rem' }}>
           <div style={estiloContenedorNombreNegocioHeader()}>
             <h1 style={estiloNombreNegocioTituloPrincipal(esMobileDashboard)}>
               {nombreNegocio || '—'}
             </h1>
-            <p className="reportes-periodo-activo">
-              {esModoPresencial ? 'Modo Caja — Venta presencial' : 'Modo WhatsApp — Pedidos'}
-            </p>
           </div>
         </div>
         <div className="header-stats">
