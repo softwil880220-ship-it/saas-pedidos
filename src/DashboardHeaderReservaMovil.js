@@ -14,14 +14,12 @@ function estiloNombreNegocioHeaderDelgado(esMobile) {
       paddingRight: PADDING_HEADER_CERRAR_SESION,
       color: '#fff',
       fontWeight: 600,
-      fontSize: '14px',
-      lineHeight: 1.4,
+      fontSize: '11px',
+      lineHeight: 1.2,
       display: 'block',
-      whiteSpace: 'normal',
-      wordBreak: 'normal',
-      overflow: 'visible',
-      writingMode: 'horizontal-tb',
-      textOrientation: 'mixed',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
     };
   }
 
@@ -75,7 +73,10 @@ export default function DashboardHeaderReservaMovil({ nombreNegocio: nombreNegoc
 
   return (
     <header className="dashboard-header">
-      <div className="header-top">
+      <div
+        className="header-top"
+        style={esMobile ? { alignItems: 'center', marginBottom: 0 } : undefined}
+      >
         {nombreNegocio ? (
           <span style={estiloNombreNegocioHeaderDelgado(esMobile)}>{nombreNegocio}</span>
         ) : null}
