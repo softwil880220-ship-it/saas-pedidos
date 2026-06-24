@@ -2804,7 +2804,9 @@ function Dashboard() {
         FORMAS_PAGO.reduce(
           (suma, { value }) => suma + (Number.parseFloat(arqueoContado[value]) || 0),
           0
-        ) - fondoFijoDelDia
+        ) +
+          fondoFijoDelDia -
+          fondoFijoDelDia
       ),
     [arqueoContado, fondoFijoDelDia]
   );
