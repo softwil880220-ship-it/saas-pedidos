@@ -344,6 +344,37 @@ function crearLineaPedido(id) {
   };
 }
 
+function consolidarLineasPorProducto(lineas) {
+  const orden = [];
+  const map = new Map();
+
+  (lineas || []).forEach((linea) => {
+    if (!linea?.productoId) return;
+
+    const productoId = String(linea.productoId);
+    const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+
+    if (map.has(productoId)) {
+      const existente = map.get(productoId);
+      map.set(productoId, {
+        ...existente,
+        cantidad: String((parseInt(existente.cantidad, 10) || 1) + cantidad),
+      });
+      return;
+    }
+
+    const copia = {
+      ...linea,
+      productoId,
+      cantidad: String(cantidad),
+    };
+    map.set(productoId, copia);
+    orden.push(productoId);
+  });
+
+  return orden.map((productoId) => map.get(productoId));
+}
+
 function buscarPorId(lista, id) {
   if (id === '' || id === null || id === undefined) {
     return null;
@@ -1337,14 +1368,16 @@ function Dashboard() {
   const ajustarCantidadLinea = (lineaId, delta) => {
     setForm((prev) => ({
       ...prev,
-      lineas: prev.lineas.map((linea) => {
-        if (linea.id !== lineaId) return linea;
+      lineas: consolidarLineasPorProducto(
+        prev.lineas.map((linea) => {
+          if (linea.id !== lineaId) return linea;
 
-        const cantidadActual = Math.max(1, parseInt(linea.cantidad, 10) || 1);
-        const cantidadNueva = Math.max(1, cantidadActual + delta);
+          const cantidadActual = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+          const cantidadNueva = Math.max(1, cantidadActual + delta);
 
-        return { ...linea, cantidad: String(cantidadNueva) };
-      }),
+          return { ...linea, cantidad: String(cantidadNueva) };
+        })
+      ),
     }));
   };
 
@@ -1376,15 +1409,18 @@ function Dashboard() {
     const idStr = String(productoId);
 
     setForm((prev) => {
-      const lineaExistente = prev.lineas.find(
-        (linea) => linea.productoId && String(linea.productoId) === idStr
+      const lineasConsolidadas = consolidarLineasPorProducto(
+        prev.lineas.filter((linea) => linea.productoId)
+      );
+      const indiceExistente = lineasConsolidadas.findIndex(
+        (linea) => String(linea.productoId) === idStr
       );
 
-      if (lineaExistente) {
+      if (indiceExistente !== -1) {
         return {
           ...prev,
-          lineas: prev.lineas.map((linea) =>
-            linea.id === lineaExistente.id
+          lineas: lineasConsolidadas.map((linea, indice) =>
+            indice === indiceExistente
               ? {
                   ...linea,
                   cantidad: String((parseInt(linea.cantidad, 10) || 1) + 1),
@@ -1394,12 +1430,10 @@ function Dashboard() {
         };
       }
 
-      const lineasConProducto = prev.lineas.filter((linea) => linea.productoId);
-
       return {
         ...prev,
         lineas: [
-          ...lineasConProducto,
+          ...lineasConsolidadas,
           {
             ...crearLineaPedido(nextLineaId.current++),
             productoId: idStr,
@@ -1479,8 +1513,15 @@ function Dashboard() {
     resetFormPedido(nuevoModo, { limpiarStorage: false });
   };
 
-  const totalPedido = calcularTotalLineas(form.lineas, productos, catalogosVariantes);
-  const lineasPedidoConProducto = form.lineas.filter((linea) => linea.productoId);
+  const lineasPedidoConProducto = useMemo(
+    () => consolidarLineasPorProducto(form.lineas),
+    [form.lineas]
+  );
+  const totalPedido = calcularTotalLineas(
+    lineasPedidoConProducto,
+    productos,
+    catalogosVariantes
+  );
   const montoPago = parseFloat(pagoRecibido);
   const pagoValido = pagoRecibido !== '' && !Number.isNaN(montoPago);
   const cambio = pagoValido ? montoPago - totalPedido : null;
