@@ -1132,6 +1132,27 @@ function clonarFormPedido(form) {
   return JSON.parse(JSON.stringify(form));
 }
 
+const PADDING_HEADER_CERRAR_SESION = '7.75rem';
+
+function estiloContenedorNombreNegocioHeader() {
+  return {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: PADDING_HEADER_CERRAR_SESION,
+  };
+}
+
+function estiloNombreNegocioTituloPrincipal(esMobile) {
+  return {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: esMobile ? 2 : 1,
+    WebkitBoxOrient: 'vertical',
+    lineHeight: 1.25,
+    wordBreak: 'break-word',
+  };
+}
+
 function Dashboard() {
   const location = useLocation();
   const { negocioId, session } = useAuth();
@@ -3230,8 +3251,10 @@ function Dashboard() {
       ) : (
       <header className="dashboard-header">
         <div className="header-top">
-          <div>
-            <h1>{nombreNegocio || '—'}</h1>
+          <div style={estiloContenedorNombreNegocioHeader()}>
+            <h1 style={estiloNombreNegocioTituloPrincipal(esMobileDashboard)}>
+              {nombreNegocio || '—'}
+            </h1>
             <p className="reportes-periodo-activo">
               {esModoPresencial ? 'Modo Caja — Venta presencial' : 'Modo WhatsApp — Pedidos'}
             </p>

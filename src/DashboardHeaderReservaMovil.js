@@ -2,9 +2,30 @@ import { useEffect, useState } from 'react';
 import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabase';
+import useEsMobile from './useEsMobile';
+
+const PADDING_HEADER_CERRAR_SESION = '7.75rem';
+
+function estiloNombreNegocioHeaderDelgado(esMobile) {
+  return {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: PADDING_HEADER_CERRAR_SESION,
+    color: '#fff',
+    fontSize: esMobile ? '1.05rem' : '1.25rem',
+    fontWeight: 600,
+    lineHeight: 1.35,
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: esMobile ? 2 : 1,
+    WebkitBoxOrient: 'vertical',
+    wordBreak: 'break-word',
+  };
+}
 
 export default function DashboardHeaderReservaMovil({ nombreNegocio: nombreNegocioProp = '' }) {
   const { negocioId } = useAuth();
+  const esMobile = useEsMobile(720);
   const [nombreNegocioLocal, setNombreNegocioLocal] = useState('');
 
   useEffect(() => {
@@ -40,7 +61,7 @@ export default function DashboardHeaderReservaMovil({ nombreNegocio: nombreNegoc
     <header className="dashboard-header">
       <div className="header-top">
         {nombreNegocio ? (
-          <span className="header-stat-fecha">{nombreNegocio}</span>
+          <span style={estiloNombreNegocioHeaderDelgado(esMobile)}>{nombreNegocio}</span>
         ) : null}
         <div className="dashboard-header-reserva-movil" aria-hidden="true">
           <div className="header-top">
