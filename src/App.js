@@ -3758,14 +3758,6 @@ function Dashboard() {
                   : retirosDelDia
               )}
             </p>
-            {arqueoModalSoloLectura ? (
-              <div
-                className="reportes-arqueo-confirmar-eliminar"
-                style={{ textAlign: 'left' }}
-              >
-                <span>{MENSAJE_ARQUEO_DIA_EXISTENTE}</span>
-              </div>
-            ) : null}
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
             ) : (
@@ -3856,6 +3848,16 @@ function Dashboard() {
                   </strong>
                 </div>
               </div>
+              {arqueoModalSoloLectura ? (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div
+                    className="reportes-arqueo-confirmar-eliminar"
+                    style={{ textAlign: 'left' }}
+                  >
+                    <span>{MENSAJE_ARQUEO_DIA_EXISTENTE}</span>
+                  </div>
+                </div>
+              ) : null}
               {errorArqueo ? (
                 <p className="retiro-modal-error" role="alert">
                   {errorArqueo}
