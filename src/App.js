@@ -3759,15 +3759,11 @@ function Dashboard() {
               )}
             </p>
             {arqueoModalSoloLectura ? (
-              <div className="reportes-arqueo-confirmar-eliminar">
+              <div
+                className="reportes-arqueo-confirmar-eliminar"
+                style={{ textAlign: 'left' }}
+              >
                 <span>{MENSAJE_ARQUEO_DIA_EXISTENTE}</span>
-                <button
-                  type="button"
-                  className="reportes-arqueo-confirmar-btn reportes-arqueo-confirmar-cancelar"
-                  onClick={cerrarModalArqueo}
-                >
-                  Cancelar
-                </button>
               </div>
             ) : null}
             {cargandoArqueoDatos ? (
