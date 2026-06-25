@@ -2077,21 +2077,20 @@ function Dashboard() {
     [pedidosHoyTodos]
   );
   const arqueoSistema = useMemo(() => {
-    const efectivo = ventasBrutasPorFormaPago.efectivo;
+    const ventasEfectivo = ventasBrutasPorFormaPago.efectivo;
+    const efectivo = redondearMoneda(ventasEfectivo - retirosDelDia + fondoFijoDelDia);
     const tarjeta = ventasBrutasPorFormaPago.tarjeta;
     const transferencia = ventasBrutasPorFormaPago.transferencia;
     const linkPago = ventasBrutasPorFormaPago.link_pago;
-    const ventasTotal = redondearMoneda(efectivo + tarjeta + transferencia + linkPago);
 
     return {
       efectivo,
       tarjeta,
       transferencia,
       link_pago: linkPago,
-      total: redondearMoneda(ventasTotal - retirosDelDia),
-      ventasEfectivoBruto: efectivo,
+      total: redondearMoneda(efectivo + tarjeta + transferencia + linkPago),
     };
-  }, [ventasBrutasPorFormaPago, retirosDelDia]);
+  }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
 
   const pedidosPorFecha = pedidosModoActual.filter(
     (pedido) =>
@@ -2804,11 +2803,9 @@ function Dashboard() {
         FORMAS_PAGO.reduce(
           (suma, { value }) => suma + (Number.parseFloat(arqueoContado[value]) || 0),
           0
-        ) +
-          fondoFijoDelDia -
-          fondoFijoDelDia
+        )
       ),
-    [arqueoContado, fondoFijoDelDia]
+    [arqueoContado]
   );
 
   const diferenciaArqueoTotal = useMemo(
@@ -3678,8 +3675,8 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
-              Sistema: ventas del día por forma de pago y retiros del día (monto negativo). Contado:
-              lo capturado en caja más el fondo fijo del día (solo lectura).
+              Fondo fijo del día: {formatearMoneda(fondoFijoDelDia)} | Retiros del día:{' '}
+              {formatearMoneda(retirosDelDia)}
             </p>
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
@@ -3723,20 +3720,6 @@ function Dashboard() {
                     </div>
                   );
                 })}
-                <div className="arqueo-modal-fila">
-                  <label>Retiros del día</label>
-                  <span className="arqueo-modal-sistema">
-                    {formatearMoneda(-retirosDelDia)}
-                  </span>
-                  <span>—</span>
-                  <span>—</span>
-                </div>
-                <div className="arqueo-modal-fila">
-                  <label>Fondo fijo</label>
-                  <span className="arqueo-modal-sistema">—</span>
-                  <span className="arqueo-modal-sistema">{formatearMoneda(fondoFijoDelDia)}</span>
-                  <span>—</span>
-                </div>
               </div>
               <div className="arqueo-modal-totales">
                 <div className="arqueo-modal-total-fila">
