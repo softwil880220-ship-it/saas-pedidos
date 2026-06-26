@@ -11,6 +11,20 @@
   padding: 1.5rem 2rem;
 }
 
+@media (min-width: 721px) {
+  .dashboard-header {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .dashboard-header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    box-sizing: border-box;
+  }
+}
+
 .dashboard-header-reserva-movil {
   visibility: hidden;
 }

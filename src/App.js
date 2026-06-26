@@ -3784,52 +3784,54 @@ function Dashboard() {
         <DashboardHeaderReservaMovil nombreNegocio={nombreNegocio} />
       ) : (
       <header className="dashboard-header">
-        <div className="header-top" style={{ marginBottom: '0.5rem' }}>
-          <div style={estiloContenedorNombreNegocioHeader()}>
-            <h1 style={estiloNombreNegocioTituloPrincipal(esMobileDashboard)}>
-              {nombreNegocio || '—'}
-            </h1>
+        <div className="dashboard-header-inner">
+          <div className="header-top" style={{ marginBottom: '0.5rem' }}>
+            <div style={estiloContenedorNombreNegocioHeader()}>
+              <h1 style={estiloNombreNegocioTituloPrincipal(esMobileDashboard)}>
+                {nombreNegocio || '—'}
+              </h1>
+            </div>
           </div>
-        </div>
-        <div className="header-stats">
-          <div className="header-stat header-stat-principal">
-            <span className="header-stat-label">Ventas totales hoy</span>
-            <span className="header-stat-fecha">
-              {formatearFechaCompleta(new Date(fechaActual))}
-            </span>
-            <span className="header-stat-value header-stat-value-total">
-              {formatearMoneda(totalVentasHoyTotal)}
-            </span>
-            <p className="header-stat-desglose">
-              Caja: {formatearMoneda(totalVentasHoyCaja)} | WhatsApp:{' '}
-              {formatearMoneda(totalVentasHoyWhatsApp)}
-            </p>
-            <p className="header-stat-desglose header-stat-desglose-whatsapp">
-              🛵 Domicilio: {formatearMoneda(totalVentasHoyDomicilio)} | 🏪 Para recoger:{' '}
-              {formatearMoneda(totalVentasHoySucursal)}
-            </p>
-            <div className="header-acciones-caja">
-              <button
-                type="button"
-                className="header-retiro-btn"
-                onClick={abrirModalFondoFijo}
-              >
-                Fondo fijo
-              </button>
-              <button
-                type="button"
-                className="header-retiro-btn"
-                onClick={abrirModalRetiro}
-              >
-                Retiro de efectivo
-              </button>
-              <button
-                type="button"
-                className="header-retiro-btn"
-                onClick={abrirModalArqueo}
-              >
-                Arqueo de caja
-              </button>
+          <div className="header-stats">
+            <div className="header-stat header-stat-principal">
+              <span className="header-stat-label">Ventas totales hoy</span>
+              <span className="header-stat-fecha">
+                {formatearFechaCompleta(new Date(fechaActual))}
+              </span>
+              <span className="header-stat-value header-stat-value-total">
+                {formatearMoneda(totalVentasHoyTotal)}
+              </span>
+              <p className="header-stat-desglose">
+                Caja: {formatearMoneda(totalVentasHoyCaja)} | WhatsApp:{' '}
+                {formatearMoneda(totalVentasHoyWhatsApp)}
+              </p>
+              <p className="header-stat-desglose header-stat-desglose-whatsapp">
+                🛵 Domicilio: {formatearMoneda(totalVentasHoyDomicilio)} | 🏪 Para recoger:{' '}
+                {formatearMoneda(totalVentasHoySucursal)}
+              </p>
+              <div className="header-acciones-caja">
+                <button
+                  type="button"
+                  className="header-retiro-btn"
+                  onClick={abrirModalFondoFijo}
+                >
+                  Fondo fijo
+                </button>
+                <button
+                  type="button"
+                  className="header-retiro-btn"
+                  onClick={abrirModalRetiro}
+                >
+                  Retiro de efectivo
+                </button>
+                <button
+                  type="button"
+                  className="header-retiro-btn"
+                  onClick={abrirModalArqueo}
+                >
+                  Arqueo de caja
+                </button>
+              </div>
             </div>
           </div>
         </div>
