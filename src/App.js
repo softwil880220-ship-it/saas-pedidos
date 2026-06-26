@@ -4257,13 +4257,23 @@ function Dashboard() {
                       guardandoArqueo ||
                       cargandoArqueoDatos ||
                       !negocioId ||
-                      diferenciaArqueoTotal !== 0
+                      diferenciaArqueoTotal !== 0 ||
+                      totalArqueoContado <= 0
                     }
                   >
                     {guardandoArqueo ? 'Guardando...' : 'Guardar arqueo'}
                   </button>
                 ) : null}
               </div>
+              {!arqueoModalSoloLectura && totalArqueoContado <= 0 ? (
+                <p
+                  className="retiro-modal-error"
+                  role="alert"
+                  style={{ textAlign: 'center', marginTop: '0.75rem' }}
+                >
+                  Debes ingresar los montos contados antes de guardar el arqueo.
+                </p>
+              ) : null}
               {!arqueoModalSoloLectura && diferenciaArqueoTotal !== 0 ? (
                 <p
                   className="retiro-modal-error"
