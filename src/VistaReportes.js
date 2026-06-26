@@ -544,6 +544,11 @@ export default function VistaReportes() {
         </div>
 
         <div className="reportes-arqueo-retiros">
+          {Number(arqueo.fondo_fijo_del_dia) > 0 ? (
+            <p className="reportes-arqueo-retiros-resumen">
+              Fondo fijo: {formatearMoneda(arqueo.fondo_fijo_del_dia)}
+            </p>
+          ) : null}
           <p className="reportes-arqueo-retiros-resumen">
             Retiros del día: {formatearMoneda(arqueo.retiros_del_dia)}
           </p>
