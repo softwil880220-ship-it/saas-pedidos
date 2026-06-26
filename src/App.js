@@ -307,7 +307,7 @@ const MENSAJE_ARQUEO_DIA_EXISTENTE =
   'Ya existe un arqueo de caja registrado para este día.';
 
 const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
-  'No puedes eliminar este fondo fijo porque existe un arqueo registrado para este día.';
+  'No puedes eliminar este Fondo fijo del día porque existe un arqueo de caja registrado para este día.';
 
 const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
   'No puedes agregar retiros de efectivo porque existe un arqueo de caja registrado para este día.';
