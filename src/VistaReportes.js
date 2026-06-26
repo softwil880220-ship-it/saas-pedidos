@@ -611,11 +611,12 @@ export default function VistaReportes() {
         </div>
         <div className="reportes-arqueo-cabecera-acciones">
           {retiroMensajeBloqueo === retiro.id ? (
-            <div
-              className="reportes-arqueo-confirmar-eliminar"
-              style={{ maxWidth: 'none', textAlign: 'left', alignItems: 'flex-start' }}
-            >
-              <p className="retiro-modal-error" role="alert" style={{ margin: 0, flex: '1 1 100%' }}>
+            <div className="reportes-arqueo-confirmar-eliminar">
+              <p
+                className="retiro-modal-error"
+                role="alert"
+                style={{ margin: 0, flexBasis: '100%', textAlign: 'left' }}
+              >
                 {MENSAJE_RETIRO_BLOQUEADO_ARQUEO}
               </p>
               <button
