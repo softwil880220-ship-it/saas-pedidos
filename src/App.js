@@ -3781,11 +3781,6 @@ function Dashboard() {
                 </div>
               </form>
             )}
-            {fondoFijoHoyId && errorFondoFijo ? (
-              <p className="retiro-modal-error" role="alert">
-                {errorFondoFijo}
-              </p>
-            ) : null}
           </div>
         </div>
       ) : null}
