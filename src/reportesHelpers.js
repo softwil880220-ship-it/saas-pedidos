@@ -226,6 +226,20 @@ export function etiquetaTipoEntregaReporte(pedido) {
     : 'A domicilio';
 }
 
+const FORMAS_PAGO_REPORTE = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'tarjeta', label: 'Tarjeta' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'link_pago', label: 'Link de pago' },
+];
+
+export function formatearFormaPagoReporte(pedido) {
+  const valor = String(pedido.forma_pago ?? '').trim();
+  if (!valor) return '—';
+
+  return FORMAS_PAGO_REPORTE.find((forma) => forma.value === valor)?.label || '—';
+}
+
 export function formatearProductosReporte(pedido) {
   const lineas = Array.isArray(pedido.lineas_detalle) ? pedido.lineas_detalle : [];
 
@@ -359,7 +373,7 @@ export function exportarReportePdf({
       filas.push([
         {
           content: `${grupo.etiqueta} — Total del día: ${formatearMoneda(grupo.totalDelDia)}`,
-          colSpan: 5,
+          colSpan: 6,
           styles: {
             fillColor: [236, 253, 245],
             textColor: [20, 83, 45],
@@ -372,6 +386,7 @@ export function exportarReportePdf({
         filas.push([
           formatearHoraPedidoLista(pedido.created_at),
           formatearClienteReporte(pedido),
+          formatearFormaPagoReporte(pedido),
           formatearProductosReporte(pedido),
           etiquetaTipoEntregaReporte(pedido),
           formatearMoneda(pedido.total),
@@ -382,6 +397,7 @@ export function exportarReportePdf({
     filas = pedidos.map((pedido) => [
       formatearFechaPedidoReporte(pedido.created_at),
       formatearClienteReporte(pedido),
+      formatearFormaPagoReporte(pedido),
       formatearProductosReporte(pedido),
       etiquetaTipoEntregaReporte(pedido),
       formatearMoneda(pedido.total),
@@ -390,14 +406,23 @@ export function exportarReportePdf({
 
   autoTable(doc, {
     startY: 54,
-    head: [[multiplesDias ? 'Hora' : 'Fecha', 'Cliente', 'Productos', 'Tipo de entrega', 'Total']],
-    body: filas.length > 0 ? filas : [['—', '—', 'Sin pedidos en el período', '—', '—']],
+    head: [
+      [
+        multiplesDias ? 'Hora' : 'Fecha',
+        'Cliente',
+        'Forma de pago',
+        'Productos',
+        'Tipo de entrega',
+        'Total',
+      ],
+    ],
+    body: filas.length > 0 ? filas : [['—', '—', '—', 'Sin pedidos en el período', '—', '—']],
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [20, 83, 45], textColor: 255 },
     alternateRowStyles: { fillColor: [236, 253, 245] },
     columnStyles: {
-      2: { cellWidth: 60 },
-      4: { halign: 'right' },
+      3: { cellWidth: 60 },
+      5: { halign: 'right' },
     },
   });
 

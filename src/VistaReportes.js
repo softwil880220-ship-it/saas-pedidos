@@ -19,6 +19,7 @@ import {
   filtrarPedidosReporte,
   formatearClienteReporte,
   formatearFechaPedidoReporte,
+  formatearFormaPagoReporte,
   formatearHoraPedidoLista,
   formatearProductosReporte,
   obtenerRangoReporte,
@@ -844,6 +845,7 @@ export default function VistaReportes() {
                       <div className="reportes-tabla-header pedidos-reporte-header">
                         <span>Hora</span>
                         <span>Cliente</span>
+                        <span>Forma de pago</span>
                         <span>Productos</span>
                         <span>Tipo de entrega</span>
                         <span>Total</span>
@@ -855,6 +857,9 @@ export default function VistaReportes() {
                           </span>
                           <span className="reporte-cliente">
                             {formatearClienteReporte(pedido)}
+                          </span>
+                          <span className="reporte-forma-pago">
+                            {formatearFormaPagoReporte(pedido)}
                           </span>
                           <span className="reporte-productos">
                             {formatearProductosReporte(pedido)}
@@ -875,6 +880,7 @@ export default function VistaReportes() {
                   <div className="reportes-tabla-header pedidos-reporte-header">
                     <span>Fecha</span>
                     <span>Cliente</span>
+                    <span>Forma de pago</span>
                     <span>Productos</span>
                     <span>Tipo de entrega</span>
                     <span>Total</span>
@@ -885,6 +891,9 @@ export default function VistaReportes() {
                         {formatearFechaPedidoReporte(pedido.created_at)}
                       </span>
                       <span className="reporte-cliente">{formatearClienteReporte(pedido)}</span>
+                      <span className="reporte-forma-pago">
+                        {formatearFormaPagoReporte(pedido)}
+                      </span>
                       <span className="reporte-productos">
                         {formatearProductosReporte(pedido)}
                       </span>
