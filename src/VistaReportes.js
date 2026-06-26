@@ -10,6 +10,7 @@ import {
   etiquetaFiltroVentaReporte,
   etiquetaTipoEntregaReporte,
   exportarArqueosPdf,
+  exportarFondosFijosPdf,
   exportarReportePdf,
   exportarRetirosPdf,
   fechasPeriodoTarjeta,
@@ -35,6 +36,7 @@ const REPORTES_TABS = [
   { value: 'ventas', label: 'Ventas' },
   { value: 'arqueos', label: 'Arqueos' },
   { value: 'retiros', label: 'Retiros de efectivo' },
+  { value: 'fondos-fijos', label: 'Fondos fijos' },
 ];
 
 const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
@@ -66,6 +68,16 @@ function formatearDiferenciaArqueoReporte(valor) {
   const diferencia = Number(valor) || 0;
   const prefijo = diferencia > 0 ? '+' : '';
   return `${prefijo}${formatearMoneda(diferencia)}`;
+}
+
+function formatearFechaSoloReporte(createdAt) {
+  if (!createdAt) return '—';
+
+  return new Date(createdAt).toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function agruparRetirosPorDia(retiros) {
@@ -115,6 +127,9 @@ export default function VistaReportes() {
   const [eliminandoRetiroId, setEliminandoRetiroId] = useState(null);
   const [arqueosHistorial, setArqueosHistorial] = useState([]);
   const [retiroMensajeBloqueo, setRetiroMensajeBloqueo] = useState(null);
+  const [fondosFijosArqueos, setFondosFijosArqueos] = useState([]);
+  const [cargandoFondosFijos, setCargandoFondosFijos] = useState(false);
+  const [errorFondosFijos, setErrorFondosFijos] = useState(null);
 
   const configPeriodo = useMemo(
     () => ({ periodo, fechaDesde, fechaHasta }),
@@ -262,6 +277,41 @@ export default function VistaReportes() {
     };
   }, [tabReportes, negocioId]);
 
+  useEffect(() => {
+    let activo = true;
+
+    if (tabReportes !== 'fondos-fijos' || !negocioId) {
+      return undefined;
+    }
+
+    const cargarFondosFijos = async () => {
+      setCargandoFondosFijos(true);
+      setErrorFondosFijos(null);
+
+      const { data, error: errorConsulta } = await queryConNegocio(
+        supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (errorConsulta) {
+        setErrorFondosFijos('No se pudo cargar el historial de fondos fijos.');
+        setFondosFijosArqueos([]);
+      } else {
+        setFondosFijosArqueos(data || []);
+      }
+
+      setCargandoFondosFijos(false);
+    };
+
+    cargarFondosFijos();
+
+    return () => {
+      activo = false;
+    };
+  }, [tabReportes, negocioId]);
+
   const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
 
   const arqueosFiltrados = useMemo(
@@ -272,6 +322,11 @@ export default function VistaReportes() {
   const retirosFiltrados = useMemo(
     () => filtrarArqueosReporte(retirosHistorial, configPeriodo),
     [retirosHistorial, configPeriodo]
+  );
+
+  const fondosFijosFiltrados = useMemo(
+    () => filtrarArqueosReporte(fondosFijosArqueos, configPeriodo),
+    [fondosFijosArqueos, configPeriodo]
   );
 
   const diasConArqueo = useMemo(() => {
@@ -337,6 +392,13 @@ export default function VistaReportes() {
     exportarRetirosPdf({
       configPeriodo,
       retiros: retirosHistorial,
+    });
+  };
+
+  const exportarPdfFondosFijos = () => {
+    exportarFondosFijosPdf({
+      configPeriodo,
+      arqueos: fondosFijosArqueos,
     });
   };
 
@@ -999,6 +1061,124 @@ export default function VistaReportes() {
               ) : (
                 <div className="reportes-arqueos-lista">
                   {retirosFiltrados.map((retiro) => renderTarjetaRetiro(retiro))}
+                </div>
+              )}
+            </>
+          ) : null}
+
+          {tabReportes === 'fondos-fijos' ? (
+            <>
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+                  <nav className="reportes-periodo-nav" aria-label="Período de fondos fijos">
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.SEMANA
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarSemana}
+                    >
+                      Semana
+                    </button>
+                    <button
+                      type="button"
+                      className={`reportes-periodo-btn${
+                        !usaRangoPersonalizado && periodo === PERIODOS_REPORTE.MES
+                          ? ' activo'
+                          : ''
+                      }${usaRangoPersonalizado ? ' desactivado' : ''}`}
+                      onClick={seleccionarMes}
+                    >
+                      Mes
+                    </button>
+                  </nav>
+
+                  <div className="reportes-rango-personalizado">
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-fondos-fijos-fecha-desde"
+                    >
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-fondos-fijos-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(e) => setFechaDesde(e.target.value)}
+                      />
+                    </label>
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-fondos-fijos-fecha-hasta"
+                    >
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-fondos-fijos-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(e) => setFechaHasta(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfFondosFijos}
+                  disabled={cargandoFondosFijos || reporteDeshabilitado}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+
+              {reporteDeshabilitado ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : cargandoFondosFijos ? (
+                <p className="dashboard-vacio">Cargando fondos fijos...</p>
+              ) : errorFondosFijos ? (
+                <p className="dashboard-vacio reportes-error">{errorFondosFijos}</p>
+              ) : fondosFijosArqueos.length === 0 ? (
+                <p className="dashboard-vacio">No hay arqueos registrados.</p>
+              ) : fondosFijosFiltrados.length === 0 ? (
+                <p className="dashboard-vacio">
+                  No hay fondos fijos para el período seleccionado.
+                </p>
+              ) : (
+                <div className="fondos-fijos-reporte">
+                  <div className="fondos-fijos-reporte-header">
+                    <span>Fecha</span>
+                    <span>Hora</span>
+                    <span>Usuario</span>
+                    <span>Fondo fijo</span>
+                  </div>
+                  {fondosFijosFiltrados.map((arqueo) => (
+                    <div key={arqueo.id} className="fondos-fijos-reporte-fila">
+                      <span className="reporte-fecha">
+                        {formatearFechaSoloReporte(arqueo.created_at)}
+                      </span>
+                      <span className="reporte-hora">
+                        {formatearHoraPedidoLista(arqueo.created_at)}
+                      </span>
+                      <span className="reporte-cliente">
+                        {arqueo.usuario?.trim() || '—'}
+                      </span>
+                      <span className="reporte-total">
+                        {formatearMoneda(arqueo.fondo_fijo_del_dia)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </>

@@ -2662,6 +2662,52 @@
   color: #94a3b8;
 }
 
+.fondos-fijos-reporte {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.fondos-fijos-reporte-header,
+.fondos-fijos-reporte-fila {
+  display: grid;
+  grid-template-columns:
+    minmax(7rem, 1.1fr)
+    minmax(4.5rem, 0.85fr)
+    minmax(0, 1.5fr)
+    minmax(6.5rem, auto);
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+}
+
+.fondos-fijos-reporte-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.fondos-fijos-reporte-fila {
+  font-size: 0.85rem;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.fondos-fijos-reporte-fila:last-child {
+  border-bottom: none;
+}
+
+.fondos-fijos-reporte-fila .reporte-total {
+  font-weight: 600;
+  text-align: right;
+}
+
 .reportes-arqueo-totales {
   display: grid;
   gap: 0.35rem;
@@ -2874,6 +2920,48 @@
 
   .reportes-arqueo-desglose-fila span:nth-child(3)::before {
     content: 'Contado: ';
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .fondos-fijos-reporte-header {
+    display: none;
+  }
+
+  .fondos-fijos-reporte-fila {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'fecha monto'
+      'hora hora'
+      'usuario usuario';
+    gap: 0.25rem 0.75rem;
+    padding: 0.85rem 0.75rem;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-fecha {
+    grid-area: fecha;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-hora {
+    grid-area: hora;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-cliente {
+    grid-area: usuario;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-total {
+    grid-area: monto;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-hora::before {
+    content: 'Hora: ';
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .fondos-fijos-reporte-fila .reporte-cliente::before {
+    content: 'Usuario: ';
     color: #64748b;
     font-weight: 600;
   }

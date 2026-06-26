@@ -602,3 +602,46 @@ export function exportarRetirosPdf({ configPeriodo, retiros }) {
   };
   doc.save(`reporte-retiros-${sufijos[tipo] || 'reporte'}.pdf`);
 }
+
+export function exportarFondosFijosPdf({ configPeriodo, arqueos }) {
+  const doc = new jsPDF();
+  const arqueosFiltrados = filtrarArqueosReporte(arqueos, configPeriodo);
+  const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
+
+  doc.setFontSize(16);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte de fondos fijos', 14, 18);
+
+  doc.setFontSize(10);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Período: ${tituloPeriodo}`, 14, 26);
+  doc.text(`Total de registros: ${arqueosFiltrados.length}`, 14, 32);
+
+  const filas = arqueosFiltrados.map((arqueo) => [
+    formatearFechaSoloRetiroPdf(arqueo.created_at),
+    formatearHoraPedidoLista(arqueo.created_at),
+    arqueo.usuario?.trim() || '—',
+    formatearMoneda(arqueo.fondo_fijo_del_dia),
+  ]);
+
+  autoTable(doc, {
+    startY: 40,
+    head: [['Fecha', 'Hora', 'Usuario', 'Fondo fijo']],
+    body:
+      filas.length > 0 ? filas : [['—', '—', 'Sin fondos fijos en el período', '—']],
+    styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
+    headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+    alternateRowStyles: { fillColor: [236, 253, 245] },
+    columnStyles: {
+      3: { halign: 'right', cellWidth: 28 },
+    },
+  });
+
+  const { tipo } = obtenerRangoReporte(configPeriodo);
+  const sufijos = {
+    [PERIODOS_REPORTE.MES]: 'mes',
+    [PERIODOS_REPORTE.SEMANA]: 'semana',
+    personalizado: 'personalizado',
+  };
+  doc.save(`reporte-fondos-fijos-${sufijos[tipo] || 'reporte'}.pdf`);
+}
