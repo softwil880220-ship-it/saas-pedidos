@@ -225,6 +225,21 @@ function crearVariantesLineaVacias() {
   }, {});
 }
 
+function clonarVariantesLinea(variantes) {
+  const clon = crearVariantesLineaVacias();
+
+  if (!variantes || typeof variantes !== 'object') {
+    return clon;
+  }
+
+  VARIANTES_CATEGORIAS.forEach(({ key }) => {
+    const ids = variantes[key];
+    clon[key] = Array.isArray(ids) ? ids.map(String) : [];
+  });
+
+  return clon;
+}
+
 function esCategoriaVariante(value) {
   return VARIANTES_CATEGORIAS.some(({ key }) => key === value);
 }
@@ -435,6 +450,7 @@ function consolidarLineasPorProducto(lineas) {
       map.set(productoId, {
         ...existente,
         cantidad: String((parseInt(existente.cantidad, 10) || 1) + cantidad),
+        variantes: clonarVariantesLinea(existente.variantes),
       });
       return;
     }
@@ -443,6 +459,7 @@ function consolidarLineasPorProducto(lineas) {
       ...linea,
       productoId,
       cantidad: String(cantidad),
+      variantes: clonarVariantesLinea(linea.variantes),
     };
     map.set(productoId, copia);
     orden.push(productoId);
@@ -1688,14 +1705,17 @@ function Dashboard() {
     resetFormPedido(nuevoModo, { limpiarStorage: false });
   };
 
-  const lineasPedidoConProducto = useMemo(
-    () => consolidarLineasPorProducto(form.lineas),
+  const lineasPedidoActivas = useMemo(
+    () => (form.lineas || []).filter((linea) => linea?.productoId),
     [form.lineas]
   );
-  const totalPedido = calcularTotalLineas(
-    lineasPedidoConProducto,
-    productos,
-    catalogosVariantes
+  const lineasPedidoConProducto = useMemo(
+    () => consolidarLineasPorProducto(lineasPedidoActivas),
+    [lineasPedidoActivas]
+  );
+  const totalPedido = useMemo(
+    () => calcularTotalLineas(lineasPedidoActivas, productos, catalogosVariantes),
+    [lineasPedidoActivas, productos, catalogosVariantes]
   );
   const montoPago = parseFloat(pagoRecibido);
   const pagoValido = pagoRecibido !== '' && !Number.isNaN(montoPago);
