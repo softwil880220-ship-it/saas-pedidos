@@ -3777,6 +3777,24 @@ function Dashboard() {
   };
 
   const arqueoModalSoloLectura = Boolean(arqueoDelDiaGuardado);
+  const estiloSeccionesEntregaDobleWeb = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1rem',
+    alignItems: 'stretch',
+  };
+  const estiloSeccionEntregaColumnaWeb = {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    marginBottom: 0,
+    maxHeight: 'calc(100vh - 14rem)',
+  };
+  const estiloSeccionEntregaListaScrollWeb = {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+  };
 
   return (
     <div className="dashboard">
@@ -4658,7 +4676,7 @@ function Dashboard() {
                 )}
               </section>
             ) : (
-              <>
+              <div style={esMobileDashboard ? undefined : estiloSeccionesEntregaDobleWeb}>
                 {SECCIONES_ENTREGA_DASHBOARD.map((seccionEntrega) => {
                   const esDomicilio =
                     seccionEntrega.key === TIPOS_ENTREGA.DOMICILIO;
@@ -4688,6 +4706,7 @@ function Dashboard() {
                     <section
                       key={seccionEntrega.key}
                       className={`dashboard-seccion-entrega dashboard-seccion-entrega-${seccionEntrega.key}`}
+                      style={esMobileDashboard ? undefined : estiloSeccionEntregaColumnaWeb}
                     >
                       <div className="seccion-entrega-cabecera">
                         <h2 className="seccion-entrega-titulo">{seccionEntrega.titulo}</h2>
@@ -4724,7 +4743,10 @@ function Dashboard() {
                           </button>
                         ))}
                       </div>
-                      <div className="dashboard-lista seccion-entrega-lista">
+                      <div
+                        className="dashboard-lista seccion-entrega-lista"
+                        style={esMobileDashboard ? undefined : estiloSeccionEntregaListaScrollWeb}
+                      >
                         {renderPedidosLista(
                           pedidosAgrupadosSeccion,
                           filtroSeccion,
@@ -4734,7 +4756,7 @@ function Dashboard() {
                     </section>
                   );
                 })}
-              </>
+              </div>
             )}
           </>
         )}
