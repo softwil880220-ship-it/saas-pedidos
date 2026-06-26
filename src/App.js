@@ -1836,114 +1836,7 @@ function Dashboard() {
       return;
     }
 
-    void (async () => {
-      try {
-        const arqueo = await cargarArqueoDelDia();
-        if (arqueo) {
-          abrirModalPedidoBloqueadoArqueo(
-            esPresencial
-              ? MENSAJE_REGISTRAR_VENTA_BLOQUEADA_ARQUEO
-              : MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO
-          );
-          return;
-        }
-      } catch (err) {
-        abrirModalPedidoBloqueadoArqueo(
-          err.message || 'No se pudo verificar el arqueo del día.'
-        );
-        return;
-      }
-
-    const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
-    const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
-
-    const payload = {
-      cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
-      telefono: esPresencial ? null : form.telefono.trim() || null,
-      producto: resumen,
-      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
-      total: detallePedido.total,
-      status: esPresencial ? statusPresencial.status : form.status,
-      tipo: esPresencial ? 'presencial' : 'whatsapp',
-      tipo_entrega: esPresencial
-        ? TIPOS_ENTREGA.DOMICILIO
-        : normalizarTipoEntrega(form.tipoEntrega),
-      direccion:
-        esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
-          ? null
-          : form.direccion.trim() || null,
-      forma_pago: normalizarFormaPagoPayload(form.formaPago),
-      referencia: esPresencial ? form.referencia.trim() || null : null,
-      ...(esPresencial
-        ? {
-            status_cocina1: statusPresencial.status_cocina1,
-            status_cocina2: statusPresencial.status_cocina2,
-          }
-        : {}),
-    };
-
-    const optimisticId = crearIdOptimisticoPedido();
-    const ahora = new Date().toISOString();
-    const payloadInsert = payloadConNegocio(payload, negocioId);
-    const pedidoOptimista = {
-      id: optimisticId,
-      ...payloadInsert,
-      created_at: ahora,
-      updated_at: ahora,
-    };
-
-    guardarPedidoPendienteSync({
-      localId: optimisticId,
-      payload: payloadInsert,
-      pedidoOptimista,
-      negocioId,
-    });
-
-    setPedidos((prev) => ordenarPedidosDesc([...prev, pedidoOptimista]));
-
-    if (esPresencial) {
-      setResumenVenta({
-        producto: resumen,
-        total: detallePedido.total,
-        referencia: form.referencia.trim(),
-        formaPago: form.formaPago,
-      });
-    }
-
-    persistenciaCarritoPausadaRef.current = true;
-    resetFormPedido(modo);
-
-    void (async () => {
-      const { data, error } = await supabase
-        .from('pedidos')
-        .insert(payloadInsert)
-        .select()
-        .single();
-
-      if (error || !data) {
-        setErrorGuardarPedido(
-          'Pedido guardado localmente. Se sincronizará cuando haya conexión.'
-        );
-        persistenciaCarritoPausadaRef.current = false;
-        return;
-      }
-
-      eliminarPedidoPendienteSync(optimisticId);
-      setErrorGuardarPedido(null);
-      persistenciaCarritoPausadaRef.current = false;
-
-      setPedidos((prev) => {
-        const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
-        const existe = sinOptimistico.some((pedido) => pedido.id === data.id);
-
-        if (existe) {
-          return ordenarPedidosDesc(sinOptimistico);
-        }
-
-        return ordenarPedidosDesc([...sinOptimistico, data]);
-      });
-    })();
-    })();
+    void ejecutarGuardadoPedido(detallePedido, esPresencial);
   };
 
   const resetProductoForm = () => {
@@ -3022,7 +2915,10 @@ function Dashboard() {
   };
 
   const verificarArqueoDelDiaBloqueaPedido = async (pedido, mensajeBloqueo) => {
-    if (!pedidoEsDelDiaHoy(pedido)) {
+    const debeVerificar =
+      pedido.tipo === 'presencial' ? filtroFecha === hoyClave : pedidoEsDelDiaHoy(pedido);
+
+    if (!debeVerificar) {
       return false;
     }
 
@@ -3111,6 +3007,113 @@ function Dashboard() {
     }
 
     await retrocederPedido(id);
+  };
+
+  const ejecutarGuardadoPedido = async (detallePedido, esPresencial) => {
+    try {
+      const arqueo = await cargarArqueoDelDia();
+      if (arqueo) {
+        abrirModalPedidoBloqueadoArqueo(
+          esPresencial
+            ? MENSAJE_REGISTRAR_VENTA_BLOQUEADA_ARQUEO
+            : MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO
+        );
+        return;
+      }
+    } catch (err) {
+      abrirModalPedidoBloqueadoArqueo(
+        err.message || 'No se pudo verificar el arqueo del día.'
+      );
+      return;
+    }
+
+    const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
+    const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
+
+    const payload = {
+      cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
+      telefono: esPresencial ? null : form.telefono.trim() || null,
+      producto: resumen,
+      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
+      total: detallePedido.total,
+      status: esPresencial ? statusPresencial.status : form.status,
+      tipo: esPresencial ? 'presencial' : 'whatsapp',
+      tipo_entrega: esPresencial
+        ? TIPOS_ENTREGA.DOMICILIO
+        : normalizarTipoEntrega(form.tipoEntrega),
+      direccion:
+        esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
+          ? null
+          : form.direccion.trim() || null,
+      forma_pago: normalizarFormaPagoPayload(form.formaPago),
+      referencia: esPresencial ? form.referencia.trim() || null : null,
+      ...(esPresencial
+        ? {
+            status_cocina1: statusPresencial.status_cocina1,
+            status_cocina2: statusPresencial.status_cocina2,
+          }
+        : {}),
+    };
+
+    const optimisticId = crearIdOptimisticoPedido();
+    const ahora = new Date().toISOString();
+    const payloadInsert = payloadConNegocio(payload, negocioId);
+    const pedidoOptimista = {
+      id: optimisticId,
+      ...payloadInsert,
+      created_at: ahora,
+      updated_at: ahora,
+    };
+
+    guardarPedidoPendienteSync({
+      localId: optimisticId,
+      payload: payloadInsert,
+      pedidoOptimista,
+      negocioId,
+    });
+
+    setPedidos((prev) => ordenarPedidosDesc([...prev, pedidoOptimista]));
+
+    if (esPresencial) {
+      setResumenVenta({
+        producto: resumen,
+        total: detallePedido.total,
+        referencia: form.referencia.trim(),
+        formaPago: form.formaPago,
+      });
+    }
+
+    persistenciaCarritoPausadaRef.current = true;
+    resetFormPedido(modo);
+
+    const { data, error } = await supabase
+      .from('pedidos')
+      .insert(payloadInsert)
+      .select()
+      .single();
+
+    if (error || !data) {
+      setErrorGuardarPedido(
+        'Pedido guardado localmente. Se sincronizará cuando haya conexión.'
+      );
+      persistenciaCarritoPausadaRef.current = false;
+      return;
+    }
+
+    eliminarPedidoPendienteSync(optimisticId);
+    setErrorGuardarPedido(null);
+    persistenciaCarritoPausadaRef.current = false;
+
+    setPedidos((prev) => {
+      const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
+      const existe = sinOptimistico.some((pedido) => pedido.id === data.id);
+
+      if (existe) {
+        return ordenarPedidosDesc(sinOptimistico);
+      }
+
+      return ordenarPedidosDesc([...sinOptimistico, data]);
+    });
   };
 
   const abrirModalRetiro = async () => {
