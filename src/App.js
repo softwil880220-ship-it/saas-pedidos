@@ -3866,6 +3866,20 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
+              Ventas totales del día:{' '}
+              {formatearMoneda(
+                (arqueoModalSoloLectura
+                  ? Number(arqueoDelDiaGuardado.total_sistema) || 0
+                  : arqueoSistema.total) -
+                  (arqueoModalSoloLectura
+                    ? Number(arqueoDelDiaGuardado.fondo_fijo_del_dia) || 0
+                    : fondoFijoDelDia) +
+                  (arqueoModalSoloLectura
+                    ? Number(arqueoDelDiaGuardado.retiros_del_dia) || 0
+                    : retirosDelDia)
+              )}
+            </p>
+            <p className="arqueo-modal-descripcion">
               Fondo fijo del día:{' '}
               {formatearMoneda(
                 arqueoModalSoloLectura
