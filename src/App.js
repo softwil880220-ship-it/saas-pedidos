@@ -306,6 +306,9 @@ function crearArqueoContadoVacio() {
 const MENSAJE_ARQUEO_DIA_EXISTENTE =
   'Ya existe un arqueo registrado para este día. Debes eliminarlo primero para poder registrar uno nuevo.';
 
+const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
+  'No puedes eliminar este fondo fijo porque existe un arqueo registrado para este día.';
+
 function obtenerCampoSistemaArqueo(formaPago) {
   if (formaPago === 'link_pago') return 'link_sistema';
   return `${formaPago}_sistema`;
@@ -3024,21 +3027,55 @@ function Dashboard() {
     setGuardandoFondoFijo(true);
     setErrorFondoFijo(null);
 
-    const { error } = await queryConNegocio(
-      supabase.from('fondos_fijos').delete().eq('id', fondoFijoHoyId),
-      negocioId
-    );
+    try {
+      const arqueo = await cargarArqueoDelDia();
+      if (arqueo) {
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO);
+        setConfirmarEliminarFondoFijo(false);
+        return;
+      }
 
-    setGuardandoFondoFijo(false);
-    setConfirmarEliminarFondoFijo(false);
+      const { error } = await queryConNegocio(
+        supabase.from('fondos_fijos').delete().eq('id', fondoFijoHoyId),
+        negocioId
+      );
 
-    if (error) {
-      setErrorFondoFijo(error.message);
-      return;
+      if (error) {
+        setErrorFondoFijo(error.message);
+        return;
+      }
+
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      setConfirmarEliminarFondoFijo(false);
+    } catch (err) {
+      setErrorFondoFijo(err.message || 'No se pudo verificar el arqueo del día.');
+      setConfirmarEliminarFondoFijo(false);
+    } finally {
+      setGuardandoFondoFijo(false);
     }
+  };
 
-    setFondoFijoDelDia(0);
-    setFondoFijoHoyId(null);
+  const intentarEliminarFondoFijo = async () => {
+    if (!negocioId || !fondoFijoHoyId || guardandoFondoFijo) return;
+
+    setErrorFondoFijo(null);
+    setConfirmarEliminarFondoFijo(false);
+    setGuardandoFondoFijo(true);
+
+    try {
+      const arqueo = await cargarArqueoDelDia();
+      if (arqueo) {
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO);
+        return;
+      }
+
+      setConfirmarEliminarFondoFijo(true);
+    } catch (err) {
+      setErrorFondoFijo(err.message || 'No se pudo verificar el arqueo del día.');
+    } finally {
+      setGuardandoFondoFijo(false);
+    }
   };
 
   const abrirModalArqueo = async () => {
@@ -3659,6 +3696,11 @@ function Dashboard() {
                 <p className="arqueo-modal-descripcion">
                   Fondo fijo registrado hoy: {formatearMoneda(fondoFijoDelDia)}
                 </p>
+                {errorFondoFijo ? (
+                  <p className="retiro-modal-error" role="alert">
+                    {errorFondoFijo}
+                  </p>
+                ) : null}
                 {confirmarEliminarFondoFijo ? (
                   <div className="retiro-modal-acciones">
                     <p className="arqueo-modal-descripcion">¿Eliminar el fondo fijo de hoy?</p>
@@ -3692,7 +3734,7 @@ function Dashboard() {
                     <button
                       type="button"
                       className="retiro-modal-guardar"
-                      onClick={() => setConfirmarEliminarFondoFijo(true)}
+                      onClick={intentarEliminarFondoFijo}
                       disabled={guardandoFondoFijo || !negocioId}
                     >
                       Eliminar
