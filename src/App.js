@@ -3782,9 +3782,16 @@ function Dashboard() {
   const arqueoModalSoloLectura = Boolean(arqueoDelDiaGuardado);
   const estiloSeccionesEntregaDobleWeb = {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
     gap: '1rem',
     alignItems: 'stretch',
+    width: '100vw',
+    maxWidth: '100vw',
+    marginLeft: 'calc(50% - 50vw)',
+    marginRight: 'calc(50% - 50vw)',
+    paddingLeft: '2rem',
+    paddingRight: '2rem',
+    boxSizing: 'border-box',
   };
   const estiloSeccionEntregaColumnaWeb = {
     display: 'flex',
