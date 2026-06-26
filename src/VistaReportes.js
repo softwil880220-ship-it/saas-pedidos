@@ -35,7 +35,7 @@ import { queryConNegocio } from './tenantHelpers';
 
 const REPORTES_TABS = [
   { value: 'ventas', label: 'Ventas' },
-  { value: 'arqueos', label: 'Arqueos' },
+  { value: 'arqueos', label: 'Arqueos de caja' },
   { value: 'retiros', label: 'Retiros de efectivo' },
   { value: 'fondos-fijos', label: 'Fondos fijos' },
 ];
