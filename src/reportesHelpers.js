@@ -463,7 +463,18 @@ function formatearDesgloseArqueoPdf(arqueo) {
 }
 
 function formatearRetirosArqueoPdf(arqueo, retirosDelDia) {
-  const lineas = [`Retiros del día: ${formatearMoneda(arqueo.retiros_del_dia)}`];
+  const ventasTotalesDelDia =
+    (Number(arqueo.total_sistema) || 0) -
+    (Number(arqueo.fondo_fijo_del_dia) || 0) +
+    (Number(arqueo.retiros_del_dia) || 0);
+
+  const lineas = [`Ventas totales del día: ${formatearMoneda(ventasTotalesDelDia)}`];
+
+  if (Number(arqueo.fondo_fijo_del_dia) > 0) {
+    lineas.push(`Fondo fijo del día: ${formatearMoneda(arqueo.fondo_fijo_del_dia)}`);
+  }
+
+  lineas.push(`Retiros del día: ${formatearMoneda(arqueo.retiros_del_dia)}`);
 
   if (!retirosDelDia.length) {
     lineas.push('Sin retiros registrados ese día.');
