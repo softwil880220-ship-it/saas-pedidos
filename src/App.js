@@ -309,6 +309,9 @@ const MENSAJE_ARQUEO_DIA_EXISTENTE =
 const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
   'No puedes eliminar este fondo fijo porque existe un arqueo registrado para este día.';
 
+const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
+  'No puedes agregar retiros de efectivo porque existe un arqueo de caja registrado para este día.';
+
 function obtenerCampoSistemaArqueo(formaPago) {
   if (formaPago === 'link_pago') return 'link_sistema';
   return `${formaPago}_sistema`;
@@ -2929,6 +2932,25 @@ function Dashboard() {
     return (data || [])[0] ?? null;
   };
 
+  const abrirModalRetiro = async () => {
+    if (!negocioId) return;
+
+    setErrorRetiro(null);
+
+    try {
+      const arqueo = await cargarArqueoDelDia();
+      if (arqueo) {
+        setErrorRetiro(MENSAJE_RETIRO_BLOQUEADO_ARQUEO);
+        return;
+      }
+
+      setRetiroForm({ monto: '', motivo: '' });
+      setModalRetiroAbierto(true);
+    } catch (err) {
+      setErrorRetiro(err.message || 'No se pudo verificar el arqueo del día.');
+    }
+  };
+
   useEffect(() => {
     if (!negocioId) {
       setFondoFijoDelDia(0);
@@ -3587,7 +3609,7 @@ function Dashboard() {
               <button
                 type="button"
                 className="header-retiro-btn"
-                onClick={() => setModalRetiroAbierto(true)}
+                onClick={abrirModalRetiro}
               >
                 Retiro de efectivo
               </button>
@@ -3599,6 +3621,11 @@ function Dashboard() {
                 Arqueo de caja
               </button>
             </div>
+            {errorRetiro && !modalRetiroAbierto ? (
+              <p className="retiro-modal-error" role="alert">
+                {errorRetiro}
+              </p>
+            ) : null}
           </div>
         </div>
         <BotonCerrarSesion />
