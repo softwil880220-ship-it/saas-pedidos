@@ -304,7 +304,7 @@ function crearArqueoContadoVacio() {
 }
 
 const MENSAJE_ARQUEO_DIA_EXISTENTE =
-  'Ya existe un arqueo registrado para este día. Debes eliminarlo primero para poder registrar uno nuevo.';
+  'Ya existe un arqueo de caja registrado para este día.';
 
 const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
   'No puedes eliminar este fondo fijo porque existe un arqueo registrado para este día.';
@@ -3989,7 +3989,9 @@ function Dashboard() {
                     className="reportes-arqueo-confirmar-eliminar"
                     style={{ textAlign: 'left' }}
                   >
-                    <span>{MENSAJE_ARQUEO_DIA_EXISTENTE}</span>
+                    <p className="retiro-modal-error" role="alert">
+                      {MENSAJE_ARQUEO_DIA_EXISTENTE}
+                    </p>
                   </div>
                 </div>
               ) : null}
