@@ -330,6 +330,28 @@ function crearArqueoContadoDesdeRegistro(arqueo) {
   }, {});
 }
 
+function normalizarMontoContadoArqueo(valor) {
+  if (valor === '' || valor === null || valor === undefined) return 0;
+
+  const limpio = String(valor).replace(/[^0-9.-]/g, '');
+  const monto = Number.parseFloat(limpio);
+
+  return Number.isFinite(monto) && monto >= 0 ? redondearMoneda(monto) : 0;
+}
+
+function formatearContadoArqueoInput(valor) {
+  return formatearMoneda(normalizarMontoContadoArqueo(valor));
+}
+
+function sanitizarEntradaContadoArqueo(value) {
+  const sanitized = String(value).replace(/[^0-9.]/g, '');
+  const partes = sanitized.split('.');
+
+  if (partes.length <= 2) return sanitized;
+
+  return `${partes[0]}.${partes.slice(1).join('')}`;
+}
+
 function usuarioSesionActual(session) {
   return (
     session?.user?.email ||
@@ -1270,6 +1292,7 @@ function Dashboard() {
   const [errorRetiro, setErrorRetiro] = useState(null);
   const [modalArqueoAbierto, setModalArqueoAbierto] = useState(false);
   const [arqueoContado, setArqueoContado] = useState(crearArqueoContadoVacio);
+  const [arqueoContadoCampoEnfocado, setArqueoContadoCampoEnfocado] = useState(null);
   const [retirosDelDia, setRetirosDelDia] = useState(0);
   const [fondoFijoDelDia, setFondoFijoDelDia] = useState(0);
   const [fondoFijoHoyId, setFondoFijoHoyId] = useState(null);
@@ -3113,6 +3136,7 @@ function Dashboard() {
   const abrirModalArqueo = async () => {
     setModalArqueoAbierto(true);
     setArqueoContado(crearArqueoContadoVacio());
+    setArqueoContadoCampoEnfocado(null);
     setArqueoDelDiaGuardado(null);
     setErrorArqueo(null);
     setCargandoArqueoDatos(true);
@@ -3168,12 +3192,34 @@ function Dashboard() {
   const cerrarModalArqueo = () => {
     setModalArqueoAbierto(false);
     setArqueoContado(crearArqueoContadoVacio());
+    setArqueoContadoCampoEnfocado(null);
     setArqueoDelDiaGuardado(null);
     setErrorArqueo(null);
   };
 
   const handleArqueoContadoChange = (formaPago, value) => {
-    setArqueoContado((prev) => ({ ...prev, [formaPago]: value }));
+    setArqueoContado((prev) => ({
+      ...prev,
+      [formaPago]: sanitizarEntradaContadoArqueo(value),
+    }));
+  };
+
+  const handleArqueoContadoFocus = (formaPago) => {
+    setArqueoContadoCampoEnfocado(formaPago);
+    setArqueoContado((prev) => ({ ...prev, [formaPago]: '' }));
+  };
+
+  const handleArqueoContadoBlur = (formaPago) => {
+    setArqueoContadoCampoEnfocado((prev) => (prev === formaPago ? null : prev));
+    setArqueoContado((prev) => {
+      const raw = prev[formaPago];
+
+      if (raw === '' || raw === null || raw === undefined) {
+        return { ...prev, [formaPago]: '0' };
+      }
+
+      return { ...prev, [formaPago]: String(normalizarMontoContadoArqueo(raw)) };
+    });
   };
 
   const handleGuardarArqueo = async (e) => {
@@ -3923,10 +3969,17 @@ function Dashboard() {
                       <div className="arqueo-modal-contado">
                         <input
                           id={`arqueo-contado-${value}`}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={arqueoContado[value]}
+                          type="text"
+                          inputMode="decimal"
+                          value={
+                            arqueoModalSoloLectura
+                              ? formatearContadoArqueoInput(arqueoContado[value])
+                              : arqueoContadoCampoEnfocado === value
+                                ? arqueoContado[value]
+                                : formatearContadoArqueoInput(arqueoContado[value])
+                          }
+                          onFocus={() => handleArqueoContadoFocus(value)}
+                          onBlur={() => handleArqueoContadoBlur(value)}
                           onChange={(e) => handleArqueoContadoChange(value, e.target.value)}
                           disabled={arqueoModalSoloLectura || guardandoArqueo}
                           required={!arqueoModalSoloLectura}
