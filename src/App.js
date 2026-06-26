@@ -1256,6 +1256,9 @@ function Dashboard() {
   const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
+  const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(
+    TIPOS_ENTREGA.DOMICILIO
+  );
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
   const { pedidos, setPedidos } = usePedidosRealtime({
     channelName: 'dashboard-pedidos',
@@ -4676,8 +4679,30 @@ function Dashboard() {
                 )}
               </section>
             ) : (
-              <div style={esMobileDashboard ? undefined : estiloSeccionesEntregaDobleWeb}>
-                {SECCIONES_ENTREGA_DASHBOARD.map((seccionEntrega) => {
+              <>
+                {esMobileDashboard && (
+                  <nav className="catalogo-nav">
+                    {SECCIONES_ENTREGA_DASHBOARD.map((seccionEntrega) => (
+                      <button
+                        key={seccionEntrega.key}
+                        type="button"
+                        className={`catalogo-tab${
+                          tabEntregaWhatsAppMovil === seccionEntrega.key ? ' activo' : ''
+                        }`}
+                        onClick={() => setTabEntregaWhatsAppMovil(seccionEntrega.key)}
+                      >
+                        {seccionEntrega.key === TIPOS_ENTREGA.DOMICILIO
+                          ? 'A domicilio'
+                          : 'Para recoger'}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+                <div style={esMobileDashboard ? undefined : estiloSeccionesEntregaDobleWeb}>
+                  {SECCIONES_ENTREGA_DASHBOARD.filter(
+                    (seccionEntrega) =>
+                      !esMobileDashboard || tabEntregaWhatsAppMovil === seccionEntrega.key
+                  ).map((seccionEntrega) => {
                   const esDomicilio =
                     seccionEntrega.key === TIPOS_ENTREGA.DOMICILIO;
                   const pedidosTipo = esDomicilio
@@ -4756,7 +4781,8 @@ function Dashboard() {
                     </section>
                   );
                 })}
-              </div>
+                </div>
+              </>
             )}
           </>
         )}
