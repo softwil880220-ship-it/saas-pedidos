@@ -40,7 +40,7 @@ const REPORTES_TABS = [
 ];
 
 const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
-  'No puedes eliminar este retiro porque existe un arqueo registrado para este día. Elimina el arqueo primero, luego el retiro, y vuelve a hacer el arqueo.';
+  'No puedes eliminar este retiro de efectivo porque existe un arqueo de caja registrado para este día.';
 
 const FORMAS_PAGO_ARQUEO = [
   { label: 'Efectivo', sistema: 'efectivo_sistema', contado: 'efectivo_contado' },
