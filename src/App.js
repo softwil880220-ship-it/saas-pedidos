@@ -1263,6 +1263,8 @@ function Dashboard() {
   const [fechaActual, setFechaActual] = useState(() => Date.now());
   const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
+  const [modalRetiroBloqueadoAbierto, setModalRetiroBloqueadoAbierto] = useState(false);
+  const [mensajeRetiroBloqueado, setMensajeRetiroBloqueado] = useState(null);
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
   const [guardandoRetiro, setGuardandoRetiro] = useState(false);
   const [errorRetiro, setErrorRetiro] = useState(null);
@@ -2801,6 +2803,11 @@ function Dashboard() {
     setErrorRetiro(null);
   };
 
+  const cerrarModalRetiroBloqueado = () => {
+    setModalRetiroBloqueadoAbierto(false);
+    setMensajeRetiroBloqueado(null);
+  };
+
   const handleRetiroFormChange = (e) => {
     const { name, value } = e.target;
     setRetiroForm((prev) => ({ ...prev, [name]: value }));
@@ -2936,18 +2943,21 @@ function Dashboard() {
     if (!negocioId) return;
 
     setErrorRetiro(null);
+    setMensajeRetiroBloqueado(null);
 
     try {
       const arqueo = await cargarArqueoDelDia();
       if (arqueo) {
-        setErrorRetiro(MENSAJE_RETIRO_BLOQUEADO_ARQUEO);
+        setMensajeRetiroBloqueado(MENSAJE_RETIRO_BLOQUEADO_ARQUEO);
+        setModalRetiroBloqueadoAbierto(true);
         return;
       }
 
       setRetiroForm({ monto: '', motivo: '' });
       setModalRetiroAbierto(true);
     } catch (err) {
-      setErrorRetiro(err.message || 'No se pudo verificar el arqueo del día.');
+      setMensajeRetiroBloqueado(err.message || 'No se pudo verificar el arqueo del día.');
+      setModalRetiroBloqueadoAbierto(true);
     }
   };
 
@@ -3621,16 +3631,43 @@ function Dashboard() {
                 Arqueo de caja
               </button>
             </div>
-            {errorRetiro && !modalRetiroAbierto ? (
-              <p className="retiro-modal-error" role="alert">
-                {errorRetiro}
-              </p>
-            ) : null}
           </div>
         </div>
         <BotonCerrarSesion />
       </header>
       )}
+
+      {modalRetiroBloqueadoAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalRetiroBloqueado}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retiro-bloqueado-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="retiro-bloqueado-modal-titulo" className="retiro-modal-titulo">
+              Retiro de efectivo
+            </h2>
+            <p className="retiro-modal-error" role="alert">
+              {mensajeRetiroBloqueado}
+            </p>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-cancelar"
+                onClick={cerrarModalRetiroBloqueado}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {modalRetiroAbierto ? (
         <div
