@@ -312,6 +312,24 @@ const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
 const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
   'No puedes agregar retiros de efectivo porque existe un arqueo de caja registrado para este día.';
 
+const MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO =
+  'No puedes eliminar esta venta porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_EDITAR_VENTA_BLOQUEADA_ARQUEO =
+  'No puedes editar esta venta porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_ELIMINAR_PEDIDO_BLOQUEADO_ARQUEO =
+  'No puedes eliminar este pedido porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_EDITAR_PEDIDO_BLOQUEADO_ARQUEO =
+  'No puedes editar este pedido porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_RETROCEDER_PEDIDO_BLOQUEADO_ARQUEO =
+  'No puedes retroceder el estado de este pedido porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_AVANZAR_PEDIDO_BLOQUEADO_ARQUEO =
+  'No puedes avanzar el estado de este pedido porque existe un arqueo de caja registrado para este día.';
+
 function obtenerCampoSistemaArqueo(formaPago) {
   if (formaPago === 'link_pago') return 'link_sistema';
   return `${formaPago}_sistema`;
@@ -1287,6 +1305,9 @@ function Dashboard() {
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
   const [modalRetiroBloqueadoAbierto, setModalRetiroBloqueadoAbierto] = useState(false);
   const [mensajeRetiroBloqueado, setMensajeRetiroBloqueado] = useState(null);
+  const [modalPedidoBloqueadoArqueoAbierto, setModalPedidoBloqueadoArqueoAbierto] =
+    useState(false);
+  const [mensajePedidoBloqueadoArqueo, setMensajePedidoBloqueadoArqueo] = useState(null);
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
   const [guardandoRetiro, setGuardandoRetiro] = useState(false);
   const [errorRetiro, setErrorRetiro] = useState(null);
@@ -2962,6 +2983,111 @@ function Dashboard() {
     return (data || [])[0] ?? null;
   };
 
+  const pedidoEsDelDiaHoy = (pedido) =>
+    formatearClaveFecha(new Date(pedido.created_at || 0)) === hoyClave;
+
+  const abrirModalPedidoBloqueadoArqueo = (mensaje) => {
+    setMensajePedidoBloqueadoArqueo(mensaje);
+    setModalPedidoBloqueadoArqueoAbierto(true);
+  };
+
+  const cerrarModalPedidoBloqueadoArqueo = () => {
+    setModalPedidoBloqueadoArqueoAbierto(false);
+    setMensajePedidoBloqueadoArqueo(null);
+  };
+
+  const verificarArqueoDelDiaBloqueaPedido = async (pedido, mensajeBloqueo) => {
+    if (!pedidoEsDelDiaHoy(pedido)) {
+      return false;
+    }
+
+    const arqueo = await cargarArqueoDelDia();
+    if (arqueo) {
+      abrirModalPedidoBloqueadoArqueo(mensajeBloqueo);
+      return true;
+    }
+
+    return false;
+  };
+
+  const intentarEliminarPedido = async (pedido) => {
+    try {
+      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
+        pedido,
+        pedido.tipo === 'presencial'
+          ? MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO
+          : MENSAJE_ELIMINAR_PEDIDO_BLOQUEADO_ARQUEO
+      );
+      if (bloqueado) return;
+    } catch (err) {
+      abrirModalPedidoBloqueadoArqueo(
+        err.message || 'No se pudo verificar el arqueo del día.'
+      );
+      return;
+    }
+
+    await eliminarPedido(pedido.id);
+  };
+
+  const intentarEditarPedido = async (pedido) => {
+    try {
+      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
+        pedido,
+        pedido.tipo === 'presencial'
+          ? MENSAJE_EDITAR_VENTA_BLOQUEADA_ARQUEO
+          : MENSAJE_EDITAR_PEDIDO_BLOQUEADO_ARQUEO
+      );
+      if (bloqueado) return;
+    } catch (err) {
+      abrirModalPedidoBloqueadoArqueo(
+        err.message || 'No se pudo verificar el arqueo del día.'
+      );
+      return;
+    }
+
+    await iniciarEdicionPedido(pedido);
+  };
+
+  const intentarAvanzarPedido = async (id) => {
+    const pedido = pedidos.find((item) => item.id === id);
+    if (!pedido) return;
+
+    try {
+      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
+        pedido,
+        MENSAJE_AVANZAR_PEDIDO_BLOQUEADO_ARQUEO
+      );
+      if (bloqueado) return;
+    } catch (err) {
+      abrirModalPedidoBloqueadoArqueo(
+        err.message || 'No se pudo verificar el arqueo del día.'
+      );
+      return;
+    }
+
+    await avanzarPedido(id);
+  };
+
+  const intentarRetrocederPedido = async (id) => {
+    const pedido = pedidos.find((item) => item.id === id);
+    if (!pedido) return;
+
+    try {
+      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
+        pedido,
+        MENSAJE_RETROCEDER_PEDIDO_BLOQUEADO_ARQUEO
+      );
+      if (bloqueado) return;
+    } catch (err) {
+      abrirModalPedidoBloqueadoArqueo(
+        err.message || 'No se pudo verificar el arqueo del día.'
+      );
+      return;
+    }
+
+    await retrocederPedido(id);
+  };
+
   const abrirModalRetiro = async () => {
     if (!negocioId) return;
 
@@ -3406,7 +3532,7 @@ function Dashboard() {
                           type="button"
                           className="editar-btn"
                           disabled={otroEditando}
-                          onClick={() => iniciarEdicionPedido(pedido)}
+                          onClick={() => intentarEditarPedido(pedido)}
                         >
                           Editar
                         </button>
@@ -3414,7 +3540,7 @@ function Dashboard() {
                           type="button"
                           className="eliminar-btn"
                           disabled={otroEditando}
-                          onClick={() => eliminarPedido(pedido.id)}
+                          onClick={() => intentarEliminarPedido(pedido)}
                         >
                           Eliminar
                         </button>
@@ -3485,7 +3611,7 @@ function Dashboard() {
                                     type="button"
                                     className="editar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => iniciarEdicionPedido(pedido)}
+                                    onClick={() => intentarEditarPedido(pedido)}
                                   >
                                     Editar
                                   </button>
@@ -3493,7 +3619,7 @@ function Dashboard() {
                                     type="button"
                                     className="eliminar-btn"
                                     disabled={otroEditando}
-                                    onClick={() => eliminarPedido(pedido.id)}
+                                    onClick={() => intentarEliminarPedido(pedido)}
                                   >
                                     Eliminar
                                   </button>
@@ -3536,7 +3662,7 @@ function Dashboard() {
                                             type="button"
                                             className="retroceder-btn"
                                             disabled={otroEditando}
-                                            onClick={() => retrocederPedido(pedido.id)}
+                                            onClick={() => intentarRetrocederPedido(pedido.id)}
                                           >
                                             Retroceder
                                           </button>
@@ -3545,7 +3671,7 @@ function Dashboard() {
                                           type="button"
                                           className="avanzar-btn"
                                           disabled={esFinal || otroEditando}
-                                          onClick={() => avanzarPedido(pedido.id)}
+                                          onClick={() => intentarAvanzarPedido(pedido.id)}
                                         >
                                           Avanzar
                                         </button>
@@ -3596,7 +3722,7 @@ function Dashboard() {
                                       type="button"
                                       className="editar-btn"
                                       disabled={otroEditando}
-                                      onClick={() => iniciarEdicionPedido(pedido)}
+                                      onClick={() => intentarEditarPedido(pedido)}
                                     >
                                       Editar
                                     </button>
@@ -3604,7 +3730,7 @@ function Dashboard() {
                                       type="button"
                                       className="eliminar-btn"
                                       disabled={otroEditando}
-                                      onClick={() => eliminarPedido(pedido.id)}
+                                      onClick={() => intentarEliminarPedido(pedido)}
                                     >
                                       Eliminar
                                     </button>
@@ -3707,6 +3833,38 @@ function Dashboard() {
                 type="button"
                 className="retiro-modal-cancelar"
                 onClick={cerrarModalRetiroBloqueado}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {modalPedidoBloqueadoArqueoAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalPedidoBloqueadoArqueo}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pedido-bloqueado-arqueo-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="pedido-bloqueado-arqueo-modal-titulo" className="retiro-modal-titulo">
+              Arqueo de caja
+            </h2>
+            <p className="retiro-modal-error" role="alert">
+              {mensajePedidoBloqueadoArqueo}
+            </p>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-cancelar"
+                onClick={cerrarModalPedidoBloqueadoArqueo}
               >
                 Cerrar
               </button>
