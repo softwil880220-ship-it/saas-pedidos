@@ -330,6 +330,12 @@ const MENSAJE_RETROCEDER_PEDIDO_BLOQUEADO_ARQUEO =
 const MENSAJE_AVANZAR_PEDIDO_BLOQUEADO_ARQUEO =
   'No puedes avanzar el estado de este pedido porque existe un arqueo de caja registrado para este día.';
 
+const MENSAJE_REGISTRAR_VENTA_BLOQUEADA_ARQUEO =
+  'No se puede registrar la venta porque existe un arqueo de caja registrado para este día.';
+
+const MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO =
+  'No se puede guardar el pedido porque existe un arqueo de caja registrado para este día.';
+
 function obtenerCampoSistemaArqueo(formaPago) {
   if (formaPago === 'link_pago') return 'link_sistema';
   return `${formaPago}_sistema`;
@@ -1830,6 +1836,24 @@ function Dashboard() {
       return;
     }
 
+    void (async () => {
+      try {
+        const arqueo = await cargarArqueoDelDia();
+        if (arqueo) {
+          abrirModalPedidoBloqueadoArqueo(
+            esPresencial
+              ? MENSAJE_REGISTRAR_VENTA_BLOQUEADA_ARQUEO
+              : MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO
+          );
+          return;
+        }
+      } catch (err) {
+        abrirModalPedidoBloqueadoArqueo(
+          err.message || 'No se pudo verificar el arqueo del día.'
+        );
+        return;
+      }
+
     const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
 
@@ -1918,6 +1942,7 @@ function Dashboard() {
 
         return ordenarPedidosDesc([...sinOptimistico, data]);
       });
+    })();
     })();
   };
 
