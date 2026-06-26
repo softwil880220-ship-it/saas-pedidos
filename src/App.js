@@ -4256,13 +4256,23 @@ function Dashboard() {
                       !arqueoContadoValido ||
                       guardandoArqueo ||
                       cargandoArqueoDatos ||
-                      !negocioId
+                      !negocioId ||
+                      diferenciaArqueoTotal !== 0
                     }
                   >
                     {guardandoArqueo ? 'Guardando...' : 'Guardar arqueo'}
                   </button>
                 ) : null}
               </div>
+              {!arqueoModalSoloLectura && diferenciaArqueoTotal !== 0 ? (
+                <p
+                  className="retiro-modal-error"
+                  role="alert"
+                  style={{ textAlign: 'center', marginTop: '0.75rem' }}
+                >
+                  La diferencia debe ser $0.00 para guardar el arqueo.
+                </p>
+              ) : null}
             </form>
             )}
           </div>
