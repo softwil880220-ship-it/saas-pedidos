@@ -3765,12 +3765,34 @@ function Dashboard() {
                               <h2 className="pedido-cliente">
                                 {formatearNombreClientePedido(pedido)}
                               </h2>
-                              <time
-                                className="pedido-hora"
-                                dateTime={pedido.created_at}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'flex-end',
+                                  flexShrink: 0,
+                                  gap: '0.15rem',
+                                }}
                               >
-                                {formatearHoraPedido(pedido.created_at)}
-                              </time>
+                                {pedido.folio !== null && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      fontWeight: 500,
+                                      color: '#64748b',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {pedido.folio}
+                                  </span>
+                                )}
+                                <time
+                                  className="pedido-hora"
+                                  dateTime={pedido.created_at}
+                                >
+                                  {formatearHoraPedido(pedido.created_at)}
+                                </time>
+                              </div>
                             </div>
                             <DesglosePedido
                               pedido={pedido}
