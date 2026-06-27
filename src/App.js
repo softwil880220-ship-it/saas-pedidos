@@ -49,6 +49,7 @@ import {
   cargarCarritoPresencialDisponible,
   cargarCarritoWhatsappDisponible,
   crearFormularioPedidoDefault,
+  cargarEstadoInicialCapturaPedidoWeb,
   cargarSeccionActiva,
   limpiarCarritoPedido,
   persistirCarritoPedido,
@@ -1358,12 +1359,19 @@ function estiloNombreNegocioTituloPrincipal(esMobile) {
   };
 }
 
+function esMobileDashboardInicial() {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(max-width: 720px)').matches;
+}
+
 function Dashboard() {
   const location = useLocation();
   const { negocioId, session } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
-  const estadoInicialCaptura = cargarEstadoInicialDashboardPedidos();
+  const estadoInicialCaptura = esMobileDashboardInicial()
+    ? cargarEstadoInicialDashboardPedidos()
+    : cargarEstadoInicialCapturaPedidoWeb();
   const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');

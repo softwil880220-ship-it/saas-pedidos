@@ -347,6 +347,40 @@ export function rutaSeccionActiva(seccion) {
   return '/';
 }
 
+const STORAGE_KEY_MODO_PEDIDOS = 'pos_modo_pedidos';
+
+export function cargarModoPedidosInicialWeb() {
+  if (typeof window === 'undefined') return 'presencial';
+
+  try {
+    const modo = window.localStorage.getItem(STORAGE_KEY_MODO_PEDIDOS);
+    if (modo === 'whatsapp') return 'whatsapp';
+    if (modo === 'presencial') return 'presencial';
+    return 'presencial';
+  } catch {
+    return 'presencial';
+  }
+}
+
+export function cargarEstadoInicialCapturaPedidoWeb() {
+  const modo = cargarModoPedidosInicialWeb();
+  const restaurado =
+    modo === 'whatsapp'
+      ? cargarCarritoWhatsappDisponible()
+      : cargarCarritoPresencialDisponible();
+
+  if (restaurado) {
+    return { ...restaurado, modo };
+  }
+
+  return {
+    form: crearFormularioPedidoDefault(modo),
+    pagoRecibido: '',
+    nextLineaId: 2,
+    modo,
+  };
+}
+
 export function cargarEstadoInicialCapturaPedido() {
   const modoGuardado = cargarModoCaptura();
   const restaurado =
