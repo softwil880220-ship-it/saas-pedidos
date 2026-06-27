@@ -224,6 +224,7 @@ const CATALOGO_TABS = [
 
 const STORAGE_KEY_MODO_PEDIDOS = 'pos_modo_pedidos';
 const STORAGE_KEY_TAB_CATALOGO = 'pos_tab_catalogo';
+const STORAGE_KEY_TAB_WHATSAPP_PEDIDOS = 'pos_tab_whatsapp_pedidos';
 
 function normalizarModoPedidos(modo) {
   return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
@@ -273,6 +274,32 @@ function cargarTabCatalogo() {
     return validos.has(tab) ? tab : 'productos';
   } catch {
     return 'productos';
+  }
+}
+
+function valoresTabWhatsappPedidosValidos() {
+  return new Set([TIPOS_ENTREGA.DOMICILIO, TIPOS_ENTREGA.SUCURSAL]);
+}
+
+function persistirTabWhatsappPedidos(tab) {
+  if (typeof window === 'undefined' || !valoresTabWhatsappPedidosValidos().has(tab)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY_TAB_WHATSAPP_PEDIDOS, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+function cargarTabWhatsappPedidos() {
+  const validos = valoresTabWhatsappPedidosValidos();
+  if (typeof window === 'undefined') return TIPOS_ENTREGA.DOMICILIO;
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEY_TAB_WHATSAPP_PEDIDOS);
+    return validos.has(tab) ? tab : TIPOS_ENTREGA.DOMICILIO;
+  } catch {
+    return TIPOS_ENTREGA.DOMICILIO;
   }
 }
 
@@ -1340,8 +1367,8 @@ function Dashboard() {
   const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
-  const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(
-    TIPOS_ENTREGA.DOMICILIO
+  const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(() =>
+    cargarTabWhatsappPedidos()
   );
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
   const { pedidos, setPedidos } = usePedidosRealtime({
@@ -1550,6 +1577,18 @@ function Dashboard() {
       persistirModoPedidos(modo);
     }
   }, [seccion, modo]);
+
+  useEffect(() => {
+    if (!esMobileDashboard || seccion !== 'pedidos' || modo !== 'whatsapp') return;
+
+    setTabEntregaWhatsAppMovil(cargarTabWhatsappPedidos());
+  }, [esMobileDashboard, seccion, modo]);
+
+  useEffect(() => {
+    if (!esMobileDashboard || seccion !== 'pedidos' || modo !== 'whatsapp') return;
+
+    persistirTabWhatsappPedidos(tabEntregaWhatsAppMovil);
+  }, [esMobileDashboard, seccion, modo, tabEntregaWhatsAppMovil]);
 
   useEffect(() => {
     if (seccion !== 'pedidos' || persistenciaCarritoPausadaRef.current) return;
