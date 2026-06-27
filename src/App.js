@@ -2353,6 +2353,7 @@ function Dashboard() {
   };
 
   const eliminarPedido = async (id) => {
+    console.log('Intentando soft delete de pedido:', id);
     const { error } = await queryConNegocio(
       supabase
         .from('pedidos')
@@ -2363,6 +2364,7 @@ function Dashboard() {
         .eq('id', id),
       negocioId
     );
+    console.log('Resultado soft delete:', error);
 
     if (!error) {
       setPedidos((prev) => prev.filter((p) => p.id !== id));
