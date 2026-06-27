@@ -40,6 +40,34 @@ const REPORTES_TABS = [
   { value: 'fondos-fijos', label: 'Fondos fijos' },
 ];
 
+const STORAGE_KEY_TAB_REPORTES = 'pos_tab_reportes';
+
+function valoresTabReportesValidos() {
+  return new Set(REPORTES_TABS.map(({ value }) => value));
+}
+
+function persistirTabReportes(tab) {
+  if (typeof window === 'undefined' || !valoresTabReportesValidos().has(tab)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY_TAB_REPORTES, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+function cargarTabReportes() {
+  const validos = valoresTabReportesValidos();
+  if (typeof window === 'undefined') return 'ventas';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEY_TAB_REPORTES);
+    return validos.has(tab) ? tab : 'ventas';
+  } catch {
+    return 'ventas';
+  }
+}
+
 const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
   'No puedes eliminar este retiro de efectivo porque existe un arqueo de caja registrado para este día.';
 
@@ -107,7 +135,7 @@ function agruparRetirosPorDia(retiros) {
 
 export default function VistaReportes() {
   const { negocioId } = useAuth();
-  const [tabReportes, setTabReportes] = useState('ventas');
+  const [tabReportes, setTabReportes] = useState(() => cargarTabReportes());
   const [periodo, setPeriodo] = useState(PERIODOS_REPORTE.SEMANA);
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -140,6 +168,10 @@ export default function VistaReportes() {
   const usaRangoPersonalizado = rangoPersonalizadoActivo(fechaDesde, fechaHasta);
   const rangoInvalido = rangoFechasInvalido(fechaDesde, fechaHasta);
   const reporteDeshabilitado = rangoInvalido;
+
+  useEffect(() => {
+    persistirTabReportes(tabReportes);
+  }, [tabReportes]);
 
   useEffect(() => {
     let activo = true;

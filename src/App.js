@@ -48,7 +48,7 @@ import {
   cargarCarritoPedido,
   cargarCarritoPresencialDisponible,
   cargarCarritoWhatsappDisponible,
-  cargarEstadoInicialCapturaPedido,
+  crearFormularioPedidoDefault,
   cargarSeccionActiva,
   limpiarCarritoPedido,
   persistirCarritoPedido,
@@ -221,6 +221,79 @@ const CATALOGO_TABS = [
   { value: 'productos', label: 'Productos' },
   ...VARIANTES_CATEGORIAS.map(({ key, label }) => ({ value: key, label })),
 ];
+
+const STORAGE_KEY_MODO_PEDIDOS = 'pos_modo_pedidos';
+const STORAGE_KEY_TAB_CATALOGO = 'pos_tab_catalogo';
+
+function normalizarModoPedidos(modo) {
+  return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
+}
+
+function persistirModoPedidos(modo) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY_MODO_PEDIDOS, normalizarModoPedidos(modo));
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+function cargarModoPedidos() {
+  if (typeof window === 'undefined') return 'presencial';
+
+  try {
+    const modo = window.localStorage.getItem(STORAGE_KEY_MODO_PEDIDOS);
+    return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
+  } catch {
+    return 'presencial';
+  }
+}
+
+function valoresCatalogoTabValidos() {
+  return new Set(CATALOGO_TABS.map(({ value }) => value));
+}
+
+function persistirTabCatalogo(tab) {
+  if (typeof window === 'undefined' || !valoresCatalogoTabValidos().has(tab)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY_TAB_CATALOGO, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+function cargarTabCatalogo() {
+  const validos = valoresCatalogoTabValidos();
+  if (typeof window === 'undefined') return 'productos';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEY_TAB_CATALOGO);
+    return validos.has(tab) ? tab : 'productos';
+  } catch {
+    return 'productos';
+  }
+}
+
+function cargarEstadoInicialDashboardPedidos() {
+  const modo = cargarModoPedidos();
+  const restaurado =
+    modo === 'whatsapp'
+      ? cargarCarritoWhatsappDisponible()
+      : cargarCarritoPresencialDisponible();
+
+  if (restaurado) {
+    return { ...restaurado, modo };
+  }
+
+  return {
+    form: crearFormularioPedidoDefault(modo),
+    pagoRecibido: '',
+    nextLineaId: 2,
+    modo,
+  };
+}
 
 function crearCatalogosVariantesVacios() {
   return VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
@@ -1263,7 +1336,7 @@ function Dashboard() {
   const { negocioId, session } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
-  const estadoInicialCaptura = cargarEstadoInicialCapturaPedido();
+  const estadoInicialCaptura = cargarEstadoInicialDashboardPedidos();
   const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
@@ -1282,7 +1355,7 @@ function Dashboard() {
   const [catalogosVariantes, setCatalogosVariantes] = useState(
     crearCatalogosVariantesVacios
   );
-  const [catalogoTab, setCatalogoTab] = useState('productos');
+  const [catalogoTab, setCatalogoTab] = useState(() => cargarTabCatalogo());
   const productosOrdenados = useMemo(
     () => ordenarProductos(productos),
     [productos]
@@ -1457,9 +1530,26 @@ function Dashboard() {
   useEffect(() => {
     if (seccion !== 'catalogo') {
       resetFormulariosCatalogo();
-      setCatalogoTab('productos');
     }
   }, [seccion]);
+
+  useEffect(() => {
+    if (seccion === 'catalogo') {
+      setCatalogoTab(cargarTabCatalogo());
+    }
+  }, [seccion]);
+
+  useEffect(() => {
+    if (seccion === 'catalogo') {
+      persistirTabCatalogo(catalogoTab);
+    }
+  }, [seccion, catalogoTab]);
+
+  useEffect(() => {
+    if (seccion === 'pedidos') {
+      persistirModoPedidos(modo);
+    }
+  }, [seccion, modo]);
 
   useEffect(() => {
     if (seccion !== 'pedidos' || persistenciaCarritoPausadaRef.current) return;
@@ -1751,6 +1841,7 @@ function Dashboard() {
       nextLineaId: nextLineaId.current,
     });
     persistirModoCaptura(nuevoModo);
+    persistirModoPedidos(nuevoModo);
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
     setFiltroDomicilio('todos');
