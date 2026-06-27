@@ -6,7 +6,10 @@ export const STORAGE_KEYS = {
   WHATSAPP_DOMICILIO: 'pos_carrito_whatsapp_domicilio',
   WHATSAPP_SUCURSAL: 'pos_carrito_whatsapp_sucursal',
   MODO_CAPTURA: 'pos_modo_captura',
+  SECCION_ACTIVA: 'pos_seccion_activa',
 };
+
+const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes']);
 
 const CLIENTE_PUBLICO = 'Público general';
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
@@ -310,27 +313,55 @@ export function cargarCarritoPresencialDisponible() {
   return null;
 }
 
+export function persistirSeccionActiva(seccion) {
+  if (typeof window === 'undefined' || !SECCIONES_DASHBOARD.has(seccion)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.SECCION_ACTIVA, seccion);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarSeccionActiva() {
+  if (typeof window === 'undefined') return 'pedidos';
+
+  try {
+    const seccion = window.localStorage.getItem(STORAGE_KEYS.SECCION_ACTIVA);
+    return SECCIONES_DASHBOARD.has(seccion) ? seccion : 'pedidos';
+  } catch {
+    return 'pedidos';
+  }
+}
+
+export function seccionDesdeRuta(pathname) {
+  if (pathname === '/catalogo') return 'catalogo';
+  if (pathname === '/reportes') return 'reportes';
+  if (pathname === '/') return 'pedidos';
+  return null;
+}
+
+export function rutaSeccionActiva(seccion) {
+  if (seccion === 'catalogo') return '/catalogo';
+  if (seccion === 'reportes') return '/reportes';
+  return '/';
+}
+
 export function cargarEstadoInicialCapturaPedido() {
-  const whatsappRestaurado = cargarCarritoWhatsappDisponible();
+  const modoGuardado = cargarModoCaptura();
+  const restaurado =
+    modoGuardado === 'whatsapp'
+      ? cargarCarritoWhatsappDisponible()
+      : cargarCarritoPresencialDisponible();
 
-  if (whatsappRestaurado) {
-    persistirModoCaptura('whatsapp');
-    return { ...whatsappRestaurado, modo: 'whatsapp' };
+  if (restaurado) {
+    return { ...restaurado, modo: modoGuardado };
   }
-
-  const cajaRestaurado = cargarCarritoPresencialDisponible();
-
-  if (cajaRestaurado) {
-    persistirModoCaptura('presencial');
-    return { ...cajaRestaurado, modo: 'presencial' };
-  }
-
-  persistirModoCaptura('presencial');
 
   return {
-    form: crearFormularioPedidoDefault('presencial'),
+    form: crearFormularioPedidoDefault(modoGuardado),
     pagoRecibido: '',
     nextLineaId: 2,
-    modo: 'presencial',
+    modo: modoGuardado,
   };
 }

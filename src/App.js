@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
 import ProtectedRoute from './ProtectedRoute';
@@ -42,9 +49,13 @@ import {
   cargarCarritoPresencialDisponible,
   cargarCarritoWhatsappDisponible,
   cargarEstadoInicialCapturaPedido,
+  cargarSeccionActiva,
   limpiarCarritoPedido,
   persistirCarritoPedido,
   persistirModoCaptura,
+  persistirSeccionActiva,
+  rutaSeccionActiva,
+  seccionDesdeRuta,
 } from './pedidoCarritoStorage';
 import {
   eliminarPedidoPendienteSync,
@@ -5109,10 +5120,48 @@ function Dashboard() {
   );
 }
 
+function PersistirSeccionActiva() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const seccion = seccionDesdeRuta(location.pathname);
+    if (seccion) {
+      persistirSeccionActiva(seccion);
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
+function RestaurarSeccionActiva() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { session, cargando } = useAuth();
+  const seccionRestauradaRef = useRef(false);
+
+  useEffect(() => {
+    if (cargando || !session || seccionRestauradaRef.current) return;
+    if (location.pathname !== '/') return;
+
+    seccionRestauradaRef.current = true;
+
+    const seccionGuardada = cargarSeccionActiva();
+    const destino = rutaSeccionActiva(seccionGuardada);
+
+    if (destino !== '/') {
+      navigate(destino, { replace: true });
+    }
+  }, [cargando, session, location.pathname, navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <PersistirSeccionActiva />
+        <RestaurarSeccionActiva />
         <Routes>
           <Route path="/login" element={<VistaLogin />} />
           <Route
