@@ -198,6 +198,7 @@ export default function VistaReportes() {
         supabase
           .from('pedidos')
           .select('*')
+          .is('deleted_at', null)
           .gte('created_at', inicio.toISOString())
           .lte('created_at', fin.toISOString()),
         negocioId

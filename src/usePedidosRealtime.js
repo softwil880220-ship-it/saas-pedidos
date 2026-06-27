@@ -53,6 +53,11 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
   if (!registro) return prev;
 
   const id = registro.id;
+
+  if (eventType === 'UPDATE' && registro.deleted_at != null) {
+    return prev.filter((item) => item.id !== id);
+  }
+
   const index = prev.findIndex((item) => item.id === id);
   const enLista = index !== -1;
 
@@ -147,10 +152,14 @@ function useSupabaseRealtime({
 
     const cargarItems = async () => {
       setCargando(true);
-      const { data, error } = await queryConNegocio(
-        supabase.from(table).select('*'),
-        negocioId
-      ).order(ordenInicial.column, { ascending: ordenInicial.ascending });
+      let query = supabase.from(table).select('*');
+      if (table === 'pedidos') {
+        query = query.is('deleted_at', null);
+      }
+      const { data, error } = await queryConNegocio(query, negocioId).order(
+        ordenInicial.column,
+        { ascending: ordenInicial.ascending }
+      );
 
       if (activo && !error && data) {
         setItems(aplicarFiltroYOrden(data));

@@ -2354,7 +2354,13 @@ function Dashboard() {
 
   const eliminarPedido = async (id) => {
     const { error } = await queryConNegocio(
-      supabase.from('pedidos').delete().eq('id', id),
+      supabase
+        .from('pedidos')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: session?.user?.id ?? null,
+        })
+        .eq('id', id),
       negocioId
     );
 
@@ -2375,7 +2381,7 @@ function Dashboard() {
     let pedidoFuente = pedido;
 
     const { data, error } = await queryConNegocio(
-      supabase.from('pedidos').select('*').eq('id', pedido.id),
+      supabase.from('pedidos').select('*').eq('id', pedido.id).is('deleted_at', null),
       negocioId
     ).single();
 
