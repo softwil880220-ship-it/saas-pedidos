@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://hpetuehjehyrfqnavfdq.supabase.co';
-const supabaseKey = 'sb_publishable_zMnqR8zGVkigId1jjHCLLg_4XQgS-EI';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
