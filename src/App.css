@@ -2814,11 +2814,19 @@
 .reportes-tabla-fila {
   grid-template-columns:
     minmax(9rem, 1.15fr)
+    minmax(4.5rem, 0.75fr)
     minmax(5rem, 1fr)
     minmax(4.5rem, 0.85fr)
     minmax(0, 2fr)
     minmax(7.5rem, 1.1fr)
     minmax(5rem, auto);
+}
+
+.reporte-folio {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .reporte-fecha {
@@ -2870,6 +2878,7 @@
     grid-template-columns: 1fr auto;
     grid-template-areas:
       'fecha total'
+      'folio folio'
       'cliente cliente'
       'forma forma'
       'productos productos'
@@ -2881,6 +2890,10 @@
   .reporte-fecha,
   .reportes-tabla-fila .reporte-hora {
     grid-area: fecha;
+  }
+
+  .reporte-folio {
+    grid-area: folio;
   }
 
   .reporte-cliente {
