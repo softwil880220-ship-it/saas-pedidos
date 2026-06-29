@@ -62,7 +62,7 @@ export default function PanelCajeros({ negocioId }) {
     setError(null);
 
     const { data, error: errorQuery } = await queryConNegocio(
-      supabase
+      supabaseAdmin
         .from('usuarios_negocio')
         .select('id, negocio_id, rol, nombre, email, activo')
         .order('nombre', { ascending: true }),
@@ -99,7 +99,7 @@ export default function PanelCajeros({ negocioId }) {
     setActualizandoId(usuario.id);
     setError(null);
 
-    const { error: errorUpdate } = await supabase
+    const { error: errorUpdate } = await supabaseAdmin
       .from('usuarios_negocio')
       .update({ activo })
       .eq('id', usuario.id)
