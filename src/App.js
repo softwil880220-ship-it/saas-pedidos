@@ -40,6 +40,7 @@ import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
+import VistaEquipo from './VistaEquipo';
 import {
   agruparPedidosPorDia,
   formatearHoraPedidoLista,
@@ -1366,7 +1367,7 @@ function esMobileDashboardInicial() {
 
 function Dashboard() {
   const location = useLocation();
-  const { negocioId, session } = useAuth();
+  const { negocioId, session, rol } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const estadoInicialCaptura = esMobileDashboardInicial()
@@ -4544,7 +4545,7 @@ function Dashboard() {
       ) : null}
 
       <main className="dashboard-main">
-        <DashboardNav activo={seccion} />
+        <DashboardNav activo={seccion} rol={rol} />
 
         {seccion === 'pedidos' && (
           <>
@@ -5398,6 +5399,14 @@ function App() {
             element={
               <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <VistaReportes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/equipo"
+            element={
+              <ProtectedRoute rolesPermitidos={['dueno']}>
+                <VistaEquipo />
               </ProtectedRoute>
             }
           />

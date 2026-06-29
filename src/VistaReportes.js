@@ -134,7 +134,7 @@ function agruparRetirosPorDia(retiros) {
 }
 
 export default function VistaReportes() {
-  const { negocioId } = useAuth();
+  const { negocioId, rol } = useAuth();
   const [tabReportes, setTabReportes] = useState(() => cargarTabReportes());
   const [periodo, setPeriodo] = useState(PERIODOS_REPORTE.SEMANA);
   const [fechaDesde, setFechaDesde] = useState('');
@@ -714,7 +714,7 @@ export default function VistaReportes() {
       <DashboardHeaderReservaMovil />
 
       <main className="dashboard-main">
-        <DashboardNav activo="reportes" />
+        <DashboardNav activo="reportes" rol={rol} />
 
         <section className="reportes-vista">
           <nav className="reportes-seccion-nav" aria-label="Secciones de reportes">

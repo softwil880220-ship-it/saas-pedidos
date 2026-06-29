@@ -9,7 +9,7 @@ export const STORAGE_KEYS = {
   SECCION_ACTIVA: 'pos_seccion_activa',
 };
 
-const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes']);
+const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes', 'equipo']);
 
 const CLIENTE_PUBLICO = 'Público general';
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
@@ -337,6 +337,7 @@ export function cargarSeccionActiva() {
 export function seccionDesdeRuta(pathname) {
   if (pathname === '/catalogo') return 'catalogo';
   if (pathname === '/reportes') return 'reportes';
+  if (pathname === '/equipo') return 'equipo';
   if (pathname === '/') return 'pedidos';
   return null;
 }
@@ -344,6 +345,7 @@ export function seccionDesdeRuta(pathname) {
 export function rutaSeccionActiva(seccion) {
   if (seccion === 'catalogo') return '/catalogo';
   if (seccion === 'reportes') return '/reportes';
+  if (seccion === 'equipo') return '/equipo';
   return '/';
 }
 
