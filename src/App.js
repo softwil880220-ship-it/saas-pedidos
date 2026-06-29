@@ -2600,6 +2600,53 @@ function Dashboard() {
     setGuardandoEdicionPedido(false);
 
     if (!error && data) {
+      const valorEdicionComoTexto = (valor) => {
+        if (valor == null) return '';
+        if (typeof valor === 'object') return JSON.stringify(valor);
+        return String(valor);
+      };
+
+      const camposEdicion = [
+        'total',
+        'cliente',
+        'forma_pago',
+        'tipo_entrega',
+        'lineas_detalle',
+      ];
+      const valoresAnteriores = {
+        total: pedido.total,
+        cliente: pedido.cliente,
+        forma_pago: normalizarFormaPagoPayload(pedido.forma_pago),
+        tipo_entrega: normalizarTipoEntrega(pedido.tipo_entrega),
+        lineas_detalle: pedido.lineas_detalle,
+      };
+      const valoresNuevos = {
+        total: payload.total,
+        cliente: payload.cliente,
+        forma_pago: payload.forma_pago,
+        tipo_entrega: payload.tipo_entrega,
+        lineas_detalle: payload.lineas_detalle,
+      };
+
+      const registrosEdicion = camposEdicion
+        .filter(
+          (campo) =>
+            valorEdicionComoTexto(valoresAnteriores[campo]) !==
+            valorEdicionComoTexto(valoresNuevos[campo])
+        )
+        .map((campo) => ({
+          pedido_id: pedido.id,
+          negocio_id: pedido.negocio_id ?? negocioId,
+          editado_por: session?.user?.id ?? null,
+          campo_modificado: campo,
+          valor_anterior: valorEdicionComoTexto(valoresAnteriores[campo]),
+          valor_nuevo: valorEdicionComoTexto(valoresNuevos[campo]),
+        }));
+
+      if (registrosEdicion.length > 0) {
+        await supabase.from('pedidos_ediciones').insert(registrosEdicion);
+      }
+
       setPedidos((prev) => prev.map((p) => (p.id === data.id ? data : p)));
       cancelarEdicionPedido();
     }
