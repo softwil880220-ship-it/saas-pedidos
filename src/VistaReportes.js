@@ -877,6 +877,7 @@ export default function VistaReportes() {
                     <div className="reportes-tabla pedidos-reporte">
                       <div className="reportes-tabla-header pedidos-reporte-header">
                         <span>Hora</span>
+                        <span>Folio</span>
                         <span>Cliente</span>
                         <span>Forma de pago</span>
                         <span>Productos</span>
@@ -888,20 +889,9 @@ export default function VistaReportes() {
                           <span className="reporte-hora">
                             {formatearHoraPedidoLista(pedido.created_at)}
                           </span>
+                          <span className="reporte-folio">{pedido.folio ?? '—'}</span>
                           <span className="reporte-cliente">
                             {formatearClienteReporte(pedido)}
-                            {pedido.folio !== null && (
-                              <span
-                                style={{
-                                  display: 'block',
-                                  fontSize: '0.72rem',
-                                  color: '#64748b',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {pedido.folio}
-                              </span>
-                            )}
                           </span>
                           <span className="reporte-forma-pago">
                             {formatearFormaPagoReporte(pedido)}
@@ -924,6 +914,7 @@ export default function VistaReportes() {
                 <div className="reportes-tabla pedidos-reporte">
                   <div className="reportes-tabla-header pedidos-reporte-header">
                     <span>Fecha</span>
+                    <span>Folio</span>
                     <span>Cliente</span>
                     <span>Forma de pago</span>
                     <span>Productos</span>
@@ -935,20 +926,9 @@ export default function VistaReportes() {
                       <span className="reporte-fecha">
                         {formatearFechaPedidoReporte(pedido.created_at)}
                       </span>
+                      <span className="reporte-folio">{pedido.folio ?? '—'}</span>
                       <span className="reporte-cliente">
                         {formatearClienteReporte(pedido)}
-                        {pedido.folio !== null && (
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: '0.72rem',
-                              color: '#64748b',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {pedido.folio}
-                          </span>
-                        )}
                       </span>
                       <span className="reporte-forma-pago">
                         {formatearFormaPagoReporte(pedido)}
