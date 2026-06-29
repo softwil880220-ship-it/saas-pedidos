@@ -1,8 +1,8 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from './AuthContext';
+import { useAuth, rutaPorRol } from './AuthContext';
 
-export default function ProtectedRoute({ children }) {
-  const { session, usuario, cargando } = useAuth();
+export default function ProtectedRoute({ children, rolesPermitidos }) {
+  const { session, usuario, rol, cargando } = useAuth();
   const location = useLocation();
 
   if (cargando) {
@@ -23,6 +23,10 @@ export default function ProtectedRoute({ children }) {
         <p>No se encontró un negocio asociado a este usuario.</p>
       </div>
     );
+  }
+
+  if (rolesPermitidos && !rolesPermitidos.includes(rol)) {
+    return <Navigate to={rutaPorRol(rol)} replace />;
   }
 
   return children;

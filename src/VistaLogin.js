@@ -1,21 +1,17 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import './App.css';
-import { useAuth } from './AuthContext';
+import { useAuth, rutaPorRol } from './AuthContext';
 
 export default function VistaLogin() {
   const { session, usuario, cargando, errorAuth, iniciarSesion } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [errorLocal, setErrorLocal] = useState(null);
 
-  const destino = location.state?.from?.pathname || '/';
-
-  if (!cargando && session && usuario?.negocio_id) {
-    return <Navigate to={destino} replace />;
+  if (!cargando && session) {
+    return <Navigate to={rutaPorRol(usuario?.rol ?? null)} replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -31,8 +27,6 @@ export default function VistaLogin() {
       setErrorLocal('Correo o contraseña incorrectos.');
       return;
     }
-
-    navigate(destino, { replace: true });
   };
 
   return (

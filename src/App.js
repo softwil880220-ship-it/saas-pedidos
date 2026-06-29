@@ -5380,7 +5380,7 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'cajero']}>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -5388,7 +5388,7 @@ function App() {
           <Route
             path="/catalogo"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -5396,7 +5396,7 @@ function App() {
           <Route
             path="/reportes"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <VistaReportes />
               </ProtectedRoute>
             }
@@ -5404,7 +5404,7 @@ function App() {
           <Route
             path="/cocina"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'cocina']}>
                 <VistaCocina />
               </ProtectedRoute>
             }
@@ -5412,7 +5412,7 @@ function App() {
           <Route
             path="/cocina2"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'cocina2']}>
                 <VistaCocina2 />
               </ProtectedRoute>
             }
@@ -5420,7 +5420,7 @@ function App() {
           <Route
             path="/repartidor"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'repartidor']}>
                 <VistaRepartidor />
               </ProtectedRoute>
             }
