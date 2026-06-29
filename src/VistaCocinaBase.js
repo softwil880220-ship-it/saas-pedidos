@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import './App.css';
 import { useAuth } from './AuthContext';
 import {
@@ -26,13 +26,19 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     negocioId,
   });
 
-  const filtrarPedidos = (pedido) =>
-    pedidoVisibleEnCocina(
-      enriquecerLineasDetalleCocina(pedido, productos),
-      cocina
-    );
-  const compararPedidos = (a, b) =>
-    new Date(a.created_at || 0) - new Date(b.created_at || 0);
+  const filtrarPedidos = useCallback(
+    (pedido) =>
+      pedidoVisibleEnCocina(
+        enriquecerLineasDetalleCocina(pedido, productos),
+        cocina,
+        productos
+      ),
+    [cocina, productos]
+  );
+  const compararPedidos = useCallback(
+    (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
+    []
+  );
 
   const { pedidos, setPedidos, cargando } = usePedidosRealtime({
     channelName,

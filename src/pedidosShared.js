@@ -274,9 +274,12 @@ export function formatearProgresoCocinas(pedido) {
   return partes.join(' · ');
 }
 
-export function pedidoVisibleEnCocina(pedido, cocina) {
+export function pedidoVisibleEnCocina(pedido, cocina, productos) {
   if (pedido?.tipo === 'presencial') return false;
   if (!['en-cocina'].includes(pedido?.status)) return false;
+  if (Array.isArray(productos) && productos.length === 0) {
+    return true;
+  }
   if (!pedidoRequiereCocina(pedido, cocina)) return false;
   return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
 }

@@ -231,6 +231,12 @@ export function usePedidosRealtime(options = {}) {
     comparar = null,
   } = options;
 
+  const ordenarLista = useCallback(
+    (lista) =>
+      comparar ? [...lista].sort(comparar) : ordenarPedidosDesc(lista),
+    [comparar]
+  );
+
   const { items, setItems, cargando } = useSupabaseRealtime({
     table: 'pedidos',
     channelName,
@@ -238,9 +244,7 @@ export function usePedidosRealtime(options = {}) {
     filtrar,
     comparar,
     ordenInicial: { column: 'created_at', ascending: false },
-    ordenarLista: comparar
-      ? (lista) => [...lista].sort(comparar)
-      : ordenarPedidosDesc,
+    ordenarLista,
   });
 
   return { pedidos: items, setPedidos: setItems, cargando };
