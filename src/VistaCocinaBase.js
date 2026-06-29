@@ -81,7 +81,29 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
             <article key={pedido.id} className="vista-operativa-tarjeta">
               <div className="vista-operativa-tarjeta-cabecera">
                 <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
-                <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    flexShrink: 0,
+                    gap: '0.15rem',
+                  }}
+                >
+                  {pedido.folio !== null && (
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {pedido.folio}
+                    </span>
+                  )}
+                  <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
+                </div>
               </div>
 
               <DesgloseProductosPedido

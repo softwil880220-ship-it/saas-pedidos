@@ -64,7 +64,21 @@ export default function VistaRepartidor() {
 
             return (
               <article key={pedido.id} className="vista-operativa-tarjeta">
-                <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
+                <div className="vista-operativa-tarjeta-cabecera">
+                  <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
+                  {pedido.folio !== null && (
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {pedido.folio}
+                    </span>
+                  )}
+                </div>
                 {pedido.telefono?.trim() && (
                   <p className="vista-operativa-telefono">{pedido.telefono.trim()}</p>
                 )}

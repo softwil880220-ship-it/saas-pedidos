@@ -373,7 +373,7 @@ export function exportarReportePdf({
       filas.push([
         {
           content: `${grupo.etiqueta} — Total del día: ${formatearMoneda(grupo.totalDelDia)}`,
-          colSpan: 6,
+          colSpan: 7,
           styles: {
             fillColor: [236, 253, 245],
             textColor: [20, 83, 45],
@@ -385,6 +385,7 @@ export function exportarReportePdf({
       grupo.pedidos.forEach((pedido) => {
         filas.push([
           formatearHoraPedidoLista(pedido.created_at),
+          pedido.folio !== null ? String(pedido.folio) : '',
           formatearClienteReporte(pedido),
           formatearFormaPagoReporte(pedido),
           formatearProductosReporte(pedido),
@@ -396,6 +397,7 @@ export function exportarReportePdf({
   } else {
     filas = pedidos.map((pedido) => [
       formatearFechaPedidoReporte(pedido.created_at),
+      pedido.folio !== null ? String(pedido.folio) : '',
       formatearClienteReporte(pedido),
       formatearFormaPagoReporte(pedido),
       formatearProductosReporte(pedido),
@@ -409,6 +411,7 @@ export function exportarReportePdf({
     head: [
       [
         multiplesDias ? 'Hora' : 'Fecha',
+        'Folio',
         'Cliente',
         'Forma de pago',
         'Productos',
@@ -416,13 +419,13 @@ export function exportarReportePdf({
         'Total',
       ],
     ],
-    body: filas.length > 0 ? filas : [['—', '—', '—', 'Sin pedidos en el período', '—', '—']],
+    body: filas.length > 0 ? filas : [['—', '—', '—', 'Sin pedidos en el período', '—', '—', '—']],
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [20, 83, 45], textColor: 255 },
     alternateRowStyles: { fillColor: [236, 253, 245] },
     columnStyles: {
-      3: { cellWidth: 60 },
-      5: { halign: 'right' },
+      4: { cellWidth: 60 },
+      6: { halign: 'right' },
     },
   });
 

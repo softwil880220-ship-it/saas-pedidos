@@ -890,6 +890,18 @@ export default function VistaReportes() {
                           </span>
                           <span className="reporte-cliente">
                             {formatearClienteReporte(pedido)}
+                            {pedido.folio !== null && (
+                              <span
+                                style={{
+                                  display: 'block',
+                                  fontSize: '0.72rem',
+                                  color: '#64748b',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {pedido.folio}
+                              </span>
+                            )}
                           </span>
                           <span className="reporte-forma-pago">
                             {formatearFormaPagoReporte(pedido)}
@@ -923,7 +935,21 @@ export default function VistaReportes() {
                       <span className="reporte-fecha">
                         {formatearFechaPedidoReporte(pedido.created_at)}
                       </span>
-                      <span className="reporte-cliente">{formatearClienteReporte(pedido)}</span>
+                      <span className="reporte-cliente">
+                        {formatearClienteReporte(pedido)}
+                        {pedido.folio !== null && (
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: '0.72rem',
+                              color: '#64748b',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {pedido.folio}
+                          </span>
+                        )}
+                      </span>
                       <span className="reporte-forma-pago">
                         {formatearFormaPagoReporte(pedido)}
                       </span>
