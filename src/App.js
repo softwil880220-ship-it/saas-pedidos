@@ -5379,6 +5379,27 @@ function App() {
             }
           />
         </Routes>
+        {process.env.REACT_APP_ENV === 'development' && (
+          <span
+            style={{
+              position: 'fixed',
+              bottom: '0.5rem',
+              left: '0.5rem',
+              zIndex: 9999,
+              padding: '0.15rem 0.4rem',
+              background: '#dc2626',
+              color: '#fff',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              borderRadius: '3px',
+              pointerEvents: 'none',
+              lineHeight: 1,
+            }}
+          >
+            DEV
+          </span>
+        )}
       </AuthProvider>
     </BrowserRouter>
   );
