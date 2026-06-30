@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from './supabase';
-import { supabaseAdmin } from './supabaseAdmin';
-import { queryConNegocio } from './tenantHelpers';
 import useEsMobile from './useEsMobile';
 import './PanelCajeros.css';
 
@@ -61,19 +59,21 @@ export default function PanelCajeros({ negocioId }) {
     setCargando(true);
     setError(null);
 
-    const { data, error: errorQuery } = await queryConNegocio(
-      supabaseAdmin
-        .from('usuarios_negocio')
-        .select('id, negocio_id, rol, nombre, email, activo')
-        .order('nombre', { ascending: true }),
-      negocioId
-    );
+    const { data, error: errorInvoke } = await supabase.functions.invoke('panel-cajeros', {
+      body: {
+        action: 'list',
+        negocio_id: negocioId,
+      },
+    });
 
-    if (errorQuery) {
-      setError(errorQuery.message);
+    if (errorInvoke) {
+      setError(errorInvoke.message);
+      setUsuarios([]);
+    } else if (data?.success === false) {
+      setError(data.error);
       setUsuarios([]);
     } else {
-      setUsuarios(data ?? []);
+      setUsuarios(data?.data ?? []);
     }
 
     setCargando(false);
@@ -99,14 +99,19 @@ export default function PanelCajeros({ negocioId }) {
     setActualizandoId(usuario.id);
     setError(null);
 
-    const { error: errorUpdate } = await supabaseAdmin
-      .from('usuarios_negocio')
-      .update({ activo })
-      .eq('id', usuario.id)
-      .eq('negocio_id', negocioId);
+    const { data, error: errorInvoke } = await supabase.functions.invoke('panel-cajeros', {
+      body: {
+        action: 'toggle',
+        negocio_id: negocioId,
+        usuario_id: usuario.id,
+        activo,
+      },
+    });
 
-    if (errorUpdate) {
-      setError(errorUpdate.message);
+    if (errorInvoke) {
+      setError(errorInvoke.message);
+    } else if (data?.success === false) {
+      setError(data.error);
     } else {
       setUsuarios((prev) =>
         prev.map((item) => (item.id === usuario.id ? { ...item, activo } : item))
@@ -139,41 +144,27 @@ export default function PanelCajeros({ negocioId }) {
       return;
     }
 
-    if (!supabaseAdmin) {
-      setErrorFormulario(
-        'Falta REACT_APP_SUPABASE_SERVICE_ROLE_KEY (solo DEV).'
-      );
-      return;
-    }
-
     setGuardando(true);
 
-    const { data: authData, error: errorAuth } =
-      await supabaseAdmin.auth.admin.createUser({
+    const { data, error: errorInvoke } = await supabase.functions.invoke('panel-cajeros', {
+      body: {
+        action: 'create',
+        negocio_id: negocioId,
         email,
-        password: pin,
-        email_confirm: true,
-      });
+        nombre,
+        rol,
+        pin,
+      },
+    });
 
-    if (errorAuth) {
-      setErrorFormulario(errorAuth.message);
+    if (errorInvoke) {
+      setErrorFormulario(errorInvoke.message);
       setGuardando(false);
       return;
     }
 
-    const { error: errorInsert } = await supabase.from('usuarios_negocio').insert({
-      negocio_id: negocioId,
-      rol,
-      nombre,
-      email,
-      supabase_user_id: authData.user.id,
-      pin_hash: pin,
-      activo: true,
-    });
-
-    if (errorInsert) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      setErrorFormulario(errorInsert.message);
+    if (data?.success === false) {
+      setErrorFormulario(data.error);
       setGuardando(false);
       return;
     }
@@ -288,11 +279,6 @@ export default function PanelCajeros({ negocioId }) {
             <h3 id="panel-cajeros-modal-titulo" className="panel-cajeros-modal-titulo">
               Agregar usuario
             </h3>
-            <p className="panel-cajeros-modal-aviso">
-              DEV: la creación en auth.users usa la service role key en el frontend. Mover a
-              Edge Function antes de PROD.
-            </p>
-
             <form onSubmit={guardarUsuario}>
               <label className="panel-cajeros-modal-campo" htmlFor="panel-cajeros-nombre">
                 <span>Nombre</span>
