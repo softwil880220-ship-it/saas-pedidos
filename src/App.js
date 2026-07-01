@@ -64,6 +64,7 @@ import {
   guardarPedidoPendienteSync,
   obtenerPedidosPendientesSync,
 } from './pedidoPendingSyncStorage';
+import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
@@ -1440,6 +1441,8 @@ function Dashboard() {
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
   const [guardandoRetiro, setGuardandoRetiro] = useState(false);
   const [errorRetiro, setErrorRetiro] = useState(null);
+  const [modalAutorizacionPinRetiroAbierto, setModalAutorizacionPinRetiroAbierto] =
+    useState(false);
   const [modalArqueoAbierto, setModalArqueoAbierto] = useState(false);
   const [arqueoContado, setArqueoContado] = useState(crearArqueoContadoVacio);
   const [arqueoContadoCampoEnfocado, setArqueoContadoCampoEnfocado] = useState(null);
@@ -1452,9 +1455,15 @@ function Dashboard() {
   const [guardandoFondoFijo, setGuardandoFondoFijo] = useState(false);
   const [errorFondoFijo, setErrorFondoFijo] = useState(null);
   const [confirmarEliminarFondoFijo, setConfirmarEliminarFondoFijo] = useState(false);
+  const [modalAutorizacionPinFondoFijoAbierto, setModalAutorizacionPinFondoFijoAbierto] =
+    useState(false);
+  const [accionPendienteAutorizacionFondoFijo, setAccionPendienteAutorizacionFondoFijo] =
+    useState(null);
   const [cargandoArqueoDatos, setCargandoArqueoDatos] = useState(false);
   const [guardandoArqueo, setGuardandoArqueo] = useState(false);
   const [errorArqueo, setErrorArqueo] = useState(null);
+  const [modalAutorizacionPinArqueoAbierto, setModalAutorizacionPinArqueoAbierto] =
+    useState(false);
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
@@ -2981,6 +2990,20 @@ function Dashboard() {
     setRetiroForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const cerrarAutorizacionPinRetiro = () => {
+    setModalAutorizacionPinRetiroAbierto(false);
+  };
+
+  const solicitarAutorizacionGuardarRetiro = (e) => {
+    e.preventDefault();
+    if (!retiroFormValido || !negocioId || guardandoRetiro) return;
+    setModalAutorizacionPinRetiroAbierto(true);
+  };
+
+  const onAutorizadoRetiro = () => {
+    void handleGuardarRetiro({ preventDefault: () => {} });
+  };
+
   const handleGuardarRetiro = async (e) => {
     e.preventDefault();
     if (!retiroFormValido || !negocioId || guardandoRetiro) return;
@@ -3404,6 +3427,40 @@ function Dashboard() {
 
   const fondoFijoFormValido = Number.parseFloat(fondoFijoForm.monto) > 0;
 
+  const tituloAutorizacionPinFondoFijo =
+    accionPendienteAutorizacionFondoFijo === 'eliminar'
+      ? 'Autoriza la eliminación del fondo fijo'
+      : 'Autoriza el fondo fijo';
+
+  const cerrarAutorizacionPinFondoFijo = () => {
+    setModalAutorizacionPinFondoFijoAbierto(false);
+    setAccionPendienteAutorizacionFondoFijo(null);
+  };
+
+  const solicitarAutorizacionGuardarFondoFijo = (e) => {
+    e.preventDefault();
+    if (!fondoFijoFormValido || !negocioId || guardandoFondoFijo || fondoFijoHoyId) return;
+    setAccionPendienteAutorizacionFondoFijo('guardar');
+    setModalAutorizacionPinFondoFijoAbierto(true);
+  };
+
+  const solicitarAutorizacionEliminarFondoFijo = () => {
+    if (!negocioId || !fondoFijoHoyId || guardandoFondoFijo) return;
+    setAccionPendienteAutorizacionFondoFijo('eliminar');
+    setModalAutorizacionPinFondoFijoAbierto(true);
+  };
+
+  const onAutorizadoFondoFijo = () => {
+    const accion = accionPendienteAutorizacionFondoFijo;
+    setAccionPendienteAutorizacionFondoFijo(null);
+
+    if (accion === 'guardar') {
+      void handleGuardarFondoFijo({ preventDefault: () => {} });
+    } else if (accion === 'eliminar') {
+      void intentarEliminarFondoFijo();
+    }
+  };
+
   const handleGuardarFondoFijo = async (e) => {
     e.preventDefault();
     if (!fondoFijoFormValido || !negocioId || guardandoFondoFijo || fondoFijoHoyId) return;
@@ -3581,6 +3638,28 @@ function Dashboard() {
 
       return { ...prev, [formaPago]: String(normalizarMontoContadoArqueo(raw)) };
     });
+  };
+
+  const cerrarAutorizacionPinArqueo = () => {
+    setModalAutorizacionPinArqueoAbierto(false);
+  };
+
+  const solicitarAutorizacionGuardarArqueo = (e) => {
+    e.preventDefault();
+    if (
+      !arqueoContadoValido ||
+      !negocioId ||
+      guardandoArqueo ||
+      cargandoArqueoDatos ||
+      arqueoDelDiaGuardado
+    ) {
+      return;
+    }
+    setModalAutorizacionPinArqueoAbierto(true);
+  };
+
+  const onAutorizadoArqueo = () => {
+    void handleGuardarArqueo({ preventDefault: () => {} });
   };
 
   const handleGuardarArqueo = async (e) => {
@@ -4173,7 +4252,7 @@ function Dashboard() {
             <h2 id="retiro-modal-titulo" className="retiro-modal-titulo">
               Retiro de efectivo
             </h2>
-            <form onSubmit={handleGuardarRetiro}>
+            <form onSubmit={solicitarAutorizacionGuardarRetiro}>
               <div className="retiro-modal-campo">
                 <label htmlFor="retiro-monto">Monto</label>
                 <input
@@ -4224,6 +4303,13 @@ function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      <ModalAutorizacionPin
+        visible={modalAutorizacionPinRetiroAbierto}
+        titulo="Autoriza el retiro de efectivo"
+        onClose={cerrarAutorizacionPinRetiro}
+        onAutorizado={onAutorizadoRetiro}
+      />
 
       {modalFondoFijoAbierto ? (
         <div
@@ -4286,7 +4372,7 @@ function Dashboard() {
                     <button
                       type="button"
                       className="retiro-modal-guardar"
-                      onClick={intentarEliminarFondoFijo}
+                      onClick={solicitarAutorizacionEliminarFondoFijo}
                       disabled={guardandoFondoFijo || !negocioId}
                     >
                       Eliminar
@@ -4295,7 +4381,7 @@ function Dashboard() {
                 )}
               </>
             ) : (
-              <form onSubmit={handleGuardarFondoFijo}>
+              <form onSubmit={solicitarAutorizacionGuardarFondoFijo}>
                 <div className="retiro-modal-campo">
                   <label htmlFor="fondo-fijo-monto">Monto</label>
                   <input
@@ -4336,6 +4422,13 @@ function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      <ModalAutorizacionPin
+        visible={modalAutorizacionPinFondoFijoAbierto}
+        titulo={tituloAutorizacionPinFondoFijo}
+        onClose={cerrarAutorizacionPinFondoFijo}
+        onAutorizado={onAutorizadoFondoFijo}
+      />
 
       {modalArqueoAbierto ? (
         <div
@@ -4384,7 +4477,7 @@ function Dashboard() {
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
             ) : (
-            <form onSubmit={handleGuardarArqueo}>
+            <form onSubmit={solicitarAutorizacionGuardarArqueo}>
               <div className="arqueo-modal-tabla">
                 <div className="arqueo-modal-tabla-encabezado">
                   <span>Forma</span>
@@ -4544,6 +4637,13 @@ function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      <ModalAutorizacionPin
+        visible={modalAutorizacionPinArqueoAbierto}
+        titulo="Autoriza el arqueo de caja"
+        onClose={cerrarAutorizacionPinArqueo}
+        onAutorizado={onAutorizadoArqueo}
+      />
 
       <main className="dashboard-main">
         <DashboardNav activo={seccion} rol={rol} />
