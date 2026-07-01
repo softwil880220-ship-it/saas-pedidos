@@ -1367,7 +1367,7 @@ function esMobileDashboardInicial() {
 
 function Dashboard() {
   const location = useLocation();
-  const { negocioId, session, rol } = useAuth();
+  const { negocioId, session, rol, usuario } = useAuth();
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const estadoInicialCaptura = esMobileDashboardInicial()
@@ -3253,6 +3253,7 @@ function Dashboard() {
           : form.direccion.trim() || null,
       forma_pago: normalizarFormaPagoPayload(form.formaPago),
       referencia: esPresencial ? form.referencia.trim() || null : null,
+      created_by: usuario?.id ?? null,
       ...(esPresencial
         ? {
             status_cocina1: statusPresencial.status_cocina1,
