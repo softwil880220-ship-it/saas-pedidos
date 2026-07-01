@@ -1,16 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 
 export const DASHBOARD_NAV_ITEMS = [
-  { id: 'pedidos', label: 'Pedidos', path: '/' },
-  { id: 'catalogo', label: 'Catálogo de productos', path: '/catalogo' },
-  { id: 'reportes', label: 'Reportes', path: '/reportes' },
-  { id: 'equipo', label: 'Equipo', path: '/equipo', soloDueno: true },
+  { id: 'pedidos', label: 'Pedidos', path: '/', rolesPermitidos: ['dueno', 'administrador', 'cajero'] },
+  { id: 'catalogo', label: 'Catálogo de productos', path: '/catalogo', rolesPermitidos: ['dueno', 'administrador'] },
+  { id: 'reportes', label: 'Reportes', path: '/reportes', rolesPermitidos: ['dueno', 'administrador'] },
+  { id: 'equipo', label: 'Equipo', path: '/equipo', rolesPermitidos: ['dueno'] },
 ];
 
 export default function DashboardNav({ activo, rol }) {
   const navigate = useNavigate();
-  const items = DASHBOARD_NAV_ITEMS.filter(
-    (item) => !item.soloDueno || rol === 'dueno'
+  const items = DASHBOARD_NAV_ITEMS.filter((item) =>
+    rol ? item.rolesPermitidos.includes(rol) : false
   );
 
   return (
