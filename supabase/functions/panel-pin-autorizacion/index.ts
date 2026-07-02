@@ -309,12 +309,53 @@ async function handleConfigurar(
   return jsonResponse({ success: true, data: { configurado: true } });
 }
 
+async function todosAutorizadoresSinPinConfigurado(
+  supabaseAdmin: SupabaseClient,
+  negocioId: string
+): Promise<
+  | { ok: true; sinConfigurar: true }
+  | { ok: true; sinConfigurar: false }
+  | { ok: false; error: string }
+> {
+  const { data: autorizadores, error } = await supabaseAdmin
+    .from('usuarios_negocio')
+    .select('pin_autorizacion_hash')
+    .eq('negocio_id', negocioId)
+    .in('rol', [...ROLES_AUTORIZADOS])
+    .eq('activo', true);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const lista = autorizadores ?? [];
+  const sinConfigurar =
+    lista.length === 0 || lista.every((autorizador) => !autorizador.pin_autorizacion_hash);
+
+  return { ok: true, sinConfigurar };
+}
+
 async function handleVerificar(
   supabaseAdmin: SupabaseClient,
   negocioId: string,
   body: PanelPinAutorizacionRequest
 ): Promise<Response> {
   const pin = body.pin?.trim() ?? '';
+
+  const estadoPinNegocio = await todosAutorizadoresSinPinConfigurado(supabaseAdmin, negocioId);
+  if (!estadoPinNegocio.ok) {
+    return jsonResponse({ success: false, error: estadoPinNegocio.error }, 500);
+  }
+
+  if (estadoPinNegocio.sinConfigurar) {
+    return jsonResponse({
+      success: true,
+      data: {
+        autorizado: false,
+        sin_configurar: true,
+      },
+    });
+  }
 
   const estadoNegocio = await cargarEstadoPinNegocio(supabaseAdmin, negocioId);
   if (!estadoNegocio.ok) {

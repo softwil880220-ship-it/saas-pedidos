@@ -1464,6 +1464,9 @@ function Dashboard() {
   const [errorArqueo, setErrorArqueo] = useState(null);
   const [modalAutorizacionPinArqueoAbierto, setModalAutorizacionPinArqueoAbierto] =
     useState(false);
+  const [modalAutorizacionPinEliminarPedidoAbierto, setModalAutorizacionPinEliminarPedidoAbierto] =
+    useState(false);
+  const [pedidoPendienteEliminar, setPedidoPendienteEliminar] = useState(null);
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
@@ -2362,13 +2365,14 @@ function Dashboard() {
     }
   };
 
-  const eliminarPedido = async (id) => {
+  const eliminarPedido = async (id, autorizadoPor = null) => {
     const { error } = await queryConNegocio(
       supabase
         .from('pedidos')
         .update({
           deleted_at: new Date().toISOString(),
           deleted_by: session?.user?.id ?? null,
+          autorizado_por: autorizadoPor,
         })
         .eq('id', id),
       negocioId
@@ -3176,8 +3180,26 @@ function Dashboard() {
       return;
     }
 
-    await eliminarPedido(pedido.id);
+    setPedidoPendienteEliminar(pedido);
+    setModalAutorizacionPinEliminarPedidoAbierto(true);
   };
+
+  const cerrarAutorizacionPinEliminarPedido = () => {
+    setModalAutorizacionPinEliminarPedidoAbierto(false);
+    setPedidoPendienteEliminar(null);
+  };
+
+  const onAutorizadoEliminarPedido = ({ autorizado_por }) => {
+    const pedido = pedidoPendienteEliminar;
+    if (pedido?.id) {
+      void eliminarPedido(pedido.id, autorizado_por ?? null);
+    }
+  };
+
+  const tituloAutorizacionPinEliminarPedido =
+    pedidoPendienteEliminar?.tipo === 'presencial'
+      ? 'Autoriza la eliminación de la venta'
+      : 'Autoriza la eliminación del pedido';
 
   const intentarEditarPedido = async (pedido) => {
     try {
@@ -4643,6 +4665,13 @@ function Dashboard() {
         titulo="Autoriza el arqueo de caja"
         onClose={cerrarAutorizacionPinArqueo}
         onAutorizado={onAutorizadoArqueo}
+      />
+
+      <ModalAutorizacionPin
+        visible={modalAutorizacionPinEliminarPedidoAbierto}
+        titulo={tituloAutorizacionPinEliminarPedido}
+        onClose={cerrarAutorizacionPinEliminarPedido}
+        onAutorizado={onAutorizadoEliminarPedido}
       />
 
       <main className="dashboard-main">

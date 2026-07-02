@@ -4,6 +4,8 @@ import { supabase } from './supabase';
 import './ModalAutorizacionPin.css';
 
 const TITULO_DEFAULT = 'Ingresa el PIN de autorización';
+const MENSAJE_SIN_CONFIGURAR =
+  'Este negocio aún no tiene un PIN de autorización configurado. Ve a Equipo > PIN de seguridad para configurarlo.';
 
 function pinAutorizacionValido(pin) {
   return /^\d{4}$/.test(pin);
@@ -27,6 +29,7 @@ export default function ModalAutorizacionPin({
   const [error, setError] = useState(null);
   const [bloqueadoHasta, setBloqueadoHasta] = useState(null);
   const [segundosRestantes, setSegundosRestantes] = useState(0);
+  const [sinConfigurar, setSinConfigurar] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -35,6 +38,7 @@ export default function ModalAutorizacionPin({
       setVerificando(false);
       setBloqueadoHasta(null);
       setSegundosRestantes(0);
+      setSinConfigurar(false);
     }
   }, [visible]);
 
@@ -72,12 +76,13 @@ export default function ModalAutorizacionPin({
     setError(null);
     setBloqueadoHasta(null);
     setSegundosRestantes(0);
+    setSinConfigurar(false);
     onClose();
   };
 
   const autorizar = async (event) => {
     event.preventDefault();
-    if (estaBloqueado) return;
+    if (estaBloqueado || sinConfigurar) return;
 
     setError(null);
 
@@ -108,6 +113,13 @@ export default function ModalAutorizacionPin({
     if (errorInvoke || data?.success === false) {
       setPin('');
       setError('PIN incorrecto');
+      return;
+    }
+
+    if (data?.data?.sin_configurar === true) {
+      setPin('');
+      setSinConfigurar(true);
+      setError(null);
       return;
     }
 
@@ -171,7 +183,13 @@ export default function ModalAutorizacionPin({
             </p>
           ) : null}
 
-          {!estaBloqueado && error ? (
+          {sinConfigurar ? (
+            <p className="modal-autorizacion-pin-sin-configurar" role="alert">
+              {MENSAJE_SIN_CONFIGURAR}
+            </p>
+          ) : null}
+
+          {!estaBloqueado && !sinConfigurar && error ? (
             <p className="modal-autorizacion-pin-error">{error}</p>
           ) : null}
 
@@ -187,7 +205,7 @@ export default function ModalAutorizacionPin({
             <button
               type="submit"
               className="modal-autorizacion-pin-autorizar"
-              disabled={verificando || estaBloqueado}
+              disabled={verificando || estaBloqueado || sinConfigurar}
             >
               {verificando ? 'Verificando…' : 'Autorizar'}
             </button>
