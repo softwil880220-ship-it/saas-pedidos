@@ -148,14 +148,14 @@ const MODOS = [
 ];
 
 function crearCatalogoTabs(categorias) {
-  const tabs = [{ value: 'productos', label: 'Productos' }];
+  const tabs = [
+    { value: 'productos', label: 'Productos' },
+    { value: TAB_CATEGORIAS_VARIANTES, label: 'Categorías' },
+  ];
 
-  if ((categorias || []).length > 0) {
-    tabs.push({ value: TAB_CATEGORIAS_VARIANTES, label: 'Categorías' });
-    categoriasVariantesActivas(categorias).forEach((categoria) => {
-      tabs.push({ value: String(categoria.id), label: categoria.nombre });
-    });
-  }
+  categoriasVariantesActivas(categorias).forEach((categoria) => {
+    tabs.push({ value: String(categoria.id), label: categoria.nombre });
+  });
 
   return tabs;
 }
