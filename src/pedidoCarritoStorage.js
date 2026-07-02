@@ -16,21 +16,8 @@ const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
 const STATUS_DEFAULT_WHATSAPP = 'en-cocina';
 const TIPO_ENTREGA_SIN_SELECCION = '';
 
-const VARIANTES_LINEA_KEYS = [
-  'toppings',
-  'salsas',
-  'mayonesas',
-  'untables',
-  'quesos',
-  'cremas',
-  'chiles',
-];
-
 function crearVariantesLineaVacias() {
-  return VARIANTES_LINEA_KEYS.reduce((acc, key) => {
-    acc[key] = [];
-    return acc;
-  }, {});
+  return {};
 }
 
 export function crearLineaPedidoVacia(id) {
@@ -74,18 +61,14 @@ export function obtenerClaveCarritoPedido(modo, tipoEntrega) {
 }
 
 function normalizarVariantesLinea(variantes) {
-  const normalizadas = crearVariantesLineaVacias();
-
   if (!variantes || typeof variantes !== 'object') {
-    return normalizadas;
+    return crearVariantesLineaVacias();
   }
 
-  VARIANTES_LINEA_KEYS.forEach((key) => {
-    const ids = variantes[key];
-    normalizadas[key] = Array.isArray(ids) ? ids.map(String) : [];
-  });
-
-  return normalizadas;
+  return Object.entries(variantes).reduce((acc, [key, ids]) => {
+    acc[key] = Array.isArray(ids) ? ids.map(String) : [];
+    return acc;
+  }, {});
 }
 
 function normalizarLineaGuardada(linea, index) {

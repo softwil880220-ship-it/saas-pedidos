@@ -68,6 +68,30 @@ import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
+import {
+  TAB_CATEGORIAS_VARIANTES,
+  agruparItemsPorCategoria,
+  calcularExtrasLinea,
+  catalogosVariantesOrdenadosDesde,
+  categoriasVariantesActivas,
+  clonarVariantesLinea,
+  combinarVariantesLinea,
+  construirProductoItemsMap,
+  crearCatalogosVariantesVacios,
+  crearVariantesActivasFormVacias,
+  crearVariantesLineaVacias,
+  esTabCategoriaVariante,
+  filtrarItemsVariantesProducto,
+  formatearDetalleVariantesLinea,
+  formatearLineaResumen,
+  itemIdsDesdeFormActivas,
+  itemsActivosCategoria,
+  obtenerCategoriaVariante,
+  ordenarItemsVariantes,
+  parsearDetalleVariantes,
+  parsearVariantesActivasProducto,
+  variantesActivasFormDesdeProducto,
+} from './variantesDinamicas';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -123,107 +147,18 @@ const MODOS = [
   { value: 'whatsapp', label: 'Modo WhatsApp' },
 ];
 
-const VARIANTES_CATEGORIAS = [
-  { key: 'toppings', tabla: 'toppings', label: 'Toppings', resumenFormato: 'plus' },
-  { key: 'salsas', tabla: 'salsas', label: 'Salsas', resumenClave: 'salsas' },
-  { key: 'mayonesas', tabla: 'mayonesas', label: 'Mayonesa', resumenClave: 'mayonesa' },
-  { key: 'untables', tabla: 'untables', label: 'Untables', resumenClave: 'untables' },
-  { key: 'quesos', tabla: 'quesos', label: 'Queso', resumenClave: 'queso' },
-  { key: 'cremas', tabla: 'cremas', label: 'Crema', resumenClave: 'crema' },
-  { key: 'chiles', tabla: 'chiles', label: 'Chile', resumenClave: 'chile' },
-];
+function crearCatalogoTabs(categorias) {
+  const tabs = [{ value: 'productos', label: 'Productos' }];
 
-const RESUMEN_VARIANTES_ORDEN = [
-  'quesos',
-  'cremas',
-  'chiles',
-  'mayonesas',
-  'untables',
-  'toppings',
-  'salsas',
-];
-
-function crearVariantesActivasFormVacias() {
-  return RESUMEN_VARIANTES_ORDEN.reduce((acc, key) => {
-    acc[key] = { categoria: false, items: [] };
-    return acc;
-  }, {});
-}
-
-function idsVariantesCategoria(catalogosVariantes, key) {
-  return (catalogosVariantes[key] || []).map((item) => String(item.id));
-}
-
-function variantesActivasTodasPorCategoria(catalogosVariantes) {
-  return RESUMEN_VARIANTES_ORDEN.reduce((acc, key) => {
-    const ids = idsVariantesCategoria(catalogosVariantes, key);
-    if (ids.length > 0) acc[key] = ids;
-    return acc;
-  }, {});
-}
-
-function parsearVariantesActivasProducto(producto, catalogosVariantes) {
-  const raw = producto?.variantes_activas;
-
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const result = {};
-    RESUMEN_VARIANTES_ORDEN.forEach((key) => {
-      const ids = raw[key];
-      if (Array.isArray(ids) && ids.length > 0) {
-        result[key] = ids.map(String);
-      }
+  if ((categorias || []).length > 0) {
+    tabs.push({ value: TAB_CATEGORIAS_VARIANTES, label: 'Categorías' });
+    categoriasVariantesActivas(categorias).forEach((categoria) => {
+      tabs.push({ value: String(categoria.id), label: categoria.nombre });
     });
-    return result;
   }
 
-  if (Array.isArray(raw)) {
-    if (raw.length === 0) return {};
-    return raw.reduce((acc, key) => {
-      if (!RESUMEN_VARIANTES_ORDEN.includes(key)) return acc;
-      const ids = idsVariantesCategoria(catalogosVariantes, key);
-      if (ids.length > 0) acc[key] = ids;
-      return acc;
-    }, {});
-  }
-
-  return variantesActivasTodasPorCategoria(catalogosVariantes);
+  return tabs;
 }
-
-function variantesActivasFormDesdeProducto(producto, catalogosVariantes) {
-  const mapa = parsearVariantesActivasProducto(producto, catalogosVariantes);
-  return RESUMEN_VARIANTES_ORDEN.reduce((acc, key) => {
-    const items = mapa[key] || [];
-    acc[key] = {
-      categoria: items.length > 0,
-      items: [...items],
-    };
-    return acc;
-  }, {});
-}
-
-function variantesActivasJsonDesdeForm(formActivas) {
-  const result = {};
-  RESUMEN_VARIANTES_ORDEN.forEach((key) => {
-    const entry = formActivas?.[key];
-    if (!entry?.categoria) return;
-    const items = (entry.items || []).map(String).filter(Boolean);
-    if (items.length > 0) result[key] = items;
-  });
-  return result;
-}
-
-function filtrarItemsVariantesProducto(producto, key, catalogosVariantes) {
-  const mapa = parsearVariantesActivasProducto(producto, catalogosVariantes);
-  const idsPermitidos = new Set((mapa[key] || []).map(String));
-  return ordenarPorNombre(catalogosVariantes[key] || []).filter((item) =>
-    idsPermitidos.has(String(item.id))
-  );
-}
-
-const CATALOGO_TABS = [
-  { value: 'productos', label: 'Productos' },
-  ...VARIANTES_CATEGORIAS.map(({ key, label }) => ({ value: key, label })),
-];
 
 const STORAGE_KEY_MODO_PEDIDOS = 'pos_modo_pedidos';
 const STORAGE_KEY_TAB_CATALOGO = 'pos_tab_catalogo';
@@ -254,12 +189,12 @@ function cargarModoPedidos() {
   }
 }
 
-function valoresCatalogoTabValidos() {
-  return new Set(CATALOGO_TABS.map(({ value }) => value));
+function valoresCatalogoTabValidos(tabs) {
+  return new Set((tabs || []).map(({ value }) => value));
 }
 
-function persistirTabCatalogo(tab) {
-  if (typeof window === 'undefined' || !valoresCatalogoTabValidos().has(tab)) return;
+function persistirTabCatalogo(tab, tabs) {
+  if (typeof window === 'undefined' || !valoresCatalogoTabValidos(tabs).has(tab)) return;
 
   try {
     window.localStorage.setItem(STORAGE_KEY_TAB_CATALOGO, tab);
@@ -268,8 +203,8 @@ function persistirTabCatalogo(tab) {
   }
 }
 
-function cargarTabCatalogo() {
-  const validos = valoresCatalogoTabValidos();
+function cargarTabCatalogo(tabs) {
+  const validos = valoresCatalogoTabValidos(tabs);
   if (typeof window === 'undefined') return 'productos';
 
   try {
@@ -323,43 +258,6 @@ function cargarEstadoInicialDashboardPedidos() {
     nextLineaId: 2,
     modo,
   };
-}
-
-function crearCatalogosVariantesVacios() {
-  return VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
-    acc[key] = [];
-    return acc;
-  }, {});
-}
-
-function crearVariantesLineaVacias() {
-  return VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
-    acc[key] = [];
-    return acc;
-  }, {});
-}
-
-function clonarVariantesLinea(variantes) {
-  const clon = crearVariantesLineaVacias();
-
-  if (!variantes || typeof variantes !== 'object') {
-    return clon;
-  }
-
-  VARIANTES_CATEGORIAS.forEach(({ key }) => {
-    const ids = variantes[key];
-    clon[key] = Array.isArray(ids) ? ids.map(String) : [];
-  });
-
-  return clon;
-}
-
-function esCategoriaVariante(value) {
-  return VARIANTES_CATEGORIAS.some(({ key }) => key === value);
-}
-
-function obtenerConfigVariante(key) {
-  return VARIANTES_CATEGORIAS.find((c) => c.key === key);
 }
 
 const CLIENTE_PUBLICO = 'Público general';
@@ -592,16 +490,16 @@ function mostrarContactoWhatsAppPedido(status, tipoEntrega = TIPOS_ENTREGA.DOMIC
   return status === 'por-aceptar' || status === 'enviado';
 }
 
-function crearLineaPedido(id) {
+function crearLineaPedido(id, ctx) {
   return {
     id,
     productoId: '',
     cantidad: '1',
-    variantes: crearVariantesLineaVacias(),
+    variantes: ctx ? crearVariantesLineaVacias(ctx.categorias) : {},
   };
 }
 
-function consolidarLineasPorProducto(lineas) {
+function consolidarLineasPorProducto(lineas, ctx) {
   const orden = [];
   const map = new Map();
 
@@ -616,7 +514,7 @@ function consolidarLineasPorProducto(lineas) {
       map.set(productoId, {
         ...existente,
         cantidad: String((parseInt(existente.cantidad, 10) || 1) + cantidad),
-        variantes: clonarVariantesLinea(existente.variantes),
+        variantes: clonarVariantesLinea(existente.variantes, ctx?.categorias),
       });
       return;
     }
@@ -625,7 +523,7 @@ function consolidarLineasPorProducto(lineas) {
       ...linea,
       productoId,
       cantidad: String(cantidad),
-      variantes: clonarVariantesLinea(linea.variantes),
+      variantes: clonarVariantesLinea(linea.variantes, ctx?.categorias),
     };
     map.set(productoId, copia);
     orden.push(productoId);
@@ -664,19 +562,6 @@ function redondearMoneda(valor) {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 }
 
-function calcularExtrasLinea(linea, catalogosVariantes) {
-  let extras = 0;
-
-  RESUMEN_VARIANTES_ORDEN.forEach((key) => {
-    (linea.variantes?.[key] || []).forEach((id) => {
-      const item = buscarPorId(catalogosVariantes[key], id);
-      if (item) extras += precioVarianteExtra(item);
-    });
-  });
-
-  return extras;
-}
-
 function toggleIdEnLinea(ids, id) {
   const lista = ids || [];
   const idStr = String(id);
@@ -686,74 +571,22 @@ function toggleIdEnLinea(ids, id) {
   return [...lista, idStr];
 }
 
-function nombresVariantesLinea(linea, key, catalogosVariantes, idsPermitidos = null) {
-  return (linea.variantes?.[key] || [])
-    .filter((id) => !idsPermitidos || idsPermitidos.has(String(id)))
-    .map((id) => buscarPorId(catalogosVariantes[key], id)?.nombre)
-    .filter(Boolean);
-}
-
-function formatearDetalleVariantesLinea(linea, catalogosVariantes, idsPermitidos = null) {
-  const detalles = [];
-
-  RESUMEN_VARIANTES_ORDEN.forEach((key) => {
-    const config = obtenerConfigVariante(key);
-    if (!config) return;
-
-    const nombres = nombresVariantesLinea(linea, key, catalogosVariantes, idsPermitidos);
-    if (!nombres.length) return;
-
-    if (config.resumenFormato === 'plus') {
-      detalles.push(`+${nombres.join(', ')}`);
-    } else {
-      detalles.push(`${config.resumenClave}: ${nombres.join(', ')}`);
-    }
-  });
-
-  return detalles;
-}
-
-function formatearLineaResumen(linea, producto, catalogosVariantes) {
-  const cantidad = parseInt(linea.cantidad, 10);
-  let texto = cantidad > 1 ? `${producto.nombre} x${cantidad}` : producto.nombre;
-  const mapa = parsearVariantesActivasProducto(producto, catalogosVariantes);
-  const detalles = RESUMEN_VARIANTES_ORDEN.flatMap((key) => {
-    const config = obtenerConfigVariante(key);
-    const idsPermitidos = new Set((mapa[key] || []).map(String));
-    if (!config || idsPermitidos.size === 0) return [];
-
-    const nombres = nombresVariantesLinea(linea, key, catalogosVariantes, idsPermitidos);
-    if (!nombres.length) return [];
-
-    if (config.resumenFormato === 'plus') {
-      return [`+${nombres.join(', ')}`];
-    }
-    return [`${config.resumenClave}: ${nombres.join(', ')}`];
-  });
-
-  if (detalles.length) {
-    texto += ` (${detalles.join('; ')})`;
-  }
-
-  return texto;
-}
-
-function VariantesPedido({ linea, producto, catalogosVariantes, onToggleVariante }) {
+function VariantesPedido({ linea, producto, variantesCtx, onToggleVariante }) {
   if (!producto) return null;
 
-  const mapa = parsearVariantesActivasProducto(producto, catalogosVariantes);
-  const categorias = RESUMEN_VARIANTES_ORDEN.filter((key) => (mapa[key] || []).length > 0);
+  const mapa = parsearVariantesActivasProducto(producto, variantesCtx);
+  const categorias = categoriasVariantesActivas(variantesCtx.categorias).filter(
+    (categoria) => (mapa[String(categoria.id)] || []).length > 0
+  );
   if (categorias.length === 0) return null;
 
   const grupos = categorias
-    .map((key) => {
-      const config = obtenerConfigVariante(key);
-      if (!config) return null;
-
-      const items = filtrarItemsVariantesProducto(producto, key, catalogosVariantes);
+    .map((categoria) => {
+      const categoriaId = String(categoria.id);
+      const items = filtrarItemsVariantesProducto(producto, categoriaId, variantesCtx);
       if (items.length === 0) return null;
 
-      return { key, label: config.label, items };
+      return { categoriaId, label: categoria.nombre, items };
     })
     .filter(Boolean);
 
@@ -761,18 +594,18 @@ function VariantesPedido({ linea, producto, catalogosVariantes, onToggleVariante
 
   return (
     <div className="linea-variantes">
-      {grupos.map(({ key, label, items }) => (
-        <div key={key} className="linea-variantes-grupo">
+      {grupos.map(({ categoriaId, label, items }) => (
+        <div key={categoriaId} className="linea-variantes-grupo">
           <span className="linea-variantes-titulo">{label} (múltiple)</span>
           <div className="linea-variantes-opciones">
             {items.map((item) => (
               <label key={item.id} className="variante-opcion">
                 <input
                   type="checkbox"
-                  checked={(linea.variantes?.[key] || []).some(
+                  checked={(linea.variantes?.[categoriaId] || []).some(
                     (id) => String(id) === String(item.id)
                   )}
-                  onChange={() => onToggleVariante(linea.id, key, item.id)}
+                  onChange={() => onToggleVariante(linea.id, categoriaId, item.id)}
                 />
                 <span>
                   {item.nombre}
@@ -815,16 +648,16 @@ function ordenarProductos(lista) {
   return ordenarPorNombre(lista);
 }
 
-function calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes) {
+function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) {
   const producto = buscarProductoPorId(listaProductos, linea.productoId);
   if (!producto) return null;
 
   const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
   const precioBase = parsePrecioCatalogo(producto.precio);
-  const extras = redondearMoneda(calcularExtrasLinea(linea, catalogosVariantes));
+  const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
   const precioUnitario = redondearMoneda(precioBase + extras);
   const subtotal = redondearMoneda(precioUnitario * cantidad);
-  const descripcion = formatearDescripcionLinea(linea, producto, catalogosVariantes);
+  const descripcion = formatearDescripcionLinea(linea, producto, variantesCtx);
 
   return {
     productoId: String(producto.id),
@@ -840,9 +673,9 @@ function calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes) {
   };
 }
 
-function calcularDetalleLineasPedido(lineas, listaProductos, catalogosVariantes) {
+function calcularDetalleLineasPedido(lineas, listaProductos, variantesCtx) {
   const lineasDetalle = lineas
-    .map((linea) => calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes))
+    .map((linea) => calcularDetalleLineaPedido(linea, listaProductos, variantesCtx))
     .filter(Boolean);
 
   const total = redondearMoneda(
@@ -852,29 +685,29 @@ function calcularDetalleLineasPedido(lineas, listaProductos, catalogosVariantes)
   return { lineas: lineasDetalle, total };
 }
 
-function calcularSubtotal(linea, listaProductos, catalogosVariantes) {
-  return calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes)?.subtotal ?? 0;
+function calcularSubtotal(linea, listaProductos, variantesCtx) {
+  return calcularDetalleLineaPedido(linea, listaProductos, variantesCtx)?.subtotal ?? 0;
 }
 
-function calcularPrecioUnitarioLinea(linea, listaProductos, catalogosVariantes) {
+function calcularPrecioUnitarioLinea(linea, listaProductos, variantesCtx) {
   return (
-    calcularDetalleLineaPedido(linea, listaProductos, catalogosVariantes)?.precioUnitario ?? 0
+    calcularDetalleLineaPedido(linea, listaProductos, variantesCtx)?.precioUnitario ?? 0
   );
 }
 
-function formatearDescripcionLinea(linea, producto, catalogosVariantes) {
-  const detalles = formatearDetalleVariantesLinea(linea, catalogosVariantes);
+function formatearDescripcionLinea(linea, producto, variantesCtx) {
+  const detalles = formatearDetalleVariantesLinea(linea, variantesCtx);
   if (detalles.length === 0) return producto.nombre;
   return `${producto.nombre} (${detalles.join('; ')})`;
 }
 
-function construirLineaDesglosePedido(linea, listaProductos, catalogosVariantes) {
+function construirLineaDesglosePedido(linea, listaProductos, variantesCtx) {
   const producto = buscarProductoPorId(listaProductos, linea.productoId);
   if (!producto) return null;
 
   const cantidad = parseInt(linea.cantidad, 10) || 1;
-  const descripcion = formatearDescripcionLinea(linea, producto, catalogosVariantes);
-  const precioUnitario = calcularPrecioUnitarioLinea(linea, listaProductos, catalogosVariantes);
+  const descripcion = formatearDescripcionLinea(linea, producto, variantesCtx);
+  const precioUnitario = calcularPrecioUnitarioLinea(linea, listaProductos, variantesCtx);
 
   return { cantidad, descripcion, precioUnitario };
 }
@@ -899,7 +732,7 @@ function limpiarTextoDesgloseFallback(texto) {
     .trim();
 }
 
-function obtenerDesglosePedido(pedido, listaProductos, catalogosVariantes) {
+function obtenerDesglosePedido(pedido, listaProductos, variantesCtx) {
   if (pedido?.lineas_detalle?.length) {
     const lineas = pedido.lineas_detalle.map((linea) => ({
       cantidad: linea.cantidad,
@@ -922,13 +755,13 @@ function obtenerDesglosePedido(pedido, listaProductos, catalogosVariantes) {
   const lineas = parsearLineasDesdeResumen(
     pedido.producto,
     listaProductos,
-    catalogosVariantes
+    variantesCtx
   );
   const partesRaw = pedido.producto.split(', ').map((s) => s.trim()).filter(Boolean);
 
   const filas = lineas
     .map((linea, index) => {
-      const formateada = construirLineaDesglosePedido(linea, listaProductos, catalogosVariantes);
+      const formateada = construirLineaDesglosePedido(linea, listaProductos, variantesCtx);
       if (formateada) return formateada;
 
       const raw = partesRaw[index];
@@ -952,8 +785,8 @@ function obtenerDesglosePedido(pedido, listaProductos, catalogosVariantes) {
   return { lineas: filas, total };
 }
 
-function DesglosePedido({ pedido, productos, catalogosVariantes }) {
-  const desglose = obtenerDesglosePedido(pedido, productos, catalogosVariantes);
+function DesglosePedido({ pedido, productos, variantesCtx }) {
+  const desglose = obtenerDesglosePedido(pedido, productos, variantesCtx);
 
   if (desglose.lineas.length === 0) return null;
 
@@ -984,82 +817,19 @@ function DesglosePedido({ pedido, productos, catalogosVariantes }) {
   );
 }
 
-function calcularTotalLineas(lineas, listaProductos, catalogosVariantes) {
-  return calcularDetalleLineasPedido(lineas, listaProductos, catalogosVariantes).total;
+function calcularTotalLineas(lineas, listaProductos, variantesCtx) {
+  return calcularDetalleLineasPedido(lineas, listaProductos, variantesCtx).total;
 }
 
-function resumenProductos(lineas, listaProductos, catalogosVariantes) {
+function resumenProductos(lineas, listaProductos, variantesCtx) {
   return lineas
     .map((linea) => {
       const producto = buscarProductoPorId(listaProductos, linea.productoId);
       if (!producto) return null;
-      return formatearLineaResumen(linea, producto, catalogosVariantes);
+      return formatearLineaResumen(linea, producto, variantesCtx);
     })
     .filter(Boolean)
     .join(', ');
-}
-
-function idsDesdeNombresVariantes(nombres, lista) {
-  return nombres
-    .map((nombre) => {
-      const item = lista.find((entry) => entry.nombre === nombre);
-      return item ? String(item.id) : null;
-    })
-    .filter(Boolean);
-}
-
-function parsearDetalleVariantes(detalle, catalogosVariantes) {
-  const variantes = crearVariantesLineaVacias();
-
-  if (detalle.startsWith('+')) {
-    variantes.toppings = idsDesdeNombresVariantes(
-      detalle
-        .slice(1)
-        .split(', ')
-        .map((t) => t.trim())
-        .filter(Boolean),
-      catalogosVariantes.toppings
-    );
-    return variantes;
-  }
-
-  VARIANTES_CATEGORIAS.forEach(({ key, resumenClave }) => {
-    if (!resumenClave) return;
-
-    const prefijos = [`${resumenClave}: `];
-    if (key === 'salsas') {
-      prefijos.push('salsa: ');
-    }
-
-    prefijos.forEach((prefijo) => {
-      if (!detalle.startsWith(prefijo)) return;
-
-      variantes[key] = idsDesdeNombresVariantes(
-        detalle
-          .slice(prefijo.length)
-          .split(', ')
-          .map((t) => t.trim())
-          .filter(Boolean),
-        catalogosVariantes[key]
-      );
-    });
-  });
-
-  return variantes;
-}
-
-function combinarVariantesLinea(...listas) {
-  const combinadas = crearVariantesLineaVacias();
-
-  VARIANTES_CATEGORIAS.forEach(({ key }) => {
-    const ids = new Set();
-    listas.forEach((variantes) => {
-      (variantes?.[key] || []).forEach((id) => ids.add(String(id)));
-    });
-    combinadas[key] = Array.from(ids);
-  });
-
-  return combinadas;
 }
 
 function normalizarLineasDetallePedido(pedido) {
@@ -1120,21 +890,21 @@ function productoIdDesdeLineaDetalle(linea, listaProductos) {
   return '';
 }
 
-function variantesFormularioDesdeLineaDetalle(linea, listaProductos, catalogosVariantes) {
+function variantesFormularioDesdeLineaDetalle(linea, listaProductos, variantesCtx) {
   if (!linea?.descripcion?.trim()) {
-    return crearVariantesLineaVacias();
+    return crearVariantesLineaVacias(variantesCtx.categorias);
   }
 
   const parsed = parsearLineaPedidoDesdeTexto(
     linea.descripcion,
     listaProductos,
-    catalogosVariantes
+    variantesCtx
   );
 
-  return parsed?.variantes || crearVariantesLineaVacias();
+  return parsed?.variantes || crearVariantesLineaVacias(variantesCtx.categorias);
 }
 
-function lineasFormularioDesdePedido(pedido, listaProductos, catalogosVariantes) {
+function lineasFormularioDesdePedido(pedido, listaProductos, variantesCtx) {
   const lineasDetalle = normalizarLineasDetallePedido(pedido);
 
   if (lineasDetalle.length > 0) {
@@ -1145,26 +915,26 @@ function lineasFormularioDesdePedido(pedido, listaProductos, catalogosVariantes)
       variantes: variantesFormularioDesdeLineaDetalle(
         linea,
         listaProductos,
-        catalogosVariantes
+        variantesCtx
       ),
     }));
   }
 
-  return [crearLineaPedido(1)];
+  return [crearLineaPedido(1, variantesCtx)];
 }
 
-function parsearLineaPedidoDesdeTexto(parte, listaProductos, catalogosVariantes, id = 1) {
+function parsearLineaPedidoDesdeTexto(parte, listaProductos, variantesCtx, id = 1) {
   let textoBase = parte;
-  let variantes = crearVariantesLineaVacias();
+  let variantes = crearVariantesLineaVacias(variantesCtx.categorias);
 
   const matchVariantes = parte.match(/^(.+?)\s*\((.+)\)$/);
   if (matchVariantes) {
     textoBase = matchVariantes[1].trim();
     const detalles = matchVariantes[2].split('; ').map((d) => d.trim());
     const variantesParseadas = detalles.map((detalle) =>
-      parsearDetalleVariantes(detalle, catalogosVariantes)
+      parsearDetalleVariantes(detalle, variantesCtx)
     );
-    variantes = combinarVariantesLinea(...variantesParseadas);
+    variantes = combinarVariantesLinea(variantesCtx, ...variantesParseadas);
   }
 
   const match = textoBase.match(/^(.+?) x(\d+)$/);
@@ -1189,9 +959,9 @@ function parsearLineaPedidoDesdeTexto(parte, listaProductos, catalogosVariantes,
   };
 }
 
-function parsearLineasDesdeResumen(textoProducto, listaProductos, catalogosVariantes) {
+function parsearLineasDesdeResumen(textoProducto, listaProductos, variantesCtx) {
   if (!textoProducto?.trim()) {
-    return [crearLineaPedido(1)];
+    return [crearLineaPedido(1, variantesCtx)];
   }
 
   const partes = textoProducto.split(', ').map((s) => s.trim()).filter(Boolean);
@@ -1200,7 +970,7 @@ function parsearLineasDesdeResumen(textoProducto, listaProductos, catalogosVaria
   return partes.map((parte) => parsearLineaPedidoDesdeTexto(
     parte,
     listaProductos,
-    catalogosVariantes,
+    variantesCtx,
     id++
   ));
 }
@@ -1389,27 +1159,31 @@ function Dashboard() {
     channelName: 'dashboard-productos',
     negocioId,
   });
-  const [catalogosVariantes, setCatalogosVariantes] = useState(
-    crearCatalogosVariantesVacios
-  );
-  const [catalogoTab, setCatalogoTab] = useState(() => cargarTabCatalogo());
+  const [categoriasVariantes, setCategoriasVariantes] = useState([]);
+  const [catalogosVariantes, setCatalogosVariantes] = useState({});
+  const [productoItemsVariantes, setProductoItemsVariantes] = useState({});
+  const [catalogoTab, setCatalogoTab] = useState('productos');
   const productosOrdenados = useMemo(
     () => ordenarProductos(productos),
     [productos]
   );
   const { frecuenciaCategorias: frecuenciaCategoriasPedidos, frecuenciaLista } =
     useFrecuenciaCategoriasPedidos(negocioId, productos);
+  const catalogoTabs = useMemo(
+    () => crearCatalogoTabs(categoriasVariantes),
+    [categoriasVariantes]
+  );
+  const variantesCtx = useMemo(
+    () => ({
+      categorias: categoriasVariantes,
+      catalogos: catalogosVariantes,
+      productoItems: productoItemsVariantes,
+    }),
+    [categoriasVariantes, catalogosVariantes, productoItemsVariantes]
+  );
   const catalogosVariantesOrdenados = useMemo(
-    () =>
-      VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
-        acc[key] = ordenarPorNombre(
-          (catalogosVariantes[key] || []).filter((item) =>
-            perteneceANegocio(item, negocioId)
-          )
-        );
-        return acc;
-      }, {}),
-    [catalogosVariantes, negocioId]
+    () => catalogosVariantesOrdenadosDesde(catalogosVariantes, categoriasVariantes, negocioId),
+    [catalogosVariantes, categoriasVariantes, negocioId]
   );
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -1422,9 +1196,12 @@ function Dashboard() {
     precio: '',
     categoria: '',
     cocina: COCINAS.COCINA1,
-    variantesActivas: crearVariantesActivasFormVacias(),
+    variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
   });
   const [varianteForm, setVarianteForm] = useState({ nombre: '', precio: '0' });
+  const [categoriaVarianteForm, setCategoriaVarianteForm] = useState({ nombre: '', orden: '0' });
+  const [editandoCategoriaVarianteId, setEditandoCategoriaVarianteId] = useState(null);
+  const [guardandoCategoriaVariante, setGuardandoCategoriaVariante] = useState(false);
   const [editandoVariante, setEditandoVariante] = useState(null);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
@@ -1473,35 +1250,103 @@ function Dashboard() {
   const [pedidoPendienteEliminar, setPedidoPendienteEliminar] = useState(null);
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
 
-  const cargarCatalogosVariantes = async () => {
-    if (!negocioId) {
-      setCatalogosVariantes(crearCatalogosVariantesVacios());
+  const cargarProductoItemsVariantes = async (catalogos, productoIds) => {
+    if (!negocioId || !productoIds?.length) {
+      setProductoItemsVariantes({});
       return;
     }
 
-    const resultados = await Promise.all(
-      VARIANTES_CATEGORIAS.map(async ({ key, tabla }) => {
-        const { data, error } = await queryConNegocio(
-          supabase.from(tabla).select('*'),
-          negocioId
-        ).order('id', { ascending: true });
+    const { data, error } = await supabase
+      .from('producto_categorias_variantes')
+      .select('producto_id, item_variante_id, items_variantes(categoria_id)')
+      .in('producto_id', productoIds);
 
-        const items =
-          !error && data
-            ? data.filter((item) => perteneceANegocio(item, negocioId))
-            : [];
+    if (error) {
+      setProductoItemsVariantes({});
+      return;
+    }
 
-        return { key, data: items };
-      })
-    );
+    const links = (data || []).map((row) => ({
+      producto_id: row.producto_id,
+      item_variante_id: row.item_variante_id,
+      categoria_id: row.items_variantes?.categoria_id,
+    }));
 
-    setCatalogosVariantes(() => {
-      const next = crearCatalogosVariantesVacios();
-      resultados.forEach(({ key, data }) => {
-        next[key] = data;
-      });
-      return next;
-    });
+    setProductoItemsVariantes(construirProductoItemsMap(links, catalogos));
+  };
+
+  const cargarCatalogosVariantes = async () => {
+    if (!negocioId) {
+      setCategoriasVariantes([]);
+      setCatalogosVariantes({});
+      setProductoItemsVariantes({});
+      return;
+    }
+
+    const { data: categorias, error: errorCategorias } = await queryConNegocio(
+      supabase.from('categorias_variantes').select('*'),
+      negocioId
+    )
+      .order('orden', { ascending: true })
+      .order('nombre', { ascending: true });
+
+    const categoriasLista = !errorCategorias && categorias ? categorias : [];
+
+    const { data: items, error: errorItems } = await supabase
+      .from('items_variantes')
+      .select('*, categorias_variantes!inner(id, negocio_id, nombre, orden, activo)')
+      .eq('categorias_variantes.negocio_id', negocioId)
+      .order('nombre', { ascending: true });
+
+    const itemsLista = !errorItems && items ? items : [];
+    const catalogos = agruparItemsPorCategoria(itemsLista);
+
+    setCategoriasVariantes(categoriasLista);
+    setCatalogosVariantes(catalogos);
+    await cargarProductoItemsVariantes(catalogos, productos.map((producto) => producto.id));
+  };
+
+  const sincronizarProductoCategoriasVariantes = async (productoId, formActivas) => {
+    const ctx = {
+      categorias: categoriasVariantes,
+      catalogos: catalogosVariantes,
+      productoItems: productoItemsVariantes,
+    };
+    const itemIds = itemIdsDesdeFormActivas(formActivas, ctx);
+
+    await supabase
+      .from('producto_categorias_variantes')
+      .delete()
+      .eq('producto_id', productoId);
+
+    if (itemIds.length > 0) {
+      const { error } = await supabase.from('producto_categorias_variantes').insert(
+        itemIds.map((itemVarianteId) => ({
+          producto_id: productoId,
+          item_variante_id: itemVarianteId,
+        }))
+      );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    const mapa = itemIds.reduce((acc, itemId) => {
+      for (const [categoriaId, items] of Object.entries(catalogosVariantes)) {
+        if ((items || []).some((item) => String(item.id) === String(itemId))) {
+          if (!acc[categoriaId]) acc[categoriaId] = [];
+          acc[categoriaId].push(String(itemId));
+          break;
+        }
+      }
+      return acc;
+    }, {});
+
+    setProductoItemsVariantes((prev) => ({
+      ...prev,
+      [String(productoId)]: mapa,
+    }));
   };
 
   const cargarCatalogos = async () => {
@@ -1540,14 +1385,16 @@ function Dashboard() {
   const resetFormulariosCatalogo = () => {
     setEditandoProductoId(null);
     setEditandoVariante(null);
+    setEditandoCategoriaVarianteId(null);
     setProductoForm({
       nombre: '',
       precio: '',
       categoria: '',
       cocina: COCINAS.COCINA1,
-      variantesActivas: crearVariantesActivasFormVacias(),
+      variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
     });
     setVarianteForm({ nombre: '', precio: '0' });
+    setCategoriaVarianteForm({ nombre: '', orden: '0' });
   };
 
   useEffect(() => {
@@ -1595,15 +1442,49 @@ function Dashboard() {
 
   useEffect(() => {
     if (seccion === 'catalogo') {
-      setCatalogoTab(cargarTabCatalogo());
+      setCatalogoTab(cargarTabCatalogo(catalogoTabs));
     }
-  }, [seccion]);
+  }, [seccion, catalogoTabs]);
 
   useEffect(() => {
     if (seccion === 'catalogo') {
-      persistirTabCatalogo(catalogoTab);
+      persistirTabCatalogo(catalogoTab, catalogoTabs);
     }
-  }, [seccion, catalogoTab]);
+  }, [seccion, catalogoTab, catalogoTabs]);
+
+  useEffect(() => {
+    if (seccion !== 'catalogo') return;
+    if (!valoresCatalogoTabValidos(catalogoTabs).has(catalogoTab)) {
+      setCatalogoTab('productos');
+    }
+  }, [seccion, catalogoTab, catalogoTabs]);
+
+  useEffect(() => {
+    if (!categoriasVariantes.length) return;
+
+    setProductoForm((prev) => {
+      const base = crearVariantesActivasFormVacias(categoriasVariantes);
+      const merged = { ...base };
+
+      Object.entries(prev.variantesActivas || {}).forEach(([key, val]) => {
+        if (merged[key]) merged[key] = val;
+      });
+
+      return { ...prev, variantesActivas: merged };
+    });
+  }, [categoriasVariantes]);
+
+  useEffect(() => {
+    if (!negocioId || productos.length === 0) {
+      if (!negocioId) setProductoItemsVariantes({});
+      return;
+    }
+
+    void cargarProductoItemsVariantes(
+      catalogosVariantes,
+      productos.map((producto) => producto.id)
+    );
+  }, [negocioId, productos, catalogosVariantes]);
 
   useEffect(() => {
     if (seccion === 'pedidos') {
@@ -1738,7 +1619,7 @@ function Dashboard() {
         direccion: '',
         formaPago: '',
         referencia: '',
-        lineas: [crearLineaPedido(1)],
+        lineas: [crearLineaPedido(1, variantesCtx)],
         status: flujo.includes(STATUS_DEFAULT_WHATSAPP_FORM)
           ? STATUS_DEFAULT_WHATSAPP_FORM
           : flujo[0],
@@ -1783,7 +1664,7 @@ function Dashboard() {
           return {
             ...linea,
             productoId: String(valor),
-            variantes: crearVariantesLineaVacias(),
+            variantes: crearVariantesLineaVacias(variantesCtx.categorias),
           };
         }
         return { ...linea, [campo]: valor };
@@ -1802,7 +1683,8 @@ function Dashboard() {
           const cantidadNueva = Math.max(1, cantidadActual + delta);
 
           return { ...linea, cantidad: String(cantidadNueva) };
-        })
+        }),
+        variantesCtx
       ),
     }));
   };
@@ -1827,7 +1709,7 @@ function Dashboard() {
   const agregarLinea = () => {
     setForm((prev) => ({
       ...prev,
-      lineas: [...prev.lineas, crearLineaPedido(nextLineaId.current++)],
+      lineas: [...prev.lineas, crearLineaPedido(nextLineaId.current++, variantesCtx)],
     }));
   };
 
@@ -1836,7 +1718,8 @@ function Dashboard() {
 
     setForm((prev) => {
       const lineasConsolidadas = consolidarLineasPorProducto(
-        prev.lineas.filter((linea) => linea.productoId)
+        prev.lineas.filter((linea) => linea.productoId),
+        variantesCtx
       );
       const indiceExistente = lineasConsolidadas.findIndex(
         (linea) => String(linea.productoId) === idStr
@@ -1861,7 +1744,7 @@ function Dashboard() {
         lineas: [
           ...lineasConsolidadas,
           {
-            ...crearLineaPedido(nextLineaId.current++),
+            ...crearLineaPedido(nextLineaId.current++, variantesCtx),
             productoId: idStr,
           },
         ],
@@ -1895,7 +1778,7 @@ function Dashboard() {
       direccion: '',
       formaPago: modoActual === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : '',
       referencia: '',
-      lineas: [crearLineaPedido(1)],
+      lineas: [crearLineaPedido(1, variantesCtx)],
       status: statusDefaultFormularioPedido(modoActual),
     });
   };
@@ -1945,12 +1828,12 @@ function Dashboard() {
     [form.lineas]
   );
   const lineasPedidoConProducto = useMemo(
-    () => consolidarLineasPorProducto(lineasPedidoActivas),
-    [lineasPedidoActivas]
+    () => consolidarLineasPorProducto(lineasPedidoActivas, variantesCtx),
+    [lineasPedidoActivas, variantesCtx]
   );
   const totalPedido = useMemo(
-    () => calcularTotalLineas(lineasPedidoActivas, productos, catalogosVariantes),
-    [lineasPedidoActivas, productos, catalogosVariantes]
+    () => calcularTotalLineas(lineasPedidoActivas, productos, variantesCtx),
+    [lineasPedidoActivas, productos, variantesCtx]
   );
   const montoPago = parseFloat(pagoRecibido);
   const pagoValido = pagoRecibido !== '' && !Number.isNaN(montoPago);
@@ -2000,7 +1883,7 @@ function Dashboard() {
     const detallePedido = calcularDetalleLineasPedido(
       form.lineas,
       productos,
-      catalogosVariantes
+      variantesCtx
     );
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
@@ -2023,7 +1906,7 @@ function Dashboard() {
       precio: '',
       categoria: '',
       cocina: COCINAS.COCINA1,
-      variantesActivas: crearVariantesActivasFormVacias(),
+      variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
     });
   };
 
@@ -2039,12 +1922,12 @@ function Dashboard() {
       precio: String(producto.precio),
       categoria: producto.categoria || '',
       cocina: normalizarCocinaProducto(producto.cocina),
-      variantesActivas: variantesActivasFormDesdeProducto(producto, catalogosVariantes),
+      variantesActivas: variantesActivasFormDesdeProducto(producto, variantesCtx),
     });
   };
 
-  const iniciarEdicionVariante = (categoria, item) => {
-    setEditandoVariante({ categoria, id: item.id });
+  const iniciarEdicionVariante = (categoriaId, item) => {
+    setEditandoVariante({ categoria: String(categoriaId), id: item.id });
     setVarianteForm({
       nombre: item.nombre,
       precio: String(item.precio),
@@ -2067,6 +1950,103 @@ function Dashboard() {
       },
     }));
 
+  const resetCategoriaVarianteForm = () => {
+    setEditandoCategoriaVarianteId(null);
+    setCategoriaVarianteForm({ nombre: '', orden: '0' });
+  };
+
+  const iniciarEdicionCategoriaVariante = (categoria) => {
+    setEditandoCategoriaVarianteId(categoria.id);
+    setCategoriaVarianteForm({
+      nombre: categoria.nombre,
+      orden: String(categoria.orden ?? 0),
+    });
+  };
+
+  const handleCategoriaVarianteFormChange = (e) => {
+    const { name, value } = e.target;
+    setCategoriaVarianteForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCategoriaVarianteSubmit = async (e) => {
+    e.preventDefault();
+    setGuardandoCategoriaVariante(true);
+
+    const payload = {
+      nombre: categoriaVarianteForm.nombre.trim(),
+      orden: parseInt(categoriaVarianteForm.orden, 10) || 0,
+    };
+
+    if (editandoCategoriaVarianteId) {
+      const { data, error } = await queryConNegocio(
+        supabase.from('categorias_variantes').update(payload).eq('id', editandoCategoriaVarianteId),
+        negocioId
+      )
+        .select()
+        .single();
+
+      setGuardandoCategoriaVariante(false);
+
+      if (!error && data) {
+        setCategoriasVariantes((prev) =>
+          [...prev.map((c) => (String(c.id) === String(data.id) ? data : c))].sort(
+            (a, b) =>
+              (a.orden ?? 0) - (b.orden ?? 0) ||
+              String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+          )
+        );
+        resetCategoriaVarianteForm();
+      }
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('categorias_variantes')
+      .insert(payloadConNegocio({ ...payload, activo: true }, negocioId))
+      .select()
+      .single();
+
+    setGuardandoCategoriaVariante(false);
+
+    if (!error && data) {
+      setCategoriasVariantes((prev) =>
+        [...prev, data].sort(
+          (a, b) =>
+            (a.orden ?? 0) - (b.orden ?? 0) ||
+            String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+        )
+      );
+      setCatalogosVariantes((prev) => ({
+        ...prev,
+        [String(data.id)]: prev[String(data.id)] || [],
+      }));
+      resetCategoriaVarianteForm();
+    }
+  };
+
+  const toggleCategoriaVarianteActiva = async (categoria) => {
+    const nuevoActivo = categoria.activo === false;
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('categorias_variantes')
+        .update({ activo: nuevoActivo })
+        .eq('id', categoria.id),
+      negocioId
+    )
+      .select()
+      .single();
+
+    if (!error && data) {
+      setCategoriasVariantes((prev) =>
+        prev.map((c) => (String(c.id) === String(data.id) ? data : c))
+      );
+
+      if (catalogoTab === String(categoria.id) && !nuevoActivo) {
+        setCatalogoTab(TAB_CATEGORIAS_VARIANTES);
+      }
+    }
+  };
+
   const handleProductoSubmit = async (e) => {
     e.preventDefault();
     setGuardandoProducto(true);
@@ -2076,51 +2056,57 @@ function Dashboard() {
       precio: parseFloat(productoForm.precio),
       categoria: productoForm.categoria.trim() || null,
       cocina: normalizarCocinaProducto(productoForm.cocina),
-      variantes_activas: variantesActivasJsonDesdeForm(productoForm.variantesActivas),
+      variantes_configuradas: true,
     };
 
-    if (editandoProductoId) {
-      const { data, error } = await queryConNegocio(
-        supabase.from('productos').update(payload).eq('id', editandoProductoId),
-        negocioId
-      )
-        .select()
-        .single();
+    try {
+      if (editandoProductoId) {
+        const { data, error } = await queryConNegocio(
+          supabase.from('productos').update(payload).eq('id', editandoProductoId),
+          negocioId
+        )
+          .select()
+          .single();
 
-      setGuardandoProducto(false);
+        if (error || !data) return;
 
-      if (!error && data) {
+        await sincronizarProductoCategoriasVariantes(
+          data.id,
+          productoForm.variantesActivas
+        );
+
         setProductos((prev) =>
           prev
             .map((p) => (String(p.id) === String(data.id) ? data : p))
             .sort((a, b) => a.id - b.id)
         );
         resetProductoForm();
+        return;
       }
-      return;
-    }
 
-    const { data, error } = await supabase
-      .from('productos')
-      .insert(payloadConNegocio(payload, negocioId))
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('productos')
+        .insert(payloadConNegocio(payload, negocioId))
+        .select()
+        .single();
 
-    setGuardandoProducto(false);
+      if (error || !data) return;
 
-    if (!error && data) {
-      setProductos((prev) =>
-        [...prev, data].sort((a, b) => a.id - b.id)
+      await sincronizarProductoCategoriasVariantes(
+        data.id,
+        productoForm.variantesActivas
       );
+
+      setProductos((prev) => [...prev, data].sort((a, b) => a.id - b.id));
       resetProductoForm();
+    } finally {
+      setGuardandoProducto(false);
     }
   };
 
-  const handleVarianteSubmit = async (e, categoria) => {
+  const handleVarianteSubmit = async (e, categoriaId) => {
     e.preventDefault();
-    const config = obtenerConfigVariante(categoria);
-    if (!config) return;
-
+    const categoriaIdStr = String(categoriaId);
     setGuardandoVariante(true);
 
     const payload = {
@@ -2129,13 +2115,13 @@ function Dashboard() {
     };
 
     const editandoId =
-      editandoVariante?.categoria === categoria ? editandoVariante.id : null;
+      editandoVariante?.categoria === categoriaIdStr ? editandoVariante.id : null;
 
     if (editandoId) {
-      const { data, error } = await queryConNegocio(
-        supabase.from(config.tabla).update(payload).eq('id', editandoId),
-        negocioId
-      )
+      const { data, error } = await supabase
+        .from('items_variantes')
+        .update(payload)
+        .eq('id', editandoId)
         .select()
         .single();
 
@@ -2144,9 +2130,11 @@ function Dashboard() {
       if (!error && data) {
         setCatalogosVariantes((prev) => ({
           ...prev,
-          [categoria]: prev[categoria]
-            .map((item) => (String(item.id) === String(data.id) ? data : item))
-            .sort((a, b) => a.id - b.id),
+          [categoriaIdStr]: ordenarItemsVariantes(
+            (prev[categoriaIdStr] || []).map((item) =>
+              String(item.id) === String(data.id) ? data : item
+            )
+          ),
         }));
         resetVarianteForm();
       }
@@ -2154,8 +2142,8 @@ function Dashboard() {
     }
 
     const { data, error } = await supabase
-      .from(config.tabla)
-      .insert(payloadConNegocio(payload, negocioId))
+      .from('items_variantes')
+      .insert({ ...payload, categoria_id: categoriaId, activo: true })
       .select()
       .single();
 
@@ -2164,9 +2152,56 @@ function Dashboard() {
     if (!error && data) {
       setCatalogosVariantes((prev) => ({
         ...prev,
-        [categoria]: [...prev[categoria], data].sort((a, b) => a.id - b.id),
+        [categoriaIdStr]: ordenarItemsVariantes([...(prev[categoriaIdStr] || []), data]),
       }));
       resetVarianteForm();
+    }
+  };
+
+  const toggleItemVarianteActivo = async (categoriaId, item) => {
+    const categoriaIdStr = String(categoriaId);
+    const nuevoActivo = item.activo === false;
+
+    const { data, error } = await supabase
+      .from('items_variantes')
+      .update({ activo: nuevoActivo })
+      .eq('id', item.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setCatalogosVariantes((prev) => ({
+        ...prev,
+        [categoriaIdStr]: ordenarItemsVariantes(
+          (prev[categoriaIdStr] || []).map((entry) =>
+            String(entry.id) === String(data.id) ? data : entry
+          )
+        ),
+      }));
+
+      if (
+        editandoVariante?.categoria === categoriaIdStr &&
+        editandoVariante.id === item.id &&
+        !nuevoActivo
+      ) {
+        resetVarianteForm();
+      }
+
+      if (!nuevoActivo) {
+        setForm((prev) => ({
+          ...prev,
+          lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, prev.lineas),
+        }));
+
+        setPedidoEditForm((prev) =>
+          prev
+            ? {
+                ...prev,
+                lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, prev.lineas),
+              }
+            : prev
+        );
+      }
     }
   };
 
@@ -2189,41 +2224,6 @@ function Dashboard() {
             : linea
         ),
       }));
-    }
-  };
-
-  const eliminarVariante = async (categoria, id) => {
-    const config = obtenerConfigVariante(categoria);
-    if (!config) return;
-
-    const { error } = await queryConNegocio(
-      supabase.from(config.tabla).delete().eq('id', id),
-      negocioId
-    );
-
-    if (!error) {
-      setCatalogosVariantes((prev) => ({
-        ...prev,
-        [categoria]: prev[categoria].filter((item) => item.id !== id),
-      }));
-
-      if (editandoVariante?.categoria === categoria && editandoVariante.id === id) {
-        resetVarianteForm();
-      }
-
-      setForm((prev) => ({
-        ...prev,
-        lineas: quitarVarianteDeLineas(categoria, id, prev.lineas),
-      }));
-
-      setPedidoEditForm((prev) =>
-        prev
-          ? {
-              ...prev,
-              lineas: quitarVarianteDeLineas(categoria, id, prev.lineas),
-            }
-          : prev
-      );
     }
   };
 
@@ -2421,7 +2421,7 @@ function Dashboard() {
     const lineas = lineasFormularioDesdePedido(
       pedidoFuente,
       productos,
-      catalogosVariantes
+      variantesCtx
     );
     nextEditLineaId.current = lineas.length + 1;
     setEditandoPedidoId(pedido.id);
@@ -2477,7 +2477,7 @@ function Dashboard() {
           return {
             ...linea,
             productoId: String(valor),
-            variantes: crearVariantesLineaVacias(),
+            variantes: crearVariantesLineaVacias(variantesCtx.categorias),
           };
         }
         return { ...linea, [campo]: valor };
@@ -2505,7 +2505,7 @@ function Dashboard() {
   const agregarLineaEdicion = () => {
     setPedidoEditForm((prev) => ({
       ...prev,
-      lineas: [...prev.lineas, crearLineaPedido(nextEditLineaId.current++)],
+      lineas: [...prev.lineas, crearLineaPedido(nextEditLineaId.current++, variantesCtx)],
     }));
   };
 
@@ -2525,7 +2525,7 @@ function Dashboard() {
     const detallePedido = calcularDetalleLineasPedido(
       pedidoEditForm.lineas,
       productos,
-      catalogosVariantes
+      variantesCtx
     );
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) return;
@@ -2533,7 +2533,7 @@ function Dashboard() {
     const resumen = resumenProductos(
       pedidoEditForm.lineas,
       productos,
-      catalogosVariantes
+      variantesCtx
     );
     const esPresencial = pedido.tipo === 'presencial';
 
@@ -2841,7 +2841,7 @@ function Dashboard() {
                                     const subtotal = calcularSubtotal(
                       linea,
                       productos,
-                      catalogosVariantes
+                      variantesCtx
                     );
 
                                     return (
@@ -2934,7 +2934,7 @@ function Dashboard() {
                                             key={`variantes-edit-${linea.id}-${linea.productoId}`}
                                             linea={linea}
                                             producto={productoSeleccionado}
-                                            catalogosVariantes={catalogosVariantes}
+                                            variantesCtx={variantesCtx}
                                             onToggleVariante={cambiarVarianteLineaEdicion}
                                           />
                                         )}
@@ -3290,7 +3290,7 @@ function Dashboard() {
       return;
     }
 
-    const resumen = resumenProductos(form.lineas, productos, catalogosVariantes);
+    const resumen = resumenProductos(form.lineas, productos, variantesCtx);
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
 
     const payload = {
@@ -3849,7 +3849,7 @@ function Dashboard() {
                     ? calcularTotalLineas(
                         pedidoEditForm.lineas,
                         productos,
-                        catalogosVariantes
+                        variantesCtx
                       )
                     : 0;
 
@@ -3913,7 +3913,7 @@ function Dashboard() {
                           ? calcularTotalLineas(
                               pedidoEditForm.lineas,
                               productos,
-                              catalogosVariantes
+                              variantesCtx
                             )
                           : 0;
 
@@ -3959,7 +3959,7 @@ function Dashboard() {
                             <DesglosePedido
                               pedido={pedido}
                               productos={productos}
-                              catalogosVariantes={catalogosVariantes}
+                              variantesCtx={variantesCtx}
                             />
                             {etiquetaFormaPago(pedido.forma_pago) && (
                               <p className="pedido-forma-pago">
@@ -4873,7 +4873,7 @@ function Dashboard() {
                     const subtotal = calcularSubtotal(
                       linea,
                       productos,
-                      catalogosVariantes
+                      variantesCtx
                     );
 
                     return (
@@ -4943,7 +4943,7 @@ function Dashboard() {
                             key={`variantes-${linea.id}-${linea.productoId}`}
                             linea={linea}
                             producto={productoSeleccionado}
-                            catalogosVariantes={catalogosVariantes}
+                            variantesCtx={variantesCtx}
                             onToggleVariante={cambiarVarianteLinea}
                           />
                         )}
@@ -5164,7 +5164,7 @@ function Dashboard() {
         {seccion === 'catalogo' && (
           <>
             <nav className="catalogo-nav">
-              {CATALOGO_TABS.map(({ value, label }) => (
+              {catalogoTabs.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
@@ -5173,6 +5173,7 @@ function Dashboard() {
                     setCatalogoTab(value);
                     resetProductoForm();
                     resetVarianteForm();
+                    resetCategoriaVarianteForm();
                   }}
                 >
                   {label}
@@ -5237,6 +5238,7 @@ function Dashboard() {
                             ))}
                           </select>
                         </div>
+                        {categoriasVariantesActivas(categoriasVariantes).length > 0 && (
                         <fieldset className="producto-variantes-activas">
                           <legend className="producto-variantes-activas-titulo">
                             Variantes disponibles para este producto
@@ -5246,26 +5248,24 @@ function Dashboard() {
                             cliente podrá seleccionar al armar el pedido en modo WhatsApp.
                           </p>
                           <div className="producto-variantes-activas-categorias">
-                            {RESUMEN_VARIANTES_ORDEN.map((key) => {
-                              const config = obtenerConfigVariante(key);
-                              const itemsCatalogo = catalogosVariantesOrdenados[key] || [];
-                              if (!config) return null;
-
-                              const entry = productoForm.variantesActivas[key] || {
+                            {categoriasVariantesActivas(categoriasVariantes).map((categoria) => {
+                              const categoriaId = String(categoria.id);
+                              const itemsCatalogo = catalogosVariantesOrdenados[categoriaId] || [];
+                              const entry = productoForm.variantesActivas[categoriaId] || {
                                 categoria: false,
                                 items: [],
                               };
 
                               return (
-                                <div key={key} className="producto-variantes-activas-grupo">
+                                <div key={categoriaId} className="producto-variantes-activas-grupo">
                                   <label className="producto-variantes-activas-categoria">
                                     <input
                                       type="checkbox"
                                       checked={Boolean(entry.categoria)}
-                                      onChange={() => toggleCategoriaVarianteProducto(key)}
+                                      onChange={() => toggleCategoriaVarianteProducto(categoriaId)}
                                       disabled={itemsCatalogo.length === 0}
                                     />
-                                    <span>{config.label}</span>
+                                    <span>{categoria.nombre}</span>
                                   </label>
                                   {entry.categoria && itemsCatalogo.length > 0 && (
                                     <div className="producto-variantes-activas-items">
@@ -5277,7 +5277,7 @@ function Dashboard() {
                                               (id) => String(id) === String(item.id)
                                             )}
                                             onChange={() =>
-                                              toggleItemVarianteProducto(key, item.id)
+                                              toggleItemVarianteProducto(categoriaId, item.id)
                                             }
                                           />
                                           <span>
@@ -5300,6 +5300,7 @@ function Dashboard() {
                             })}
                           </div>
                         </fieldset>
+                        )}
                         <button
                           type="submit"
                           className="guardar-btn"
@@ -5363,16 +5364,117 @@ function Dashboard() {
               </>
             )}
 
-            {VARIANTES_CATEGORIAS.map(({ key, label }) => {
-              if (catalogoTab !== key) return null;
+            {catalogoTab === TAB_CATEGORIAS_VARIANTES && (
+              <>
+                <section className="pedido-formulario">
+                  <>
+                    <h2 className="formulario-titulo">
+                      {editandoCategoriaVarianteId
+                        ? 'Editar categoría de variante'
+                        : 'Agregar categoría de variante'}
+                    </h2>
+                    <form className="formulario" onSubmit={handleCategoriaVarianteSubmit}>
+                      <div className="formulario-campo">
+                        <label htmlFor="categoria-variante-nombre">Nombre</label>
+                        <input
+                          id="categoria-variante-nombre"
+                          name="nombre"
+                          type="text"
+                          value={categoriaVarianteForm.nombre}
+                          onChange={handleCategoriaVarianteFormChange}
+                          required
+                        />
+                      </div>
+                      <div className="formulario-campo">
+                        <label htmlFor="categoria-variante-orden">Orden</label>
+                        <input
+                          id="categoria-variante-orden"
+                          name="orden"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={categoriaVarianteForm.orden}
+                          onChange={handleCategoriaVarianteFormChange}
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="guardar-btn"
+                        disabled={guardandoCategoriaVariante}
+                      >
+                        {guardandoCategoriaVariante
+                          ? 'Guardando...'
+                          : editandoCategoriaVarianteId
+                            ? 'Guardar cambios'
+                            : 'Agregar categoría'}
+                      </button>
+                      <button
+                        type="button"
+                        className="cancelar-btn"
+                        onClick={resetCategoriaVarianteForm}
+                      >
+                        Cancelar
+                      </button>
+                    </form>
+                  </>
+                </section>
 
-              const items = catalogosVariantesOrdenados[key] || [];
+                <section className="dashboard-lista">
+                  {categoriasVariantes.length === 0 ? (
+                    <p className="dashboard-vacio">
+                      No hay categorías de variantes configuradas
+                    </p>
+                  ) : (
+                    <div className="pedidos-grid">
+                      {[...categoriasVariantes]
+                        .sort(
+                          (a, b) =>
+                            (a.orden ?? 0) - (b.orden ?? 0) ||
+                            String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+                        )
+                        .map((categoria) => (
+                          <article key={categoria.id} className="pedido-tarjeta">
+                            <h2 className="pedido-cliente">{categoria.nombre}</h2>
+                            <p className="pedido-producto">Orden: {categoria.orden ?? 0}</p>
+                            {categoria.activo === false && (
+                              <p className="pedido-producto">Inactiva</p>
+                            )}
+                            <div className="tarjeta-acciones">
+                              <button
+                                type="button"
+                                className="editar-btn"
+                                onClick={() => iniciarEdicionCategoriaVariante(categoria)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="eliminar-btn"
+                                onClick={() => toggleCategoriaVarianteActiva(categoria)}
+                              >
+                                {categoria.activo === false ? 'Activar' : 'Desactivar'}
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
+            {categoriasVariantesActivas(categoriasVariantes).map((categoria) => {
+              const categoriaId = String(categoria.id);
+              if (catalogoTab !== categoriaId) return null;
+
+              const items = ordenarItemsVariantes(catalogosVariantes[categoriaId] || []);
               const editandoActual =
-                editandoVariante?.categoria === key ? editandoVariante.id : null;
-              const nombreSingular = label.toLowerCase();
+                editandoVariante?.categoria === categoriaId ? editandoVariante.id : null;
+              const nombreSingular = categoria.nombre.toLowerCase();
 
               return (
-                <div key={key}>
+                <div key={categoriaId}>
                   <section className="pedido-formulario">
                     <>
                       <h2 className="formulario-titulo">
@@ -5380,12 +5482,12 @@ function Dashboard() {
                       </h2>
                       <form
                         className="formulario"
-                        onSubmit={(e) => handleVarianteSubmit(e, key)}
+                        onSubmit={(e) => handleVarianteSubmit(e, categoria.id)}
                       >
                           <div className="formulario-campo">
-                            <label htmlFor={`${key}-nombre`}>Nombre</label>
+                            <label htmlFor={`${categoriaId}-nombre`}>Nombre</label>
                             <input
-                              id={`${key}-nombre`}
+                              id={`${categoriaId}-nombre`}
                               name="nombre"
                               type="text"
                               value={varianteForm.nombre}
@@ -5394,9 +5496,9 @@ function Dashboard() {
                             />
                           </div>
                           <div className="formulario-campo">
-                            <label htmlFor={`${key}-precio`}>Precio adicional</label>
+                            <label htmlFor={`${categoriaId}-precio`}>Precio adicional</label>
                             <input
-                              id={`${key}-precio`}
+                              id={`${categoriaId}-precio`}
                               name="precio"
                               type="number"
                               min="0"
@@ -5431,7 +5533,7 @@ function Dashboard() {
                   <section className="dashboard-lista">
                     {items.length === 0 ? (
                       <p className="dashboard-vacio">
-                        No hay {label.toLowerCase()} en el catálogo
+                        No hay items en {categoria.nombre.toLowerCase()}
                       </p>
                     ) : (
                       <div className="pedidos-grid">
@@ -5439,6 +5541,9 @@ function Dashboard() {
                           <article key={item.id} className="pedido-tarjeta">
                             <h2 className="pedido-cliente">{item.nombre}</h2>
                             <p className="pedido-producto">Precio adicional</p>
+                            {item.activo === false && (
+                              <p className="pedido-producto">Inactivo</p>
+                            )}
                             <p className="pedido-total">
                               {formatearMoneda(item.precio)}
                             </p>
@@ -5447,8 +5552,8 @@ function Dashboard() {
                                 type="button"
                                 className="editar-btn"
                                 onClick={() => {
-                                  setCatalogoTab(key);
-                                  iniciarEdicionVariante(key, item);
+                                  setCatalogoTab(categoriaId);
+                                  iniciarEdicionVariante(categoriaId, item);
                                 }}
                               >
                                 Editar
@@ -5456,9 +5561,9 @@ function Dashboard() {
                               <button
                                 type="button"
                                 className="eliminar-btn"
-                                onClick={() => eliminarVariante(key, item.id)}
+                                onClick={() => toggleItemVarianteActivo(categoriaId, item)}
                               >
-                                Eliminar
+                                {item.activo === false ? 'Activar' : 'Desactivar'}
                               </button>
                             </div>
                           </article>
