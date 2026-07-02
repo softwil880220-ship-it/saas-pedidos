@@ -67,7 +67,7 @@ import {
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
-import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
+import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
 
 const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 const STATUS_FLOW_SUCURSAL = [
@@ -1402,10 +1402,14 @@ function Dashboard() {
   const catalogosVariantesOrdenados = useMemo(
     () =>
       VARIANTES_CATEGORIAS.reduce((acc, { key }) => {
-        acc[key] = ordenarPorNombre(catalogosVariantes[key] || []);
+        acc[key] = ordenarPorNombre(
+          (catalogosVariantes[key] || []).filter((item) =>
+            perteneceANegocio(item, negocioId)
+          )
+        );
         return acc;
       }, {}),
-    [catalogosVariantes]
+    [catalogosVariantes, negocioId]
   );
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -1470,7 +1474,10 @@ function Dashboard() {
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
 
   const cargarCatalogosVariantes = async () => {
-    if (!negocioId) return;
+    if (!negocioId) {
+      setCatalogosVariantes(crearCatalogosVariantesVacios());
+      return;
+    }
 
     const resultados = await Promise.all(
       VARIANTES_CATEGORIAS.map(async ({ key, tabla }) => {
@@ -1479,12 +1486,17 @@ function Dashboard() {
           negocioId
         ).order('id', { ascending: true });
 
-        return { key, data: !error && data ? data : [] };
+        const items =
+          !error && data
+            ? data.filter((item) => perteneceANegocio(item, negocioId))
+            : [];
+
+        return { key, data: items };
       })
     );
 
-    setCatalogosVariantes((prev) => {
-      const next = { ...prev };
+    setCatalogosVariantes(() => {
+      const next = crearCatalogosVariantesVacios();
       resultados.forEach(({ key, data }) => {
         next[key] = data;
       });
