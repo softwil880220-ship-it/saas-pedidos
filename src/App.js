@@ -2097,7 +2097,17 @@ function Dashboard() {
         productoForm.variantesActivas
       );
 
-      setProductos((prev) => [...prev, data].sort((a, b) => a.id - b.id));
+      setProductos((prev) => {
+        const idStr = String(data.id);
+        const yaExiste = prev.some((producto) => String(producto.id) === idStr);
+        const next = yaExiste
+          ? prev.map((producto) =>
+              String(producto.id) === idStr ? data : producto
+            )
+          : [...prev, data];
+
+        return next.sort((a, b) => a.id - b.id);
+      });
       resetProductoForm();
     } finally {
       setGuardandoProducto(false);

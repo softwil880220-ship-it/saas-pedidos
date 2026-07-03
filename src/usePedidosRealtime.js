@@ -23,6 +23,34 @@ function obtenerIdRegistro(payload) {
   return anterior?.id ?? nuevo?.id;
 }
 
+function idsCoinciden(idA, idB) {
+  if (idA == null || idB == null) return false;
+  return String(idA) === String(idB);
+}
+
+function agregarRegistroSinDuplicarId(lista, registro) {
+  const index = lista.findIndex((item) => idsCoinciden(item.id, registro.id));
+
+  if (index !== -1) {
+    const next = [...lista];
+    next[index] = { ...lista[index], ...registro };
+    return next;
+  }
+
+  return [...lista, registro];
+}
+
+function deduplicarListaPorId(lista) {
+  const vistos = new Set();
+
+  return lista.filter((item) => {
+    const id = String(item.id);
+    if (vistos.has(id)) return false;
+    vistos.add(id);
+    return true;
+  });
+}
+
 export function sincronizarListaConEvento(prev, payload, options = {}) {
   const {
     filtrar = null,
@@ -46,7 +74,7 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
   if (eventType === 'DELETE') {
     const id = obtenerIdRegistro(payload);
     if (id == null) return prev;
-    return prev.filter((item) => item.id !== id);
+    return prev.filter((item) => !idsCoinciden(item.id, id));
   }
 
   const registro = nuevo && Object.keys(nuevo).length > 0 ? nuevo : null;
@@ -55,10 +83,10 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
   const id = registro.id;
 
   if (eventType === 'UPDATE' && registro.deleted_at != null) {
-    return prev.filter((item) => item.id !== id);
+    return prev.filter((item) => !idsCoinciden(item.id, id));
   }
 
-  const index = prev.findIndex((item) => item.id === id);
+  const index = prev.findIndex((item) => idsCoinciden(item.id, id));
   const enLista = index !== -1;
 
   if (eventType === 'INSERT' || eventType === 'UPDATE') {
@@ -68,11 +96,13 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
         next[index] = { ...prev[index], ...registro };
         return aplicarOrden(next);
       }
-      return aplicarOrden([...prev, registro]);
+      return aplicarOrden(
+        deduplicarListaPorId(agregarRegistroSinDuplicarId(prev, registro))
+      );
     }
 
     if (enLista) {
-      return prev.filter((item) => item.id !== id);
+      return prev.filter((item) => !idsCoinciden(item.id, id));
     }
   }
 
