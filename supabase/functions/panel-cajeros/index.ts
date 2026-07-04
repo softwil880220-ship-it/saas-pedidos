@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { hashSync, genSaltSync } from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,8 @@ const ROLES_CREATABLE = [
   'administrador',
   'mesero',
 ] as const;
+
+const BCRYPT_COST = 10;
 
 type Action = 'list' | 'create' | 'toggle';
 
@@ -191,7 +194,7 @@ async function handleCreate(
       email,
       username,
       supabase_user_id: authData.user.id,
-      pin_hash: pin,
+      pin_hash: hashSync(pin, genSaltSync(BCRYPT_COST)),
       activo: true,
     })
     .select('id, negocio_id, rol, nombre, email, activo')
