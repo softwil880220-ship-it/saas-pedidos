@@ -67,6 +67,7 @@ import {
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
+import VistaMesas from './VistaMesas.jsx';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
@@ -152,8 +153,9 @@ const FILTROS_DOMICILIO = crearFiltrosPorFlujo(STATUS_FLOW_DOMICILIO);
 const FILTROS_SUCURSAL = crearFiltrosPorFlujo(STATUS_FLOW_SUCURSAL);
 
 const MODOS = [
-  { value: 'presencial', label: 'Modo Caja' },
-  { value: 'whatsapp', label: 'Modo WhatsApp' },
+  { value: 'presencial', label: 'Caja' },
+  { value: 'whatsapp', label: 'Para recoger/domicilio' },
+  { value: 'mesas', label: 'Mesas' },
 ];
 
 function crearCatalogoTabs(categorias) {
@@ -174,7 +176,9 @@ const STORAGE_KEY_TAB_CATALOGO = 'pos_tab_catalogo';
 const STORAGE_KEY_TAB_WHATSAPP_PEDIDOS = 'pos_tab_whatsapp_pedidos';
 
 function normalizarModoPedidos(modo) {
-  return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
+  if (modo === 'whatsapp') return 'whatsapp';
+  if (modo === 'mesas') return 'mesas';
+  return 'presencial';
 }
 
 function persistirModoPedidos(modo) {
@@ -192,7 +196,9 @@ function cargarModoPedidos() {
 
   try {
     const modo = window.localStorage.getItem(STORAGE_KEY_MODO_PEDIDOS);
-    return modo === 'whatsapp' ? 'whatsapp' : 'presencial';
+    if (modo === 'whatsapp') return 'whatsapp';
+    if (modo === 'mesas') return 'mesas';
+    return 'presencial';
   } catch {
     return 'presencial';
   }
@@ -252,6 +258,16 @@ function cargarTabWhatsappPedidos() {
 
 function cargarEstadoInicialDashboardPedidos() {
   const modo = cargarModoPedidos();
+
+  if (modo === 'mesas') {
+    return {
+      modo: 'mesas',
+      form: crearFormularioPedidoDefault('whatsapp'),
+      pagoRecibido: '',
+      nextLineaId: 2,
+    };
+  }
+
   const restaurado =
     modo === 'whatsapp'
       ? cargarCarritoWhatsappDisponible()
@@ -1048,7 +1064,10 @@ function Dashboard() {
   const estadoInicialCaptura = esMobileDashboardInicial()
     ? cargarEstadoInicialDashboardPedidos()
     : cargarEstadoInicialCapturaPedidoWeb();
-  const [modo, setModo] = useState(estadoInicialCaptura.modo ?? 'presencial');
+  const modoInicialGuardado = cargarModoPedidos();
+  const [modo, setModo] = useState(
+    modoInicialGuardado === 'mesas' ? 'mesas' : (estadoInicialCaptura.modo ?? 'presencial')
+  );
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
   const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(() =>
@@ -1723,7 +1742,7 @@ function Dashboard() {
         pagoRecibido: carrito.pagoRecibido,
         nextLineaId: carrito.snapshot.nextLineaId,
       });
-    } else {
+    } else if (modo === 'whatsapp') {
       persistirCarritoPedido({
         modo,
         form,
@@ -1731,7 +1750,7 @@ function Dashboard() {
         nextLineaId: nextLineaId.current,
       });
     }
-    persistirModoCaptura(nuevoModo);
+    persistirModoCaptura(nuevoModo === 'mesas' ? 'presencial' : nuevoModo);
     persistirModoPedidos(nuevoModo);
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
@@ -1741,6 +1760,10 @@ function Dashboard() {
     setResumenVenta(null);
     setEditandoPedidoId(null);
     setPedidoEditForm(null);
+
+    if (nuevoModo === 'mesas') {
+      return;
+    }
 
     if (nuevoModo === 'presencial') {
       const restaurado = cargarCarritoPresencialDisponible();
@@ -2295,6 +2318,7 @@ function Dashboard() {
   );
 
   const esModoPresencial = modo === 'presencial';
+  const esModoMesas = modo === 'mesas';
 
   const avanzarPedido = async (id) => {
     const pedido = pedidos.find((p) => p.id === id);
@@ -4720,6 +4744,16 @@ function Dashboard() {
             )}
 
             <section className="pedido-formulario">
+              {esModoMesas ? (
+                <VistaMesas
+                  productos={productos}
+                  productosOrdenados={productosOrdenados}
+                  frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                  frecuenciaLista={frecuenciaLista}
+                  variantesCtx={variantesCtx}
+                />
+              ) : (
+                <>
               <h2 className="formulario-titulo">
                 {esModoPresencial ? 'Nueva venta' : 'Nuevo pedido'}
               </h2>
@@ -5038,8 +5072,12 @@ function Dashboard() {
                   Agrega productos en la sección Catálogo de productos para crear pedidos.
                 </p>
               )}
+                </>
+              )}
             </section>
 
+            {!esModoMesas && (
+            <>
             <section className="dashboard-filtros dashboard-filtros-fecha">
               <div className="filtro-fecha-campo">
                 <label htmlFor="filtro-fecha">Ver pedidos del</label>
@@ -5184,6 +5222,8 @@ function Dashboard() {
                 })}
                 </div>
               </>
+            )}
+            </>
             )}
           </>
         )}
