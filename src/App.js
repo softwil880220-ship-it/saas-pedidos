@@ -65,7 +65,8 @@ import {
   obtenerPedidosPendientesSync,
 } from './pedidoPendingSyncStorage';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
-import SelectorProductosPedido from './SelectorProductosPedido';
+import SelectorProductosPedido from './SelectorProductosPedido.jsx';
+import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
@@ -4833,28 +4834,84 @@ function Dashboard() {
                 </div>
 
                 {productos.length > 0 && (
-                  <SelectorProductosPedido
-                    productos={productosOrdenados}
-                    frecuenciaCategorias={frecuenciaCategoriasPedidos}
-                    frecuenciaLista={frecuenciaLista}
-                    categoriaActiva={
-                      esModoPresencial
-                        ? carrito.categoriaPedidoActiva
-                        : categoriaPedidoActiva
-                    }
-                    onCategoriaChange={
-                      esModoPresencial
-                        ? carrito.setCategoriaPedidoActiva
-                        : setCategoriaPedidoActiva
-                    }
-                    onAgregarProducto={
-                      esModoPresencial
-                        ? carrito.agregarProductoAlPedido
-                        : agregarProductoAlPedido
-                    }
-                  />
+                  esModoPresencial ? (
+                    <SelectorProductosPedido
+                      productos={productosOrdenados}
+                      frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                      frecuenciaLista={frecuenciaLista}
+                      categoriaActiva={carrito.categoriaPedidoActiva}
+                      onCategoriaChange={carrito.setCategoriaPedidoActiva}
+                      onAgregarProducto={carrito.agregarProductoAlPedido}
+                    />
+                  ) : (
+                    <SelectorProductosPedido
+                      productos={productosOrdenados}
+                      frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                      frecuenciaLista={frecuenciaLista}
+                      categoriaActiva={categoriaPedidoActiva}
+                      onCategoriaChange={setCategoriaPedidoActiva}
+                      onAgregarProducto={agregarProductoAlPedido}
+                    />
+                  )
                 )}
 
+                {esModoPresencial ? (
+                  <PedidoLineasCarrito
+                    lineas={carrito.lineasPedidoConProducto}
+                    productos={productos}
+                    variantesCtx={variantesCtx}
+                    totalPedido={carrito.totalPedido}
+                    onAjustarCantidad={carrito.ajustarCantidadLinea}
+                    onEliminarLinea={carrito.eliminarLinea}
+                  >
+                    <div className="caja-pago">
+                      <div className="formulario-campo caja-pago-campo">
+                        <label htmlFor="pago-recibido">Pago recibido</label>
+                        <input
+                          id="pago-recibido"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={carrito.pagoRecibido}
+                          onChange={(e) => carrito.setPagoRecibido(e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      {pagoValido &&
+                        (pagoInsuficiente ? (
+                          <p className="caja-pago-alerta caja-pago-insuficiente">
+                            Pago insuficiente
+                          </p>
+                        ) : (
+                          <p className="caja-pago-alerta caja-pago-cambio">
+                            Cambio: {formatearMoneda(cambio)}
+                          </p>
+                        ))}
+                    </div>
+                    <div className="pedido-acciones-principales">
+                      <button
+                        type="button"
+                        className="limpiar-pedido-btn"
+                        onClick={limpiarPedidoCaptura}
+                      >
+                        Limpiar pedido
+                      </button>
+                      <button
+                        type="submit"
+                        className="guardar-btn"
+                        disabled={productos.length === 0 || carrito.totalPedido <= 0}
+                      >
+                        Registrar venta
+                      </button>
+                    </div>
+                    {errorGuardarPedido ? (
+                      <p className="formulario-error-guardar" role="alert">
+                        {errorGuardarPedido}
+                      </p>
+                    ) : null}
+                  </PedidoLineasCarrito>
+                ) : (
+                  <>
                 <div className="pedido-lineas">
                   <div className="pedido-lineas-encabezado">
                     <span>Productos del pedido</span>
@@ -4951,32 +5008,6 @@ function Dashboard() {
                     <span className="pedido-total-label">Total del pedido</span>
                     <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
                   </div>
-                  {esModoPresencial && (
-                    <div className="caja-pago">
-                      <div className="formulario-campo caja-pago-campo">
-                        <label htmlFor="pago-recibido">Pago recibido</label>
-                        <input
-                          id="pago-recibido"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={carrito.pagoRecibido}
-                          onChange={(e) => carrito.setPagoRecibido(e.target.value)}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {pagoValido &&
-                        (pagoInsuficiente ? (
-                          <p className="caja-pago-alerta caja-pago-insuficiente">
-                            Pago insuficiente
-                          </p>
-                        ) : (
-                          <p className="caja-pago-alerta caja-pago-cambio">
-                            Cambio: {formatearMoneda(cambio)}
-                          </p>
-                        ))}
-                    </div>
-                  )}
                   <div className="pedido-acciones-principales">
                     <button
                       type="button"
@@ -4990,7 +5021,7 @@ function Dashboard() {
                       className="guardar-btn"
                       disabled={productos.length === 0 || totalPedido <= 0}
                     >
-                      {esModoPresencial ? 'Registrar venta' : 'Guardar pedido'}
+                      Guardar pedido
                     </button>
                   </div>
                   {errorGuardarPedido ? (
@@ -4999,6 +5030,8 @@ function Dashboard() {
                     </p>
                   ) : null}
                 </div>
+                  </>
+                )}
               </form>
               {productos.length === 0 && (
                 <p className="formulario-aviso">
