@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   WHATSAPP_SUCURSAL: 'pos_carrito_whatsapp_sucursal',
   MODO_CAPTURA: 'pos_modo_captura',
   SECCION_ACTIVA: 'pos_seccion_activa',
+  MESAS: 'pos_carritos_mesas',
 };
 
 const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes', 'equipo']);
@@ -294,6 +295,144 @@ export function cargarCarritoPresencialDisponible() {
   }
 
   return null;
+}
+
+const VERSION_STORAGE_MESAS = 1;
+
+function esCarritoMesaVacio(snapshot) {
+  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
+  const sinProductos = lineas.length === 0 || lineas.every(lineaEstaVacia);
+
+  if (!sinProductos) {
+    return false;
+  }
+
+  return !String(snapshot?.pagoRecibido ?? '').trim();
+}
+
+function leerMapaMesasAlmacenado() {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.MESAS);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.carritos !== 'object') {
+      return {};
+    }
+
+    return parsed.carritos;
+  } catch {
+    return {};
+  }
+}
+
+function normalizarSnapshotMesa(entrada) {
+  if (!entrada?.form || typeof entrada.form !== 'object') {
+    return null;
+  }
+
+  const lineas = Array.isArray(entrada.form.lineas)
+    ? entrada.form.lineas.map(normalizarLineaGuardada)
+    : [];
+  const formDefault = crearFormularioPedidoDefault('presencial');
+
+  const snapshot = {
+    form: {
+      ...formDefault,
+      ...entrada.form,
+      tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+      lineas: lineas.length ? lineas : [crearLineaPedidoVacia(1)],
+    },
+    pagoRecibido: entrada.pagoRecibido ?? '',
+    nextLineaId: entrada.nextLineaId ?? calcularNextLineaId(lineas),
+  };
+
+  if (entrada.mesaId != null && String(entrada.mesaId).trim()) {
+    snapshot.mesaId = String(entrada.mesaId);
+  }
+
+  if (entrada.actualizadoEn) {
+    snapshot.actualizadoEn = entrada.actualizadoEn;
+  }
+
+  return snapshot;
+}
+
+function escribirMapaMesas(carritos) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (!carritos || Object.keys(carritos).length === 0) {
+      limpiarCarritoEnStorage(STORAGE_KEYS.MESAS);
+      return;
+    }
+
+    window.localStorage.setItem(
+      STORAGE_KEYS.MESAS,
+      JSON.stringify({
+        version: VERSION_STORAGE_MESAS,
+        carritos,
+      })
+    );
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function persistirCarritosMesas(carritos) {
+  if (typeof window === 'undefined') return;
+
+  const mapaActual = leerMapaMesasAlmacenado();
+  const mapaMerged = { ...mapaActual };
+
+  Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
+    if (!folioId) return;
+
+    const normalizado = normalizarSnapshotMesa(snapshot);
+
+    if (!normalizado || esCarritoMesaVacio(normalizado)) {
+      delete mapaMerged[folioId];
+      return;
+    }
+
+    mapaMerged[folioId] = {
+      ...normalizado,
+      actualizadoEn: snapshot?.actualizadoEn ?? new Date().toISOString(),
+    };
+  });
+
+  escribirMapaMesas(mapaMerged);
+}
+
+export function cargarCarritosMesasAbiertos() {
+  const mapa = leerMapaMesasAlmacenado();
+  const resultado = {};
+
+  Object.entries(mapa).forEach(([folioId, entrada]) => {
+    const normalizado = normalizarSnapshotMesa(entrada);
+    if (!normalizado || esCarritoMesaVacio(normalizado)) {
+      return;
+    }
+
+    resultado[folioId] = normalizado;
+  });
+
+  return resultado;
+}
+
+export function limpiarCarritoFolio(folioId) {
+  if (!folioId || typeof window === 'undefined') return;
+
+  const mapaActual = leerMapaMesasAlmacenado();
+  if (!Object.prototype.hasOwnProperty.call(mapaActual, folioId)) {
+    return;
+  }
+
+  const mapaRestante = { ...mapaActual };
+  delete mapaRestante[folioId];
+  escribirMapaMesas(mapaRestante);
 }
 
 export function persistirSeccionActiva(seccion) {
