@@ -3,6 +3,7 @@ import {
   calcularSubtotal,
 } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
+import VariantesPedido from './VariantesPedido.jsx';
 
 export default function PedidoLineasCarrito({
   lineas,
@@ -11,6 +12,7 @@ export default function PedidoLineasCarrito({
   totalPedido,
   onAjustarCantidad,
   onEliminarLinea,
+  onCambiarVariante,
   children,
 }) {
   return (
@@ -82,6 +84,15 @@ export default function PedidoLineasCarrito({
                   ✕
                 </button>
               </div>
+              {onCambiarVariante && productoSeleccionado ? (
+                <VariantesPedido
+                  key={`variantes-${linea.id}-${linea.productoId}`}
+                  linea={linea}
+                  producto={productoSeleccionado}
+                  variantesCtx={variantesCtx}
+                  onToggleVariante={onCambiarVariante}
+                />
+              ) : null}
             </div>
           );
         })}

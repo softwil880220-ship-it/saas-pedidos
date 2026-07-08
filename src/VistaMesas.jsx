@@ -8,6 +8,10 @@ function folioIdDesdeNumeroMesa(numero) {
   return String(numero);
 }
 
+function foliosOcupadosDesdeStorage() {
+  return new Set(Object.keys(cargarCarritosMesasAbiertos()));
+}
+
 export default function VistaMesas({
   productos,
   productosOrdenados,
@@ -15,27 +19,55 @@ export default function VistaMesas({
   frecuenciaLista,
   variantesCtx,
 }) {
-  const [carritosAbiertos, setCarritosAbiertos] = useState(() => cargarCarritosMesasAbiertos());
+  const [foliosOcupados, setFoliosOcupados] = useState(foliosOcupadosDesdeStorage);
   const [folioActivo, setFolioActivo] = useState(null);
 
-  const recargarCarritosAbiertos = useCallback(() => {
-    setCarritosAbiertos(cargarCarritosMesasAbiertos());
+  const sincronizarFoliosOcupados = useCallback(() => {
+    setFoliosOcupados(foliosOcupadosDesdeStorage());
   }, []);
 
+  const restablecerVistaGrilla = useCallback(() => {
+    setFolioActivo(null);
+    sincronizarFoliosOcupados();
+  }, [sincronizarFoliosOcupados]);
+
   useEffect(() => {
-    recargarCarritosAbiertos();
-  }, [recargarCarritosAbiertos]);
+    restablecerVistaGrilla();
+  }, [restablecerVistaGrilla]);
+
+  useEffect(() => {
+    const restablecerPanelAlMostrarPagina = (evento) => {
+      if (evento.persisted) {
+        restablecerVistaGrilla();
+      }
+    };
+
+    window.addEventListener('pageshow', restablecerPanelAlMostrarPagina);
+    return () => window.removeEventListener('pageshow', restablecerPanelAlMostrarPagina);
+  }, [restablecerVistaGrilla]);
+
+  const actualizarOcupacionMesa = useCallback((folioId, ocupada) => {
+    setFoliosOcupados((prev) => {
+      const next = new Set(prev);
+      if (ocupada) {
+        next.add(folioId);
+      } else {
+        next.delete(folioId);
+      }
+      return next;
+    });
+  }, []);
 
   const mesas = useMemo(
     () =>
       Array.from({ length: CANTIDAD_MESAS }, (_, indice) => {
         const numero = indice + 1;
         const folioId = folioIdDesdeNumeroMesa(numero);
-        const ocupada = Object.prototype.hasOwnProperty.call(carritosAbiertos, folioId);
+        const ocupada = foliosOcupados.has(folioId);
 
         return { numero, folioId, ocupada };
       }),
-    [carritosAbiertos]
+    [foliosOcupados]
   );
 
   const numeroMesaActiva = folioActivo ? parseInt(folioActivo, 10) : null;
@@ -45,8 +77,7 @@ export default function VistaMesas({
   };
 
   const cerrarPanel = () => {
-    setFolioActivo(null);
-    recargarCarritosAbiertos();
+    restablecerVistaGrilla();
   };
 
   return (
@@ -85,6 +116,7 @@ export default function VistaMesas({
           frecuenciaLista={frecuenciaLista}
           variantesCtx={variantesCtx}
           onCerrar={cerrarPanel}
+          onOcupacionMesaChange={actualizarOcupacionMesa}
         />
       ) : null}
     </section>

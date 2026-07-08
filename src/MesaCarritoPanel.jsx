@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
@@ -11,6 +12,7 @@ export default function MesaCarritoPanel({
   frecuenciaLista,
   variantesCtx,
   onCerrar,
+  onOcupacionMesaChange,
 }) {
   const carrito = useCarritoPedido({
     folioId,
@@ -19,6 +21,10 @@ export default function MesaCarritoPanel({
     productos,
     variantesCtx,
   });
+
+  useEffect(() => {
+    onOcupacionMesaChange?.(folioId, !carrito.estaVacio);
+  }, [folioId, carrito.estaVacio, onOcupacionMesaChange]);
 
   return (
     <section className="mesa-carrito-panel">
@@ -46,6 +52,7 @@ export default function MesaCarritoPanel({
             totalPedido={carrito.totalPedido}
             onAjustarCantidad={carrito.ajustarCantidadLinea}
             onEliminarLinea={carrito.eliminarLinea}
+            onCambiarVariante={carrito.cambiarVarianteLinea}
           />
         </>
       ) : (
