@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { cargarCarritosMesasAbiertos } from './pedidoCarritoStorage';
+import {
+  cargarCarritosMesasAbiertos,
+  cargarMesaActiva,
+  limpiarMesaActiva,
+  persistirMesaActiva,
+} from './pedidoCarritoStorage';
 import MesaCarritoPanel from './MesaCarritoPanel';
 
 export const CANTIDAD_MESAS = 10;
@@ -12,6 +17,16 @@ function foliosOcupadosDesdeStorage() {
   return new Set(Object.keys(cargarCarritosMesasAbiertos()));
 }
 
+function esFolioMesaValido(folioId) {
+  const numero = parseInt(folioId, 10);
+  return Number.isFinite(numero) && numero >= 1 && numero <= CANTIDAD_MESAS;
+}
+
+function resolverMesaActivaInicial() {
+  const guardada = cargarMesaActiva();
+  return guardada && esFolioMesaValido(guardada) ? guardada : null;
+}
+
 export default function VistaMesas({
   productos,
   productosOrdenados,
@@ -20,31 +35,28 @@ export default function VistaMesas({
   variantesCtx,
 }) {
   const [foliosOcupados, setFoliosOcupados] = useState(foliosOcupadosDesdeStorage);
-  const [folioActivo, setFolioActivo] = useState(null);
+  const [folioActivo, setFolioActivo] = useState(resolverMesaActivaInicial);
 
   const sincronizarFoliosOcupados = useCallback(() => {
     setFoliosOcupados(foliosOcupadosDesdeStorage());
   }, []);
 
-  const restablecerVistaGrilla = useCallback(() => {
-    setFolioActivo(null);
+  useEffect(() => {
     sincronizarFoliosOcupados();
   }, [sincronizarFoliosOcupados]);
 
   useEffect(() => {
-    restablecerVistaGrilla();
-  }, [restablecerVistaGrilla]);
+    const restaurarMesaActivaAlMostrarPagina = (evento) => {
+      if (!evento.persisted) return;
 
-  useEffect(() => {
-    const restablecerPanelAlMostrarPagina = (evento) => {
-      if (evento.persisted) {
-        restablecerVistaGrilla();
-      }
+      const guardada = cargarMesaActiva();
+      setFolioActivo(guardada && esFolioMesaValido(guardada) ? guardada : null);
+      sincronizarFoliosOcupados();
     };
 
-    window.addEventListener('pageshow', restablecerPanelAlMostrarPagina);
-    return () => window.removeEventListener('pageshow', restablecerPanelAlMostrarPagina);
-  }, [restablecerVistaGrilla]);
+    window.addEventListener('pageshow', restaurarMesaActivaAlMostrarPagina);
+    return () => window.removeEventListener('pageshow', restaurarMesaActivaAlMostrarPagina);
+  }, [sincronizarFoliosOcupados]);
 
   const actualizarOcupacionMesa = useCallback((folioId, ocupada) => {
     setFoliosOcupados((prev) => {
@@ -74,10 +86,13 @@ export default function VistaMesas({
 
   const abrirMesa = (folioId) => {
     setFolioActivo(folioId);
+    persistirMesaActiva(folioId);
   };
 
   const cerrarPanel = () => {
-    restablecerVistaGrilla();
+    setFolioActivo(null);
+    limpiarMesaActiva();
+    sincronizarFoliosOcupados();
   };
 
   return (

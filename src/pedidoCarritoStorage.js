@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   MODO_CAPTURA: 'pos_modo_captura',
   SECCION_ACTIVA: 'pos_seccion_activa',
   MESAS: 'pos_carritos_mesas',
+  MESA_ACTIVA: 'pos_mesa_activa',
 };
 
 const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes', 'equipo']);
@@ -433,6 +434,37 @@ export function limpiarCarritoFolio(folioId) {
   const mapaRestante = { ...mapaActual };
   delete mapaRestante[folioId];
   escribirMapaMesas(mapaRestante);
+}
+
+export function cargarMesaActiva() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const folioId = window.localStorage.getItem(STORAGE_KEYS.MESA_ACTIVA);
+    return folioId && String(folioId).trim() ? String(folioId).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistirMesaActiva(folioId) {
+  if (typeof window === 'undefined' || !folioId) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.MESA_ACTIVA, String(folioId));
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function limpiarMesaActiva() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.MESA_ACTIVA);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
 }
 
 export function persistirSeccionActiva(seccion) {
