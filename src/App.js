@@ -67,6 +67,7 @@ import {
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
+import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
 import {
   buscarProductoPorId,
@@ -1087,12 +1088,26 @@ function Dashboard() {
     () => catalogosVariantesOrdenadosDesde(catalogosVariantes, categoriasVariantes, negocioId),
     [catalogosVariantes, categoriasVariantes, negocioId]
   );
+  const snapshotInicialCajaRef = useRef(cargarCarritoPresencialDisponible() ?? undefined);
+  const carrito = useCarritoPedido({
+    variantesCtx,
+    productos,
+    modoCaptura: 'presencial',
+    persistir: true,
+    snapshotInicial: snapshotInicialCajaRef.current,
+  });
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
-  const nextLineaId = useRef(estadoInicialCaptura.nextLineaId);
+  const nextLineaId = useRef(
+    estadoInicialCaptura.modo === 'whatsapp' ? estadoInicialCaptura.nextLineaId : 2
+  );
   const nextEditLineaId = useRef(2);
   const persistenciaCarritoPausadaRef = useRef(false);
-  const [form, setForm] = useState(estadoInicialCaptura.form);
+  const [form, setForm] = useState(() =>
+    estadoInicialCaptura.modo === 'whatsapp'
+      ? estadoInicialCaptura.form
+      : crearFormularioPedidoDefault('whatsapp')
+  );
   const [productoForm, setProductoForm] = useState({
     nombre: '',
     precio: '',
@@ -1112,7 +1127,9 @@ function Dashboard() {
   const [guardandoVariante, setGuardandoVariante] = useState(false);
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
   const [errorGuardarPedido, setErrorGuardarPedido] = useState(null);
-  const [pagoRecibido, setPagoRecibido] = useState(estadoInicialCaptura.pagoRecibido);
+  const [pagoRecibido, setPagoRecibido] = useState(() =>
+    estadoInicialCaptura.modo === 'whatsapp' ? estadoInicialCaptura.pagoRecibido : ''
+  );
   const [fechaActual, setFechaActual] = useState(() => Date.now());
   const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
@@ -1408,6 +1425,7 @@ function Dashboard() {
 
   useEffect(() => {
     if (seccion !== 'pedidos' || persistenciaCarritoPausadaRef.current) return;
+    if (modo !== 'whatsapp') return;
 
     persistirCarritoPedido({
       modo,
@@ -1483,6 +1501,11 @@ function Dashboard() {
   const handleFormChange = (e) => {
     setErrorGuardarPedido(null);
     const { name, value } = e.target;
+
+    if (modo === 'presencial') {
+      carrito.setCampoCaptura(name, value);
+      return;
+    }
 
     if (name === 'tipoEntrega' && modo === 'whatsapp') {
       persistirCarritoPedido({
@@ -1662,23 +1685,24 @@ function Dashboard() {
   };
 
   const resetFormPedido = (modoActual = modo, { limpiarStorage = true } = {}) => {
+    if (modoActual === 'presencial') {
+      carrito.resetCarrito({ limpiarStorage });
+      return;
+    }
+
     if (limpiarStorage) {
-      limpiarCarritoPedido(
-        modoActual,
-        modoActual === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
-      );
+      limpiarCarritoPedido(modoActual, form.tipoEntrega);
     }
 
     nextLineaId.current = 2;
     setPagoRecibido('');
     setCategoriaPedidoActiva(null);
     setForm({
-      cliente: modoActual === 'presencial' ? CLIENTE_PUBLICO : '',
+      cliente: '',
       telefono: '',
-      tipoEntrega:
-        modoActual === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : TIPO_ENTREGA_SIN_SELECCION,
+      tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
       direccion: '',
-      formaPago: modoActual === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : '',
+      formaPago: '',
       referencia: '',
       lineas: [crearLineaPedido(1, variantesCtx)],
       status: statusDefaultFormularioPedido(modoActual),
@@ -1691,12 +1715,21 @@ function Dashboard() {
   };
 
   const cambiarModo = (nuevoModo) => {
-    persistirCarritoPedido({
-      modo,
-      form,
-      pagoRecibido,
-      nextLineaId: nextLineaId.current,
-    });
+    if (modo === 'presencial') {
+      persistirCarritoPedido({
+        modo: 'presencial',
+        form: carrito.form,
+        pagoRecibido: carrito.pagoRecibido,
+        nextLineaId: carrito.snapshot.nextLineaId,
+      });
+    } else {
+      persistirCarritoPedido({
+        modo,
+        form,
+        pagoRecibido,
+        nextLineaId: nextLineaId.current,
+      });
+    }
     persistirModoCaptura(nuevoModo);
     persistirModoPedidos(nuevoModo);
     setModo(nuevoModo);
@@ -1711,9 +1744,13 @@ function Dashboard() {
     if (nuevoModo === 'presencial') {
       const restaurado = cargarCarritoPresencialDisponible();
       if (restaurado) {
-        aplicarEstadoCarrito(restaurado);
+        carrito.aplicarSnapshot(restaurado);
+        setCategoriaPedidoActiva(null);
         return;
       }
+
+      carrito.resetCarrito({ limpiarStorage: false });
+      return;
     } else {
       const restaurado = cargarCarritoWhatsappDisponible();
       if (restaurado) {
@@ -1729,18 +1766,38 @@ function Dashboard() {
     () => (form.lineas || []).filter((linea) => linea?.productoId),
     [form.lineas]
   );
-  const lineasPedidoConProducto = useMemo(
+  const lineasPedidoConProductoWhatsapp = useMemo(
     () => consolidarLineasPorProducto(lineasPedidoActivas, variantesCtx),
     [lineasPedidoActivas, variantesCtx]
   );
-  const totalPedido = useMemo(
+  const totalPedidoWhatsapp = useMemo(
     () => calcularTotalLineas(lineasPedidoActivas, productos, variantesCtx),
     [lineasPedidoActivas, productos, variantesCtx]
   );
-  const montoPago = parseFloat(pagoRecibido);
-  const pagoValido = pagoRecibido !== '' && !Number.isNaN(montoPago);
-  const cambio = pagoValido ? montoPago - totalPedido : null;
-  const pagoInsuficiente = pagoValido && cambio < 0;
+
+  const formCaptura = modo === 'presencial' ? carrito.form : form;
+  const lineasPedidoConProducto =
+    modo === 'presencial' ? carrito.lineasPedidoConProducto : lineasPedidoConProductoWhatsapp;
+  const totalPedido = modo === 'presencial' ? carrito.totalPedido : totalPedidoWhatsapp;
+  const pagoValido = modo === 'presencial' ? carrito.pagoValido : false;
+  const cambio = modo === 'presencial' ? carrito.cambio : null;
+  const pagoInsuficiente = modo === 'presencial' ? carrito.pagoInsuficiente : false;
+
+  const ajustarCantidadLineaCaptura = (lineaId, delta) => {
+    if (modo === 'presencial') {
+      carrito.ajustarCantidadLinea(lineaId, delta);
+      return;
+    }
+    ajustarCantidadLinea(lineaId, delta);
+  };
+
+  const eliminarLineaCaptura = (lineaId) => {
+    if (modo === 'presencial') {
+      carrito.eliminarLinea(lineaId);
+      return;
+    }
+    eliminarLinea(lineaId);
+  };
 
   const handleProductoFormChange = (e) => {
     const { name, value } = e.target;
@@ -1782,17 +1839,14 @@ function Dashboard() {
     e.preventDefault();
     setErrorGuardarPedido(null);
 
-    const detallePedido = calcularDetalleLineasPedido(
-      form.lineas,
-      productos,
-      variantesCtx
-    );
+    const esPresencial = modo === 'presencial';
+    const detallePedido = esPresencial
+      ? carrito.obtenerDetallePedido()
+      : calcularDetalleLineasPedido(form.lineas, productos, variantesCtx);
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
       return;
     }
-
-    const esPresencial = modo === 'presencial';
 
     if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(form.tipoEntrega)) {
       return;
@@ -3202,7 +3256,9 @@ function Dashboard() {
       return;
     }
 
-    const resumen = resumenProductos(form.lineas, productos, variantesCtx);
+    const resumen = esPresencial
+      ? carrito.obtenerResumenProductos()
+      : resumenProductos(form.lineas, productos, variantesCtx);
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
 
     const payload = {
@@ -3220,8 +3276,10 @@ function Dashboard() {
         esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
           ? null
           : form.direccion.trim() || null,
-      forma_pago: normalizarFormaPagoPayload(form.formaPago),
-      referencia: esPresencial ? form.referencia.trim() || null : null,
+      forma_pago: normalizarFormaPagoPayload(
+        esPresencial ? carrito.form.formaPago : form.formaPago
+      ),
+      referencia: esPresencial ? carrito.form.referencia.trim() || null : null,
       created_by: usuario?.id ?? null,
       ...(esPresencial
         ? {
@@ -3254,12 +3312,16 @@ function Dashboard() {
       setResumenVenta({
         producto: resumen,
         total: detallePedido.total,
-        referencia: form.referencia.trim(),
-        formaPago: form.formaPago,
+        referencia: carrito.form.referencia.trim(),
+        formaPago: carrito.form.formaPago,
       });
     }
 
-    persistenciaCarritoPausadaRef.current = true;
+    if (esPresencial) {
+      carrito.pausarPersistencia();
+    } else {
+      persistenciaCarritoPausadaRef.current = true;
+    }
     resetFormPedido(modo);
 
     const { data, error } = await supabase
@@ -3272,13 +3334,21 @@ function Dashboard() {
       setErrorGuardarPedido(
         'Pedido guardado localmente. Se sincronizará cuando haya conexión.'
       );
-      persistenciaCarritoPausadaRef.current = false;
+      if (esPresencial) {
+        carrito.reanudarPersistencia();
+      } else {
+        persistenciaCarritoPausadaRef.current = false;
+      }
       return;
     }
 
     eliminarPedidoPendienteSync(optimisticId);
     setErrorGuardarPedido(null);
-    persistenciaCarritoPausadaRef.current = false;
+    if (esPresencial) {
+      carrito.reanudarPersistencia();
+    } else {
+      persistenciaCarritoPausadaRef.current = false;
+    }
 
     setPedidos((prev) => {
       const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
@@ -4739,7 +4809,7 @@ function Dashboard() {
                         name="referencia"
                         type="text"
                         placeholder="Opcional"
-                        value={form.referencia}
+                        value={formCaptura.referencia}
                         onChange={handleFormChange}
                       />
                     </div>
@@ -4749,7 +4819,7 @@ function Dashboard() {
                     <select
                       id="formaPago"
                       name="formaPago"
-                      value={form.formaPago}
+                      value={formCaptura.formaPago}
                       onChange={handleFormChange}
                     >
                       {!esModoPresencial && <option value="">Sin especificar</option>}
@@ -4767,9 +4837,21 @@ function Dashboard() {
                     productos={productosOrdenados}
                     frecuenciaCategorias={frecuenciaCategoriasPedidos}
                     frecuenciaLista={frecuenciaLista}
-                    categoriaActiva={categoriaPedidoActiva}
-                    onCategoriaChange={setCategoriaPedidoActiva}
-                    onAgregarProducto={agregarProductoAlPedido}
+                    categoriaActiva={
+                      esModoPresencial
+                        ? carrito.categoriaPedidoActiva
+                        : categoriaPedidoActiva
+                    }
+                    onCategoriaChange={
+                      esModoPresencial
+                        ? carrito.setCategoriaPedidoActiva
+                        : setCategoriaPedidoActiva
+                    }
+                    onAgregarProducto={
+                      esModoPresencial
+                        ? carrito.agregarProductoAlPedido
+                        : agregarProductoAlPedido
+                    }
                   />
                 )}
 
@@ -4810,7 +4892,7 @@ function Dashboard() {
                               <button
                                 type="button"
                                 className="cantidad-stepper-btn"
-                                onClick={() => ajustarCantidadLinea(linea.id, -1)}
+                                onClick={() => ajustarCantidadLineaCaptura(linea.id, -1)}
                                 disabled={(parseInt(linea.cantidad, 10) || 1) <= 1}
                                 aria-label="Reducir cantidad"
                               >
@@ -4825,7 +4907,7 @@ function Dashboard() {
                               <button
                                 type="button"
                                 className="cantidad-stepper-btn"
-                                onClick={() => ajustarCantidadLinea(linea.id, 1)}
+                                onClick={() => ajustarCantidadLineaCaptura(linea.id, 1)}
                                 aria-label="Aumentar cantidad"
                               >
                                 +
@@ -4844,7 +4926,7 @@ function Dashboard() {
                           <button
                             type="button"
                             className="eliminar-linea-btn"
-                            onClick={() => eliminarLinea(linea.id)}
+                            onClick={() => eliminarLineaCaptura(linea.id)}
                             aria-label={`Eliminar producto ${indice + 1}`}
                           >
                             ✕
@@ -4878,8 +4960,8 @@ function Dashboard() {
                           type="number"
                           min="0"
                           step="0.01"
-                          value={pagoRecibido}
-                          onChange={(e) => setPagoRecibido(e.target.value)}
+                          value={carrito.pagoRecibido}
+                          onChange={(e) => carrito.setPagoRecibido(e.target.value)}
                           placeholder="0.00"
                         />
                       </div>
