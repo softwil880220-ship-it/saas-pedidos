@@ -301,6 +301,10 @@ export function cargarCarritoPresencialDisponible() {
 const VERSION_STORAGE_MESAS = 1;
 
 function esCarritoMesaVacio(snapshot) {
+  if ((snapshot?.rondasEnviadas ?? 0) > 0) {
+    return false;
+  }
+
   const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
   const sinProductos = lineas.length === 0 || lineas.every(lineaEstaVacia);
 
@@ -309,6 +313,45 @@ function esCarritoMesaVacio(snapshot) {
   }
 
   return !String(snapshot?.pagoRecibido ?? '').trim();
+}
+
+function metadatosMesaDesdeEntrada(entrada) {
+  return {
+    numeroRondaSiguiente: entrada?.numeroRondaSiguiente ?? 1,
+    rondasEnviadas: entrada?.rondasEnviadas ?? 0,
+  };
+}
+
+export function crearFormularioCapturaMesaVacio() {
+  const formDefault = crearFormularioPedidoDefault('presencial');
+
+  return {
+    ...formDefault,
+    cliente: '',
+    telefono: '',
+    tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+    direccion: '',
+    formaPago: FORMA_PAGO_DEFAULT_CAJA,
+    referencia: '',
+    lineas: [crearLineaPedidoVacia(1)],
+    status: 'por-aceptar',
+  };
+}
+
+export function obtenerMetadatosMesa(folioId) {
+  const entrada = leerMapaMesasAlmacenado()[folioId];
+  return metadatosMesaDesdeEntrada(entrada);
+}
+
+export function mesaEstaOcupada(snapshot) {
+  if (!snapshot) return false;
+
+  if ((snapshot.rondasEnviadas ?? 0) > 0) {
+    return true;
+  }
+
+  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
+  return lineas.some((linea) => linea?.productoId);
 }
 
 function leerMapaMesasAlmacenado() {
@@ -348,6 +391,7 @@ function normalizarSnapshotMesa(entrada) {
     },
     pagoRecibido: entrada.pagoRecibido ?? '',
     nextLineaId: entrada.nextLineaId ?? calcularNextLineaId(lineas),
+    ...metadatosMesaDesdeEntrada(entrada),
   };
 
   if (entrada.mesaId != null && String(entrada.mesaId).trim()) {
@@ -391,15 +435,32 @@ export function persistirCarritosMesas(carritos) {
   Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
     if (!folioId) return;
 
+    const anterior = mapaActual[folioId];
     const normalizado = normalizarSnapshotMesa(snapshot);
 
-    if (!normalizado || esCarritoMesaVacio(normalizado)) {
+    const entradaFinal = normalizado
+      ? {
+          ...normalizado,
+          numeroRondaSiguiente:
+            snapshot?.numeroRondaSiguiente ??
+            anterior?.numeroRondaSiguiente ??
+            normalizado.numeroRondaSiguiente ??
+            1,
+          rondasEnviadas:
+            snapshot?.rondasEnviadas ??
+            anterior?.rondasEnviadas ??
+            normalizado.rondasEnviadas ??
+            0,
+        }
+      : null;
+
+    if (!entradaFinal || esCarritoMesaVacio(entradaFinal)) {
       delete mapaMerged[folioId];
       return;
     }
 
     mapaMerged[folioId] = {
-      ...normalizado,
+      ...entradaFinal,
       actualizadoEn: snapshot?.actualizadoEn ?? new Date().toISOString(),
     };
   });

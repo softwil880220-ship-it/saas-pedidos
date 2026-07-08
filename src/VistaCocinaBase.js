@@ -108,6 +108,18 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
                       {pedido.folio}
                     </span>
                   )}
+                  {pedido.tipo === 'mesa' && pedido.referencia ? (
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: '#b45309',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {pedido.referencia}
+                    </span>
+                  ) : null}
                   <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
                 </div>
               </div>

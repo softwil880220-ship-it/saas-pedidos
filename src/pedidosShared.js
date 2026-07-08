@@ -130,7 +130,7 @@ export function todasCocinasRequeridasListas(pedido) {
 }
 
 export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsapp') {
-  if (tipoPedido === 'presencial') return 'entregado';
+  if (tipoPedido === 'presencial' || tipoPedido === 'mesa') return 'entregado';
 
   return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'listo-para-recoger'

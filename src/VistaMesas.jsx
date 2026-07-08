@@ -33,6 +33,8 @@ export default function VistaMesas({
   frecuenciaCategorias,
   frecuenciaLista,
   variantesCtx,
+  negocioId,
+  usuarioId,
 }) {
   const [foliosOcupados, setFoliosOcupados] = useState(foliosOcupadosDesdeStorage);
   const [folioActivo, setFolioActivo] = useState(resolverMesaActivaInicial);
@@ -130,8 +132,11 @@ export default function VistaMesas({
           frecuenciaCategorias={frecuenciaCategorias}
           frecuenciaLista={frecuenciaLista}
           variantesCtx={variantesCtx}
+          negocioId={negocioId}
+          usuarioId={usuarioId}
           onCerrar={cerrarPanel}
           onOcupacionMesaChange={actualizarOcupacionMesa}
+          onRondaEnviada={sincronizarFoliosOcupados}
         />
       ) : null}
     </section>

@@ -4751,6 +4751,8 @@ function Dashboard() {
                   frecuenciaCategorias={frecuenciaCategoriasPedidos}
                   frecuenciaLista={frecuenciaLista}
                   variantesCtx={variantesCtx}
+                  negocioId={negocioId}
+                  usuarioId={usuario?.id}
                 />
               ) : (
                 <>
