@@ -337,6 +337,31 @@ export function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
 }
 
+export function etiquetaCanalEntregaCocina(tipoEntrega) {
+  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
+    ? 'Para recoger'
+    : 'Domicilio';
+}
+
+export function formatearFechaHoraCocina(createdAt) {
+  if (!createdAt) return '—';
+
+  return new Date(createdAt).toLocaleString('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function resolverNombreCapturaPedido(pedido, nombresPorId = {}) {
+  const creadorId = pedido?.created_by;
+  if (!creadorId) return null;
+
+  return nombresPorId[String(creadorId)] ?? null;
+}
+
 function redondearMoneda(valor) {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
 }

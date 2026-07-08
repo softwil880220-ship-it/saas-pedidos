@@ -1,23 +1,19 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { useAuth } from './AuthContext';
 import {
   DesgloseProductosPedido,
   construirUpdateAlMarcarCocinaLista,
   enriquecerLineasDetalleCocina,
+  esPedidoWhatsapp,
+  etiquetaCanalEntregaCocina,
+  formatearFechaHoraCocina,
   pedidoVisibleEnCocina,
+  resolverNombreCapturaPedido,
 } from './pedidosShared';
 import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
-
-function formatearHora(createdAt) {
-  if (!createdAt) return '—';
-  return new Date(createdAt).toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function VistaCocinaBase({ cocina, titulo, channelName, claseVista }) {
   const { negocioId } = useAuth();
@@ -25,6 +21,7 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     channelName: `${channelName}-productos`,
     negocioId,
   });
+  const [nombresCapturaPorId, setNombresCapturaPorId] = useState({});
 
   const filtrarPedidos = useCallback(
     (pedido) =>
@@ -47,6 +44,36 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     comparar: compararPedidos,
   });
   const [actualizandoId, setActualizandoId] = useState(null);
+
+  useEffect(() => {
+    if (!negocioId) {
+      setNombresCapturaPorId({});
+      return;
+    }
+
+    let activo = true;
+
+    const cargarNombresCaptura = async () => {
+      const { data, error } = await queryConNegocio(
+        supabase.from('usuarios_negocio').select('id, nombre').eq('activo', true),
+        negocioId
+      );
+
+      if (!activo || error || !data) {
+        return;
+      }
+
+      setNombresCapturaPorId(
+        Object.fromEntries(data.map((usuario) => [String(usuario.id), usuario.nombre]))
+      );
+    };
+
+    void cargarNombresCaptura();
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId]);
 
   const marcarListo = async (pedido) => {
     const update = construirUpdateAlMarcarCocinaLista(pedido, cocina);
@@ -82,62 +109,53 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
         <div className="vista-operativa-grid">
           {pedidos.map((pedido) => {
             const pedidoEnriquecido = enriquecerLineasDetalleCocina(pedido, productos);
+            const nombreCaptura = resolverNombreCapturaPedido(pedido, nombresCapturaPorId);
+            const esWhatsapp = esPedidoWhatsapp(pedido);
 
             return (
-            <article key={pedido.id} className="vista-operativa-tarjeta">
-              <div className="vista-operativa-tarjeta-cabecera">
-                <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-end',
-                    flexShrink: 0,
-                    gap: '0.15rem',
-                  }}
-                >
-                  {pedido.folio !== null && (
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 500,
-                        color: '#64748b',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {pedido.folio}
-                    </span>
-                  )}
-                  {pedido.tipo === 'mesa' && pedido.referencia ? (
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        color: '#b45309',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {pedido.referencia}
-                    </span>
-                  ) : null}
-                  <time className="vista-operativa-hora">{formatearHora(pedido.created_at)}</time>
+              <article key={pedido.id} className="vista-operativa-tarjeta">
+                <div className="vista-operativa-tarjeta-cabecera">
+                  <div className="vista-operativa-tarjeta-titulo">
+                    <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
+                    {esWhatsapp ? (
+                      <span className="vista-operativa-canal">
+                        {etiquetaCanalEntregaCocina(pedido.tipo_entrega)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="vista-operativa-tarjeta-meta">
+                    {pedido.folio != null ? (
+                      <span className="vista-operativa-folio">{pedido.folio}</span>
+                    ) : null}
+                    {pedido.tipo === 'mesa' && pedido.referencia ? (
+                      <span className="vista-operativa-ronda">{pedido.referencia}</span>
+                    ) : null}
+                    <time className="vista-operativa-fecha-hora" dateTime={pedido.created_at}>
+                      {formatearFechaHoraCocina(pedido.created_at)}
+                    </time>
+                  </div>
                 </div>
-              </div>
 
-              <DesgloseProductosPedido
-                pedido={pedidoEnriquecido}
-                mostrarTotal
-                filtrarCocina={cocina}
-              />
-              <button
-                type="button"
-                className="vista-operativa-btn listo-btn"
-                disabled={actualizandoId === pedido.id}
-                onClick={() => marcarListo(pedidoEnriquecido)}
-              >
-                {actualizandoId === pedido.id ? 'Guardando...' : 'Listo'}
-              </button>
-            </article>
+                {nombreCaptura ? (
+                  <p className="vista-operativa-captura">
+                    Capturado por: <span>{nombreCaptura}</span>
+                  </p>
+                ) : null}
+
+                <DesgloseProductosPedido
+                  pedido={pedidoEnriquecido}
+                  mostrarTotal={false}
+                  filtrarCocina={cocina}
+                />
+                <button
+                  type="button"
+                  className="vista-operativa-btn listo-btn"
+                  disabled={actualizandoId === pedido.id}
+                  onClick={() => marcarListo(pedidoEnriquecido)}
+                >
+                  {actualizandoId === pedido.id ? 'Guardando...' : 'Listo'}
+                </button>
+              </article>
             );
           })}
         </div>

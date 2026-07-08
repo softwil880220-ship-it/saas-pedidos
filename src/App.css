@@ -2335,6 +2335,59 @@
   color: #0f172a;
 }
 
+.vista-operativa-tarjeta-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.vista-operativa-canal {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.vista-operativa-tarjeta-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 0.15rem;
+}
+
+.vista-operativa-folio,
+.vista-operativa-fecha-hora {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.vista-operativa-ronda {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+  white-space: nowrap;
+}
+
+.vista-operativa-captura {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.vista-operativa-captura span {
+  font-weight: 600;
+  color: #334155;
+}
+
 .vista-operativa-hora {
   font-size: 0.85rem;
   color: #64748b;
