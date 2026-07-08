@@ -11,9 +11,12 @@ import {
 } from './pedidoCarritoCalculos';
 import {
   cargarCarritoPedido,
+  cargarCarritosMesasAbiertos,
   crearFormularioPedidoDefault,
+  limpiarCarritoFolio,
   limpiarCarritoPedido,
   persistirCarritoPedido,
+  persistirCarritosMesas,
 } from './pedidoCarritoStorage';
 import {
   crearVariantesLineaVacias,
@@ -139,13 +142,24 @@ function resumenProductos(lineas, listaProductos, variantesCtx) {
     .join(', ');
 }
 
-function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx) {
+function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folioId) {
   if (snapshotInicial?.form) {
     return {
       form: snapshotInicial.form,
       pagoRecibido: snapshotInicial.pagoRecibido ?? '',
       nextLineaId: snapshotInicial.nextLineaId ?? 2,
     };
+  }
+
+  if (folioId) {
+    const restaurado = cargarCarritosMesasAbiertos()[folioId];
+    if (restaurado?.form) {
+      return {
+        form: restaurado.form,
+        pagoRecibido: restaurado.pagoRecibido ?? '',
+        nextLineaId: restaurado.nextLineaId ?? 2,
+      };
+    }
   }
 
   return {
@@ -163,7 +177,12 @@ export default function useCarritoPedido({
   snapshotInicial,
   persistir = true,
 }) {
-  const estadoInicial = resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx);
+  const estadoInicial = resolverEstadoInicial(
+    snapshotInicial,
+    modoCaptura,
+    variantesCtx,
+    folioId
+  );
   const [form, setForm] = useState(estadoInicial.form);
   const [pagoRecibido, setPagoRecibido] = useState(estadoInicial.pagoRecibido);
   const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
@@ -213,7 +232,18 @@ export default function useCarritoPedido({
   );
 
   const persistirSnapshotActual = useCallback(() => {
-    if (!persistir || persistenciaPausadaRef.current || folioId) return;
+    if (!persistir || persistenciaPausadaRef.current) return;
+
+    if (folioId) {
+      persistirCarritosMesas({
+        [folioId]: {
+          form,
+          pagoRecibido,
+          nextLineaId: nextLineaId.current,
+        },
+      });
+      return;
+    }
 
     persistirCarritoPedido({
       modo: modoStorage,
@@ -243,11 +273,15 @@ export default function useCarritoPedido({
 
   const resetCarrito = useCallback(
     ({ limpiarStorage = true } = {}) => {
-      if (limpiarStorage && !folioId) {
-        limpiarCarritoPedido(
-          modoStorage,
-          modoCaptura === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
-        );
+      if (limpiarStorage) {
+        if (folioId) {
+          limpiarCarritoFolio(folioId);
+        } else {
+          limpiarCarritoPedido(
+            modoStorage,
+            modoCaptura === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
+          );
+        }
       }
 
       nextLineaId.current = 2;
