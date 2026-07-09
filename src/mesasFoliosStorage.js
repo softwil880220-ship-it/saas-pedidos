@@ -393,6 +393,18 @@ export async function abrirFolioMesa({
   return String(data.id);
 }
 
+export function obtenerFolioIdDesdePayloadRealtime(payload) {
+  const eventType = String(payload.eventType ?? payload.type ?? '').toUpperCase();
+  const registro = payload.new && Object.keys(payload.new).length > 0 ? payload.new : null;
+  const anterior = payload.old && Object.keys(payload.old).length > 0 ? payload.old : null;
+
+  if (eventType === 'DELETE') {
+    return anterior?.id != null ? String(anterior.id) : null;
+  }
+
+  return registro?.id != null ? String(registro.id) : null;
+}
+
 export function sincronizarFilaDesdeRealtime(payload) {
   const eventType = String(payload.eventType ?? payload.type ?? '').toUpperCase();
   const registro = payload.new && Object.keys(payload.new).length > 0 ? payload.new : null;

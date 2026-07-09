@@ -29,6 +29,11 @@ export default function VistaMesas({
   const [errorHidratacion, setErrorHidratacion] = useState(null);
   const [mesasOcupadas, setMesasOcupadas] = useState(() => obtenerNumerosMesaOcupados());
   const [panelMesa, setPanelMesa] = useState(null);
+  const [folioCacheActualizado, setFolioCacheActualizado] = useState({
+    revision: 0,
+    folioId: null,
+    eventType: null,
+  });
   const panelMesaRef = useRef(panelMesa);
 
   useEffect(() => {
@@ -63,6 +68,21 @@ export default function VistaMesas({
       }
     }
   }, [handleFolioEliminado, handleFolioCreadoRemoto]);
+
+  const manejarCambioCacheMesas = useCallback(
+    (detalle) => {
+      sincronizarOcupacion();
+
+      if (detalle?.folioId && detalle.eventType === 'UPDATE') {
+        setFolioCacheActualizado((prev) => ({
+          revision: prev.revision + 1,
+          folioId: String(detalle.folioId),
+          eventType: 'UPDATE',
+        }));
+      }
+    },
+    [sincronizarOcupacion]
+  );
 
   useEffect(() => {
     configurarContextoMesas({ usuarioId, rol });
@@ -107,7 +127,7 @@ export default function VistaMesas({
 
   useMesasFoliosRealtime({
     negocioId: hidrato ? negocioId : null,
-    onCambio: sincronizarOcupacion,
+    onCambio: manejarCambioCacheMesas,
   });
 
   useEffect(() => {
@@ -218,6 +238,7 @@ export default function VistaMesas({
         <MesaCarritoPanel
           key={`mesa-panel-${panelMesa.numero}`}
           folioId={panelMesa.folioId}
+          folioCacheActualizado={folioCacheActualizado}
           numeroMesa={panelMesa.numero}
           productos={productos}
           productosOrdenados={productosOrdenados}

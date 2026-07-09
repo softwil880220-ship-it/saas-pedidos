@@ -18,8 +18,35 @@ function carritoTieneProductos(snapshot) {
   return lineas.some((linea) => linea?.productoId);
 }
 
+function construirSnapshotDesdeCache(folioId) {
+  const restaurado = cargarCarritosMesasAbiertos()[folioId];
+
+  if (restaurado?.form) {
+    return {
+      form: restaurado.form,
+      pagoRecibido: restaurado.pagoRecibido ?? '',
+      nextLineaId: restaurado.nextLineaId ?? 2,
+    };
+  }
+
+  return {
+    form: crearFormularioCapturaMesaVacio(),
+    pagoRecibido: '',
+    nextLineaId: 2,
+  };
+}
+
+function serializarSnapshotParaComparacion(snapshot) {
+  return JSON.stringify({
+    form: snapshot.form,
+    pagoRecibido: snapshot.pagoRecibido ?? '',
+    nextLineaId: snapshot.nextLineaId ?? 2,
+  });
+}
+
 export default function MesaCarritoPanel({
   folioId: folioIdProp,
+  folioCacheActualizado,
   numeroMesa,
   productos,
   productosOrdenados,
@@ -39,7 +66,9 @@ export default function MesaCarritoPanel({
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
   const folioIdPropAnteriorRef = useRef(folioIdProp);
-  const hidratacionRemotaEnCursoRef = useRef(false);
+  const folioCacheRevisionAnteriorRef = useRef(0);
+  const syncSnapshotExternoEnCursoRef = useRef(false);
+  const ultimoSnapshotRemotoAplicadoRef = useRef(null);
 
   const carrito = useCarritoPedido({
     folioId,
@@ -56,6 +85,15 @@ export default function MesaCarritoPanel({
     setFolioIdLocal(folioIdProp ?? null);
   }, [folioIdProp]);
 
+  const aplicarSnapshotExternoDesdeCache = (folioId, carritoRef) => {
+    const snapshot = construirSnapshotDesdeCache(folioId);
+
+    syncSnapshotExternoEnCursoRef.current = true;
+    carritoRef.pausarPersistencia();
+    carritoRef.aplicarSnapshot(snapshot);
+    ultimoSnapshotRemotoAplicadoRef.current = serializarSnapshotParaComparacion(snapshot);
+  };
+
   useLayoutEffect(() => {
     const folioAnterior = folioIdPropAnteriorRef.current;
     folioIdPropAnteriorRef.current = folioIdProp;
@@ -68,24 +106,47 @@ export default function MesaCarritoPanel({
       return;
     }
 
-    hidratacionRemotaEnCursoRef.current = true;
-    carrito.pausarPersistencia();
-
-    const restaurado = cargarCarritosMesasAbiertos()[folioIdProp];
-    const snapshot = restaurado?.form
-      ? {
-          form: restaurado.form,
-          pagoRecibido: restaurado.pagoRecibido ?? '',
-          nextLineaId: restaurado.nextLineaId ?? 2,
-        }
-      : {
-          form: crearFormularioCapturaMesaVacio(),
-          pagoRecibido: '',
-          nextLineaId: 2,
-        };
-
-    carrito.aplicarSnapshot(snapshot);
+    aplicarSnapshotExternoDesdeCache(folioIdProp, carrito);
   }, [folioIdProp, carrito.pausarPersistencia, carrito.aplicarSnapshot]);
+
+  useLayoutEffect(() => {
+    if (!folioIdProp || !folioCacheActualizado) {
+      return;
+    }
+
+    if (folioCacheActualizado.eventType !== 'UPDATE') {
+      return;
+    }
+
+    if (String(folioCacheActualizado.folioId) !== String(folioIdProp)) {
+      return;
+    }
+
+    if (folioCacheActualizado.revision === folioCacheRevisionAnteriorRef.current) {
+      return;
+    }
+
+    folioCacheRevisionAnteriorRef.current = folioCacheActualizado.revision;
+
+    if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
+      return;
+    }
+
+    aplicarSnapshotExternoDesdeCache(folioIdProp, carrito);
+  }, [
+    folioIdProp,
+    folioCacheActualizado,
+    carrito.pausarPersistencia,
+    carrito.aplicarSnapshot,
+  ]);
+
+  useEffect(() => {
+    if (syncSnapshotExternoEnCursoRef.current) {
+      return;
+    }
+
+    ultimoSnapshotRemotoAplicadoRef.current = null;
+  }, [carrito.snapshot, carrito.lineasPedidoActivas.length]);
 
   useEffect(() => {
     if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
@@ -199,8 +260,15 @@ export default function MesaCarritoPanel({
       return undefined;
     }
 
-    if (hidratacionRemotaEnCursoRef.current) {
+    if (syncSnapshotExternoEnCursoRef.current) {
       return undefined;
+    }
+
+    if (ultimoSnapshotRemotoAplicadoRef.current != null) {
+      const snapshotActual = serializarSnapshotParaComparacion(carrito.snapshot);
+      if (ultimoSnapshotRemotoAplicadoRef.current === snapshotActual) {
+        return undefined;
+      }
     }
 
     const { rondasEnviadas } = obtenerMetadatosMesa(folioId);
@@ -250,14 +318,15 @@ export default function MesaCarritoPanel({
   ]);
 
   useEffect(() => {
-    if (!hidratacionRemotaEnCursoRef.current) {
+    if (!syncSnapshotExternoEnCursoRef.current) {
       return;
     }
 
-    hidratacionRemotaEnCursoRef.current = false;
+    syncSnapshotExternoEnCursoRef.current = false;
     carrito.reanudarPersistencia();
   }, [
     folioIdProp,
+    folioCacheActualizado?.revision,
     carrito.lineasPedidoActivas.length,
     carrito.reanudarPersistencia,
   ]);

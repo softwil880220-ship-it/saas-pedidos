@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { supabase } from './supabase';
-import { sincronizarFilaDesdeRealtime } from './mesasFoliosStorage';
+import {
+  obtenerFolioIdDesdePayloadRealtime,
+  sincronizarFilaDesdeRealtime,
+} from './mesasFoliosStorage';
 
 const REALTIME_EVENTOS = ['INSERT', 'UPDATE', 'DELETE'];
 
@@ -30,8 +33,12 @@ export function useMesasFoliosRealtime({ negocioId, onCambio }) {
           },
           (payload) => {
             if (!activo) return;
+            const eventType = String(payload.eventType ?? payload.type ?? '').toUpperCase();
             sincronizarFilaDesdeRealtime(payload);
-            onCambio?.();
+            onCambio?.({
+              folioId: obtenerFolioIdDesdePayloadRealtime(payload),
+              eventType,
+            });
           }
         );
       });
@@ -43,7 +50,7 @@ export function useMesasFoliosRealtime({ negocioId, onCambio }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && activo) {
-        onCambio?.();
+        onCambio?.({ folioId: null, eventType: null });
       }
     };
 

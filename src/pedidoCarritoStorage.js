@@ -309,6 +309,7 @@ export {
   limpiarMesaActiva,
   mesaEstaOcupada,
   obtenerFolioAbiertoPorMesa,
+  obtenerFolioIdDesdePayloadRealtime,
   obtenerMetadatosMesa,
   obtenerNumeroMesaDeFolio,
   obtenerNumerosMesaOcupados,
