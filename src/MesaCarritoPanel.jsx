@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import {
-  cargarCarritosMesasAbiertos,
+  abrirFolioMesa,
   crearFormularioCapturaMesaVacio,
-  mesaEstaOcupada,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
 } from './pedidoCarritoStorage';
 
+function carritoTieneProductos(snapshot) {
+  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
+  return lineas.some((linea) => linea?.productoId);
+}
+
 export default function MesaCarritoPanel({
-  folioId,
+  folioId: folioIdProp,
   numeroMesa,
   productos,
   productosOrdenados,
@@ -22,36 +26,111 @@ export default function MesaCarritoPanel({
   negocioId,
   usuarioId,
   onCerrar,
-  onOcupacionMesaChange,
+  onFolioCreado,
   onRondaEnviada,
 }) {
+  const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
+  const folioId = folioIdProp ?? folioIdLocal;
+  const creacionFolioEnCursoRef = useRef(false);
+  const folioCreacionIniciadaRef = useRef(false);
+
   const carrito = useCarritoPedido({
     folioId,
     modoCaptura: 'mesa',
-    persistir: true,
+    persistir: Boolean(folioId),
     productos,
     variantesCtx,
   });
   const [enviandoCocina, setEnviandoCocina] = useState(false);
   const [errorEnvioCocina, setErrorEnvioCocina] = useState(null);
-
-  const notificarOcupacion = useCallback(() => {
-    const snapshot = cargarCarritosMesasAbiertos()[folioId];
-    const ocupada = !carrito.estaVacio || mesaEstaOcupada(snapshot);
-    onOcupacionMesaChange?.(folioId, ocupada);
-  }, [folioId, carrito.estaVacio, onOcupacionMesaChange]);
+  const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
 
   useEffect(() => {
-    notificarOcupacion();
-  }, [notificarOcupacion]);
+    setFolioIdLocal(folioIdProp ?? null);
+  }, [folioIdProp]);
+
+  useEffect(() => {
+    if (folioId) return;
+
+    if (carrito.lineasPedidoActivas.length === 0) {
+      folioCreacionIniciadaRef.current = false;
+      creacionFolioEnCursoRef.current = false;
+      return undefined;
+    }
+
+    if (folioCreacionIniciadaRef.current || creacionFolioEnCursoRef.current) {
+      return undefined;
+    }
+
+    const snapshotAlCrear = carrito.snapshot;
+    if (!carritoTieneProductos(snapshotAlCrear)) {
+      return undefined;
+    }
+
+    folioCreacionIniciadaRef.current = true;
+    creacionFolioEnCursoRef.current = true;
+    let cancelado = false;
+
+    const crearFolio = async () => {
+      setErrorCreacionFolio(null);
+
+      try {
+        const nuevoFolioId = await abrirFolioMesa({
+          negocioId,
+          numeroMesa,
+          creadoPor: usuarioId,
+          carritoSnapshot: snapshotAlCrear,
+        });
+
+        if (cancelado || !carritoTieneProductos(carrito.snapshot)) {
+          return;
+        }
+
+        persistirCarritosMesas({
+          [nuevoFolioId]: {
+            ...carrito.snapshot,
+            numeroRondaSiguiente: 1,
+          },
+        });
+
+        setFolioIdLocal(nuevoFolioId);
+        onFolioCreado?.(nuevoFolioId);
+      } catch {
+        if (!cancelado) {
+          folioCreacionIniciadaRef.current = false;
+          setErrorCreacionFolio('No se pudo registrar la mesa. Intenta agregar el producto de nuevo.');
+        }
+      } finally {
+        if (!cancelado) {
+          creacionFolioEnCursoRef.current = false;
+        }
+      }
+    };
+
+    void crearFolio();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    folioId,
+    carrito.lineasPedidoActivas.length,
+    carrito.snapshot,
+    negocioId,
+    numeroMesa,
+    usuarioId,
+    onFolioCreado,
+  ]);
 
   const handleEnviarCocina = async () => {
+    if (!folioId) return;
+
     const detallePedido = carrito.obtenerDetallePedido();
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
       return;
     }
 
-    const { numeroRondaSiguiente, rondasEnviadas } = obtenerMetadatosMesa(folioId);
+    const { numeroRondaSiguiente } = obtenerMetadatosMesa(folioId);
     const resumen = carrito.obtenerResumenProductos();
 
     setEnviandoCocina(true);
@@ -88,18 +167,19 @@ export default function MesaCarritoPanel({
         pagoRecibido: '',
         nextLineaId: 2,
         numeroRondaSiguiente: numeroRondaSiguiente + 1,
-        rondasEnviadas: rondasEnviadas + 1,
       },
     });
 
     carrito.reanudarPersistencia();
     onRondaEnviada?.();
-    onOcupacionMesaChange?.(folioId, true);
     setEnviandoCocina(false);
   };
 
   const puedeEnviarCocina =
-    carrito.lineasPedidoActivas.length > 0 && carrito.totalPedido > 0 && !enviandoCocina;
+    Boolean(folioId) &&
+    carrito.lineasPedidoActivas.length > 0 &&
+    carrito.totalPedido > 0 &&
+    !enviandoCocina;
 
   return (
     <section className="mesa-carrito-panel">
@@ -109,6 +189,12 @@ export default function MesaCarritoPanel({
           Cerrar panel
         </button>
       </div>
+
+      {errorCreacionFolio ? (
+        <p className="formulario-error-guardar" role="alert">
+          {errorCreacionFolio}
+        </p>
+      ) : null}
 
       {productos.length > 0 ? (
         <>

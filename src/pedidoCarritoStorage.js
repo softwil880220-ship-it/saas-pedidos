@@ -7,8 +7,6 @@ export const STORAGE_KEYS = {
   WHATSAPP_SUCURSAL: 'pos_carrito_whatsapp_sucursal',
   MODO_CAPTURA: 'pos_modo_captura',
   SECCION_ACTIVA: 'pos_seccion_activa',
-  MESAS: 'pos_carritos_mesas',
-  MESA_ACTIVA: 'pos_mesa_activa',
 };
 
 const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes', 'equipo']);
@@ -298,235 +296,24 @@ export function cargarCarritoPresencialDisponible() {
   return null;
 }
 
-const VERSION_STORAGE_MESAS = 1;
-
-function esCarritoMesaVacio(snapshot) {
-  if ((snapshot?.rondasEnviadas ?? 0) > 0) {
-    return false;
-  }
-
-  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
-  const sinProductos = lineas.length === 0 || lineas.every(lineaEstaVacia);
-
-  if (!sinProductos) {
-    return false;
-  }
-
-  return !String(snapshot?.pagoRecibido ?? '').trim();
-}
-
-function metadatosMesaDesdeEntrada(entrada) {
-  return {
-    numeroRondaSiguiente: entrada?.numeroRondaSiguiente ?? 1,
-    rondasEnviadas: entrada?.rondasEnviadas ?? 0,
-  };
-}
-
-export function crearFormularioCapturaMesaVacio() {
-  const formDefault = crearFormularioPedidoDefault('presencial');
-
-  return {
-    ...formDefault,
-    cliente: '',
-    telefono: '',
-    tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
-    direccion: '',
-    formaPago: FORMA_PAGO_DEFAULT_CAJA,
-    referencia: '',
-    lineas: [crearLineaPedidoVacia(1)],
-    status: 'por-aceptar',
-  };
-}
-
-export function obtenerMetadatosMesa(folioId) {
-  const entrada = leerMapaMesasAlmacenado()[folioId];
-  return metadatosMesaDesdeEntrada(entrada);
-}
-
-export function mesaEstaOcupada(snapshot) {
-  if (!snapshot) return false;
-
-  if ((snapshot.rondasEnviadas ?? 0) > 0) {
-    return true;
-  }
-
-  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
-  return lineas.some((linea) => linea?.productoId);
-}
-
-function leerMapaMesasAlmacenado() {
-  if (typeof window === 'undefined') return {};
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.MESAS);
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.carritos !== 'object') {
-      return {};
-    }
-
-    return parsed.carritos;
-  } catch {
-    return {};
-  }
-}
-
-function normalizarSnapshotMesa(entrada) {
-  if (!entrada?.form || typeof entrada.form !== 'object') {
-    return null;
-  }
-
-  const lineas = Array.isArray(entrada.form.lineas)
-    ? entrada.form.lineas.map(normalizarLineaGuardada)
-    : [];
-  const formDefault = crearFormularioPedidoDefault('presencial');
-
-  const snapshot = {
-    form: {
-      ...formDefault,
-      ...entrada.form,
-      tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
-      lineas: lineas.length ? lineas : [crearLineaPedidoVacia(1)],
-    },
-    pagoRecibido: entrada.pagoRecibido ?? '',
-    nextLineaId: entrada.nextLineaId ?? calcularNextLineaId(lineas),
-    ...metadatosMesaDesdeEntrada(entrada),
-  };
-
-  if (entrada.mesaId != null && String(entrada.mesaId).trim()) {
-    snapshot.mesaId = String(entrada.mesaId);
-  }
-
-  if (entrada.actualizadoEn) {
-    snapshot.actualizadoEn = entrada.actualizadoEn;
-  }
-
-  return snapshot;
-}
-
-function escribirMapaMesas(carritos) {
-  if (typeof window === 'undefined') return;
-
-  try {
-    if (!carritos || Object.keys(carritos).length === 0) {
-      limpiarCarritoEnStorage(STORAGE_KEYS.MESAS);
-      return;
-    }
-
-    window.localStorage.setItem(
-      STORAGE_KEYS.MESAS,
-      JSON.stringify({
-        version: VERSION_STORAGE_MESAS,
-        carritos,
-      })
-    );
-  } catch {
-    // Ignorar errores de almacenamiento local.
-  }
-}
-
-export function persistirCarritosMesas(carritos) {
-  if (typeof window === 'undefined') return;
-
-  const mapaActual = leerMapaMesasAlmacenado();
-  const mapaMerged = { ...mapaActual };
-
-  Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
-    if (!folioId) return;
-
-    const anterior = mapaActual[folioId];
-    const normalizado = normalizarSnapshotMesa(snapshot);
-
-    const entradaFinal = normalizado
-      ? {
-          ...normalizado,
-          numeroRondaSiguiente:
-            snapshot?.numeroRondaSiguiente ??
-            anterior?.numeroRondaSiguiente ??
-            normalizado.numeroRondaSiguiente ??
-            1,
-          rondasEnviadas:
-            snapshot?.rondasEnviadas ??
-            anterior?.rondasEnviadas ??
-            normalizado.rondasEnviadas ??
-            0,
-        }
-      : null;
-
-    if (!entradaFinal || esCarritoMesaVacio(entradaFinal)) {
-      delete mapaMerged[folioId];
-      return;
-    }
-
-    mapaMerged[folioId] = {
-      ...entradaFinal,
-      actualizadoEn: snapshot?.actualizadoEn ?? new Date().toISOString(),
-    };
-  });
-
-  escribirMapaMesas(mapaMerged);
-}
-
-export function cargarCarritosMesasAbiertos() {
-  const mapa = leerMapaMesasAlmacenado();
-  const resultado = {};
-
-  Object.entries(mapa).forEach(([folioId, entrada]) => {
-    const normalizado = normalizarSnapshotMesa(entrada);
-    if (!normalizado || esCarritoMesaVacio(normalizado)) {
-      return;
-    }
-
-    resultado[folioId] = normalizado;
-  });
-
-  return resultado;
-}
-
-export function limpiarCarritoFolio(folioId) {
-  if (!folioId || typeof window === 'undefined') return;
-
-  const mapaActual = leerMapaMesasAlmacenado();
-  if (!Object.prototype.hasOwnProperty.call(mapaActual, folioId)) {
-    return;
-  }
-
-  const mapaRestante = { ...mapaActual };
-  delete mapaRestante[folioId];
-  escribirMapaMesas(mapaRestante);
-}
-
-export function cargarMesaActiva() {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const folioId = window.localStorage.getItem(STORAGE_KEYS.MESA_ACTIVA);
-    return folioId && String(folioId).trim() ? String(folioId).trim() : null;
-  } catch {
-    return null;
-  }
-}
-
-export function persistirMesaActiva(folioId) {
-  if (typeof window === 'undefined' || !folioId) return;
-
-  try {
-    window.localStorage.setItem(STORAGE_KEYS.MESA_ACTIVA, String(folioId));
-  } catch {
-    // Ignorar errores de almacenamiento local.
-  }
-}
-
-export function limpiarMesaActiva() {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.removeItem(STORAGE_KEYS.MESA_ACTIVA);
-  } catch {
-    // Ignorar errores de almacenamiento local.
-  }
-}
+export {
+  abrirFolioMesa,
+  cargarCarritosMesasAbiertos,
+  cargarMesaActiva,
+  crearFormularioCapturaMesaVacio,
+  folioSigueAbierto,
+  hidratarFoliosMesas,
+  limpiarCarritoFolio,
+  limpiarMesaActiva,
+  mesaEstaOcupada,
+  obtenerFolioAbiertoPorMesa,
+  obtenerMetadatosMesa,
+  obtenerNumeroMesaDeFolio,
+  obtenerNumerosMesaOcupados,
+  persistirCarritosMesas,
+  persistirMesaActiva,
+  sincronizarFilaDesdeRealtime,
+} from './mesasFoliosStorage';
 
 export function persistirSeccionActiva(seccion) {
   if (typeof window === 'undefined' || !SECCIONES_DASHBOARD.has(seccion)) return;
