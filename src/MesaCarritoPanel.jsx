@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
@@ -39,6 +39,7 @@ export default function MesaCarritoPanel({
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
   const folioIdPropAnteriorRef = useRef(folioIdProp);
+  const hidratacionRemotaEnCursoRef = useRef(false);
 
   const carrito = useCarritoPedido({
     folioId,
@@ -55,7 +56,7 @@ export default function MesaCarritoPanel({
     setFolioIdLocal(folioIdProp ?? null);
   }, [folioIdProp]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const folioAnterior = folioIdPropAnteriorRef.current;
     folioIdPropAnteriorRef.current = folioIdProp;
 
@@ -66,6 +67,9 @@ export default function MesaCarritoPanel({
     if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
       return;
     }
+
+    hidratacionRemotaEnCursoRef.current = true;
+    carrito.pausarPersistencia();
 
     const restaurado = cargarCarritosMesasAbiertos()[folioIdProp];
     const snapshot = restaurado?.form
@@ -80,10 +84,8 @@ export default function MesaCarritoPanel({
           nextLineaId: 2,
         };
 
-    carrito.pausarPersistencia();
     carrito.aplicarSnapshot(snapshot);
-    carrito.reanudarPersistencia();
-  }, [folioIdProp, carrito.pausarPersistencia, carrito.aplicarSnapshot, carrito.reanudarPersistencia]);
+  }, [folioIdProp, carrito.pausarPersistencia, carrito.aplicarSnapshot]);
 
   useEffect(() => {
     if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
@@ -197,6 +199,10 @@ export default function MesaCarritoPanel({
       return undefined;
     }
 
+    if (hidratacionRemotaEnCursoRef.current) {
+      return undefined;
+    }
+
     const { rondasEnviadas } = obtenerMetadatosMesa(folioId);
     if (rondasEnviadas > 0) {
       return undefined;
@@ -241,6 +247,19 @@ export default function MesaCarritoPanel({
     carrito.pausarPersistencia,
     carrito.reanudarPersistencia,
     onFolioEliminado,
+  ]);
+
+  useEffect(() => {
+    if (!hidratacionRemotaEnCursoRef.current) {
+      return;
+    }
+
+    hidratacionRemotaEnCursoRef.current = false;
+    carrito.reanudarPersistencia();
+  }, [
+    folioIdProp,
+    carrito.lineasPedidoActivas.length,
+    carrito.reanudarPersistencia,
   ]);
 
   const handleEnviarCocina = async () => {
