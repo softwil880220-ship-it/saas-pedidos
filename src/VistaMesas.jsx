@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   cargarMesaActiva,
   configurarContextoMesas,
@@ -29,10 +29,25 @@ export default function VistaMesas({
   const [errorHidratacion, setErrorHidratacion] = useState(null);
   const [mesasOcupadas, setMesasOcupadas] = useState(() => obtenerNumerosMesaOcupados());
   const [panelMesa, setPanelMesa] = useState(null);
+  const panelMesaRef = useRef(panelMesa);
+
+  useEffect(() => {
+    panelMesaRef.current = panelMesa;
+  }, [panelMesa]);
+
+  const handleFolioEliminado = useCallback(() => {
+    setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
+    limpiarMesaActiva();
+    setMesasOcupadas(obtenerNumerosMesaOcupados());
+  }, []);
 
   const sincronizarOcupacion = useCallback(() => {
     setMesasOcupadas(obtenerNumerosMesaOcupados());
-  }, []);
+
+    if (panelMesaRef.current?.folioId && !folioSigueAbierto(panelMesaRef.current.folioId)) {
+      handleFolioEliminado();
+    }
+  }, [handleFolioEliminado]);
 
   useEffect(() => {
     configurarContextoMesas({ usuarioId, rol });
@@ -139,12 +154,6 @@ export default function VistaMesas({
     },
     [sincronizarOcupacion]
   );
-
-  const handleFolioEliminado = useCallback(() => {
-    setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
-    limpiarMesaActiva();
-    sincronizarOcupacion();
-  }, [sincronizarOcupacion]);
 
   if (!hidrato && !errorHidratacion) {
     return (

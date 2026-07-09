@@ -7,6 +7,7 @@ import {
   abrirFolioMesa,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
+  folioSigueAbierto,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
 } from './pedidoCarritoStorage';
@@ -51,6 +52,31 @@ export default function MesaCarritoPanel({
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
   }, [folioIdProp]);
+
+  useEffect(() => {
+    const folioActivo = folioIdProp ?? folioIdLocal;
+    if (!folioActivo || folioSigueAbierto(folioActivo)) {
+      return;
+    }
+
+    creacionFolioEnCursoRef.current = false;
+    folioCreacionIniciadaRef.current = false;
+    eliminacionFolioEnCursoRef.current = false;
+
+    carrito.pausarPersistencia();
+    carrito.aplicarSnapshot({
+      form: crearFormularioCapturaMesaVacio(),
+      pagoRecibido: '',
+      nextLineaId: 2,
+    });
+    setFolioIdLocal(null);
+  }, [
+    folioIdProp,
+    folioIdLocal,
+    folioId,
+    carrito.pausarPersistencia,
+    carrito.aplicarSnapshot,
+  ]);
 
   useEffect(() => {
     if (folioId) return;
