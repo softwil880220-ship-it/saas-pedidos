@@ -13,6 +13,7 @@ import {
   cargarCarritoPedido,
   cargarCarritosMesasAbiertos,
   crearFormularioPedidoDefault,
+  debeSuprimirPersistEco,
   limpiarCarritoFolio,
   limpiarCarritoPedido,
   persistirCarritoPedido,
@@ -234,13 +235,19 @@ export default function useCarritoPedido({
   const persistirSnapshotActual = useCallback(() => {
     if (!persistir || persistenciaPausadaRef.current) return;
 
+    const snapshotActual = {
+      form,
+      pagoRecibido,
+      nextLineaId: nextLineaId.current,
+    };
+
+    if (folioId && debeSuprimirPersistEco(snapshotActual)) {
+      return;
+    }
+
     if (folioId) {
       persistirCarritosMesas({
-        [folioId]: {
-          form,
-          pagoRecibido,
-          nextLineaId: nextLineaId.current,
-        },
+        [folioId]: snapshotActual,
       });
       return;
     }

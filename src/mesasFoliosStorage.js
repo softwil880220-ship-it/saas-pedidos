@@ -10,6 +10,7 @@ const folioAbiertoPorNumeroMesa = new Map();
 let negocioIdCache = null;
 let usuarioIdCache = null;
 let rolCache = null;
+let ultimoSnapshotRemotoAplicadoSerializado = null;
 
 const ROLES_CON_ACCESO_CARRITO_MESA = new Set(['dueno', 'administrador']);
 
@@ -102,6 +103,28 @@ function serializarCarritoSnapshot(snapshot) {
   };
 }
 
+export function serializarSnapshotParaComparacion(snapshot) {
+  return JSON.stringify({
+    form: snapshot.form,
+    pagoRecibido: snapshot.pagoRecibido ?? '',
+    nextLineaId: snapshot.nextLineaId ?? 2,
+  });
+}
+
+export function setUltimoSnapshotRemotoAplicado(serializado) {
+  ultimoSnapshotRemotoAplicadoSerializado = serializado ?? null;
+}
+
+export function debeSuprimirPersistEco(snapshot) {
+  if (ultimoSnapshotRemotoAplicadoSerializado == null) {
+    return false;
+  }
+
+  return (
+    serializarSnapshotParaComparacion(snapshot) === ultimoSnapshotRemotoAplicadoSerializado
+  );
+}
+
 function normalizarSnapshotDesdeJson(carritoSnapshot, numeroRondaSiguiente = 1) {
   const entrada = carritoSnapshot && typeof carritoSnapshot === 'object' ? carritoSnapshot : {};
   const formEntrada = entrada.form && typeof entrada.form === 'object' ? entrada.form : {};
@@ -182,6 +205,10 @@ async function flushFolioToSupabase(folioId) {
   if (!entrada || !negocioIdCache) return;
 
   const carritoSnapshot = serializarCarritoSnapshot(entrada);
+
+  if (debeSuprimirPersistEco(carritoSnapshot)) {
+    return;
+  }
 
   await queryConNegocio(
     supabase
@@ -265,6 +292,10 @@ export function folioSigueAbierto(folioId) {
 export function persistirCarritosMesas(carritos) {
   Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
     if (!folioId) return;
+
+    if (debeSuprimirPersistEco(snapshot)) {
+      return;
+    }
 
     const anterior = cacheFolios.get(String(folioId));
     const normalizado = normalizarSnapshotDesdeJson(

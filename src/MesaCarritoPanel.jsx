@@ -11,6 +11,8 @@ import {
   folioSigueAbierto,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
+  serializarSnapshotParaComparacion,
+  setUltimoSnapshotRemotoAplicado,
 } from './pedidoCarritoStorage';
 
 function carritoTieneProductos(snapshot) {
@@ -36,12 +38,15 @@ function construirSnapshotDesdeCache(folioId) {
   };
 }
 
-function serializarSnapshotParaComparacion(snapshot) {
-  return JSON.stringify({
-    form: snapshot.form,
-    pagoRecibido: snapshot.pagoRecibido ?? '',
-    nextLineaId: snapshot.nextLineaId ?? 2,
-  });
+function asignarUltimoSnapshotRemoto(ref, snapshot) {
+  const serializado = serializarSnapshotParaComparacion(snapshot);
+  ref.current = serializado;
+  setUltimoSnapshotRemotoAplicado(serializado);
+}
+
+function limpiarUltimoSnapshotRemoto(ref) {
+  ref.current = null;
+  setUltimoSnapshotRemotoAplicado(null);
 }
 
 export default function MesaCarritoPanel({
@@ -91,12 +96,26 @@ export default function MesaCarritoPanel({
     syncSnapshotExternoEnCursoRef.current = true;
     carritoRef.pausarPersistencia();
     carritoRef.aplicarSnapshot(snapshot);
-    ultimoSnapshotRemotoAplicadoRef.current = serializarSnapshotParaComparacion(snapshot);
+    asignarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef, snapshot);
   };
 
   useLayoutEffect(() => {
     const folioAnterior = folioIdPropAnteriorRef.current;
     folioIdPropAnteriorRef.current = folioIdProp;
+
+    if (folioAnterior && !folioIdProp && !folioSigueAbierto(folioAnterior)) {
+      if (!creacionFolioEnCursoRef.current && !folioCreacionIniciadaRef.current) {
+        limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
+        syncSnapshotExternoEnCursoRef.current = false;
+        carrito.pausarPersistencia();
+        carrito.aplicarSnapshot({
+          form: crearFormularioCapturaMesaVacio(),
+          pagoRecibido: '',
+          nextLineaId: 2,
+        });
+      }
+      return;
+    }
 
     if (!folioIdProp || folioIdProp === folioAnterior) {
       return;
@@ -145,7 +164,7 @@ export default function MesaCarritoPanel({
       return;
     }
 
-    ultimoSnapshotRemotoAplicadoRef.current = null;
+    limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
   }, [carrito.snapshot, carrito.lineasPedidoActivas.length]);
 
   useEffect(() => {

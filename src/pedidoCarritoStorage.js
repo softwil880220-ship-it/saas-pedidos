@@ -315,6 +315,9 @@ export {
   obtenerNumerosMesaOcupados,
   persistirCarritosMesas,
   persistirMesaActiva,
+  serializarSnapshotParaComparacion,
+  setUltimoSnapshotRemotoAplicado,
+  debeSuprimirPersistEco,
   sincronizarFilaDesdeRealtime,
 } from './mesasFoliosStorage';
 
