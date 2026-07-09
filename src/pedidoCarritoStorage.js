@@ -300,6 +300,7 @@ export {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
   cargarMesaActiva,
+  configurarContextoMesas,
   crearFormularioCapturaMesaVacio,
   folioSigueAbierto,
   hidratarFoliosMesas,

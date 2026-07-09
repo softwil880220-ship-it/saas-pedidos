@@ -4753,6 +4753,7 @@ function Dashboard() {
                   variantesCtx={variantesCtx}
                   negocioId={negocioId}
                   usuarioId={usuario?.id}
+                  rol={rol}
                 />
               ) : (
                 <>

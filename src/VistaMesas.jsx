@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   cargarMesaActiva,
+  configurarContextoMesas,
   folioSigueAbierto,
   hidratarFoliosMesas,
   limpiarMesaActiva,
@@ -22,6 +23,7 @@ export default function VistaMesas({
   variantesCtx,
   negocioId,
   usuarioId,
+  rol,
 }) {
   const [hidrato, setHidrato] = useState(false);
   const [errorHidratacion, setErrorHidratacion] = useState(null);
@@ -31,6 +33,10 @@ export default function VistaMesas({
   const sincronizarOcupacion = useCallback(() => {
     setMesasOcupadas(obtenerNumerosMesaOcupados());
   }, []);
+
+  useEffect(() => {
+    configurarContextoMesas({ usuarioId, rol });
+  }, [usuarioId, rol]);
 
   useEffect(() => {
     let activo = true;

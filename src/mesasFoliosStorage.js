@@ -8,6 +8,28 @@ const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
 const cacheFolios = new Map();
 const folioAbiertoPorNumeroMesa = new Map();
 let negocioIdCache = null;
+let usuarioIdCache = null;
+let rolCache = null;
+
+const ROLES_CON_ACCESO_CARRITO_MESA = new Set(['dueno', 'administrador']);
+
+export function configurarContextoMesas({ usuarioId, rol } = {}) {
+  usuarioIdCache = usuarioId ?? null;
+  rolCache = rol ?? null;
+}
+
+function puedeVerCarritoMesa(fila) {
+  if (!fila) return false;
+
+  const creadoPor = fila.creado_por != null ? String(fila.creado_por) : null;
+  const usuarioActual = usuarioIdCache != null ? String(usuarioIdCache) : null;
+
+  if (creadoPor && usuarioActual && creadoPor === usuarioActual) {
+    return true;
+  }
+
+  return rolCache != null && ROLES_CON_ACCESO_CARRITO_MESA.has(rolCache);
+}
 
 function crearVariantesLineaVacias() {
   return {};
@@ -136,8 +158,9 @@ function aplicarFilaACache(fila) {
     return;
   }
 
+  const carritoSnapshotEntrada = puedeVerCarritoMesa(fila) ? fila.carrito_snapshot : null;
   const snapshot = normalizarSnapshotDesdeJson(
-    fila.carrito_snapshot,
+    carritoSnapshotEntrada,
     fila.numero_ronda_siguiente
   );
 
