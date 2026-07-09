@@ -304,6 +304,25 @@ export function limpiarCarritoFolio() {
   // El cierre de folio (estado = cerrada) se implementará en el paso de cobro.
 }
 
+export async function eliminarFolioMesa(folioId) {
+  if (!folioId || !negocioIdCache) {
+    return false;
+  }
+
+  const { error } = await queryConNegocio(
+    supabase.from('mesas_folios').delete().eq('id', folioId),
+    negocioIdCache
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  removerFolioDeCache(folioId);
+  reconstruirIndiceMesasAbiertas();
+  return true;
+}
+
 export async function hidratarFoliosMesas(negocioId) {
   negocioIdCache = negocioId ?? null;
   cacheFolios.clear();

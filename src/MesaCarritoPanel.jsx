@@ -6,6 +6,7 @@ import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import {
   abrirFolioMesa,
   crearFormularioCapturaMesaVacio,
+  eliminarFolioMesa,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
 } from './pedidoCarritoStorage';
@@ -27,12 +28,14 @@ export default function MesaCarritoPanel({
   usuarioId,
   onCerrar,
   onFolioCreado,
+  onFolioEliminado,
   onRondaEnviada,
 }) {
   const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
   const folioId = folioIdProp ?? folioIdLocal;
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
+  const eliminacionFolioEnCursoRef = useRef(false);
 
   const carrito = useCarritoPedido({
     folioId,
@@ -120,6 +123,57 @@ export default function MesaCarritoPanel({
     numeroMesa,
     usuarioId,
     onFolioCreado,
+  ]);
+
+  useEffect(() => {
+    if (!folioId || carrito.lineasPedidoActivas.length > 0) {
+      return undefined;
+    }
+
+    const { rondasEnviadas } = obtenerMetadatosMesa(folioId);
+    if (rondasEnviadas > 0) {
+      return undefined;
+    }
+
+    if (eliminacionFolioEnCursoRef.current || creacionFolioEnCursoRef.current) {
+      return undefined;
+    }
+
+    eliminacionFolioEnCursoRef.current = true;
+    const folioAEliminar = folioId;
+    let cancelado = false;
+
+    const eliminarFolio = async () => {
+      try {
+        carrito.pausarPersistencia();
+        await eliminarFolioMesa(folioAEliminar);
+        if (cancelado) return;
+
+        setFolioIdLocal(null);
+        folioCreacionIniciadaRef.current = false;
+        onFolioEliminado?.();
+      } catch {
+        if (!cancelado) {
+          carrito.reanudarPersistencia();
+        }
+      } finally {
+        if (!cancelado) {
+          eliminacionFolioEnCursoRef.current = false;
+        }
+      }
+    };
+
+    void eliminarFolio();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    folioId,
+    carrito.lineasPedidoActivas.length,
+    carrito.pausarPersistencia,
+    carrito.reanudarPersistencia,
+    onFolioEliminado,
   ]);
 
   const handleEnviarCocina = async () => {

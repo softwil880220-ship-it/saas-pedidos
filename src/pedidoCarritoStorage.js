@@ -302,6 +302,7 @@ export {
   cargarMesaActiva,
   configurarContextoMesas,
   crearFormularioCapturaMesaVacio,
+  eliminarFolioMesa,
   folioSigueAbierto,
   hidratarFoliosMesas,
   limpiarCarritoFolio,

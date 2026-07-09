@@ -140,6 +140,12 @@ export default function VistaMesas({
     [sincronizarOcupacion]
   );
 
+  const handleFolioEliminado = useCallback(() => {
+    setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
+    limpiarMesaActiva();
+    sincronizarOcupacion();
+  }, [sincronizarOcupacion]);
+
   if (!hidrato && !errorHidratacion) {
     return (
       <section className="vista-mesas">
@@ -198,6 +204,7 @@ export default function VistaMesas({
           usuarioId={usuarioId}
           onCerrar={cerrarPanel}
           onFolioCreado={handleFolioCreado}
+          onFolioEliminado={handleFolioEliminado}
           onRondaEnviada={sincronizarOcupacion}
         />
       ) : null}
