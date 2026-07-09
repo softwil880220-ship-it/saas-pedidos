@@ -104,9 +104,10 @@ export default function MesaCarritoPanel({
     folioIdPropAnteriorRef.current = folioIdProp;
 
     if (folioAnterior && !folioIdProp && !folioSigueAbierto(folioAnterior)) {
-      if (!creacionFolioEnCursoRef.current && !folioCreacionIniciadaRef.current) {
+      if (!creacionFolioEnCursoRef.current) {
         limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
         syncSnapshotExternoEnCursoRef.current = false;
+        folioCreacionIniciadaRef.current = false;
         carrito.pausarPersistencia();
         carrito.aplicarSnapshot({
           form: crearFormularioCapturaMesaVacio(),
@@ -115,6 +116,15 @@ export default function MesaCarritoPanel({
         });
       }
       return;
+    }
+
+    const esAdjuncionFolioNuevo =
+      folioIdProp &&
+      folioIdProp !== folioAnterior &&
+      (!folioAnterior || String(folioAnterior) !== String(folioIdProp));
+
+    if (esAdjuncionFolioNuevo) {
+      limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
     }
 
     if (!folioIdProp || folioIdProp === folioAnterior) {
