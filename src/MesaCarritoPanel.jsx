@@ -71,6 +71,7 @@ export default function MesaCarritoPanel({
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
   const folioIdPropAnteriorRef = useRef(folioIdProp);
+  const folioIdPropAdjuncionEnCursoRef = useRef(false);
   const folioCacheRevisionAnteriorRef = useRef(0);
   const syncSnapshotExternoEnCursoRef = useRef(false);
   const ultimoSnapshotRemotoAplicadoRef = useRef(null);
@@ -104,6 +105,7 @@ export default function MesaCarritoPanel({
     folioIdPropAnteriorRef.current = folioIdProp;
 
     if (folioAnterior && !folioIdProp && !folioSigueAbierto(folioAnterior)) {
+      folioIdPropAdjuncionEnCursoRef.current = false;
       if (!creacionFolioEnCursoRef.current) {
         limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
         syncSnapshotExternoEnCursoRef.current = false;
@@ -114,6 +116,7 @@ export default function MesaCarritoPanel({
           pagoRecibido: '',
           nextLineaId: 2,
         });
+        carrito.reanudarPersistencia();
       }
       return;
     }
@@ -122,6 +125,8 @@ export default function MesaCarritoPanel({
       folioIdProp &&
       folioIdProp !== folioAnterior &&
       (!folioAnterior || String(folioAnterior) !== String(folioIdProp));
+
+    folioIdPropAdjuncionEnCursoRef.current = esAdjuncionFolioNuevo;
 
     if (esAdjuncionFolioNuevo) {
       limpiarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef);
@@ -136,10 +141,19 @@ export default function MesaCarritoPanel({
     }
 
     aplicarSnapshotExternoDesdeCache(folioIdProp, carrito);
-  }, [folioIdProp, carrito.pausarPersistencia, carrito.aplicarSnapshot]);
+  }, [
+    folioIdProp,
+    carrito.pausarPersistencia,
+    carrito.aplicarSnapshot,
+    carrito.reanudarPersistencia,
+  ]);
 
   useLayoutEffect(() => {
     if (!folioIdProp || !folioCacheActualizado) {
+      return;
+    }
+
+    if (!folioSigueAbierto(folioIdProp)) {
       return;
     }
 
@@ -157,7 +171,11 @@ export default function MesaCarritoPanel({
 
     folioCacheRevisionAnteriorRef.current = folioCacheActualizado.revision;
 
-    if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
+    if (creacionFolioEnCursoRef.current) {
+      return;
+    }
+
+    if (folioCreacionIniciadaRef.current && folioIdPropAdjuncionEnCursoRef.current) {
       return;
     }
 
@@ -168,6 +186,10 @@ export default function MesaCarritoPanel({
     carrito.pausarPersistencia,
     carrito.aplicarSnapshot,
   ]);
+
+  useEffect(() => {
+    folioIdPropAdjuncionEnCursoRef.current = false;
+  }, [folioIdProp]);
 
   useEffect(() => {
     if (syncSnapshotExternoEnCursoRef.current) {
