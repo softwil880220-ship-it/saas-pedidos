@@ -54,6 +54,14 @@ export default function MesaCarritoPanel({
   }, [folioIdProp]);
 
   useEffect(() => {
+    if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
+      return;
+    }
+
+    if (!folioIdProp && carrito.lineasPedidoActivas.length > 0) {
+      return;
+    }
+
     const folioActivo = folioIdProp ?? folioIdLocal;
     if (!folioActivo || folioSigueAbierto(folioActivo)) {
       return;
@@ -74,6 +82,7 @@ export default function MesaCarritoPanel({
     folioIdProp,
     folioIdLocal,
     folioId,
+    carrito.lineasPedidoActivas.length,
     carrito.pausarPersistencia,
     carrito.aplicarSnapshot,
   ]);
