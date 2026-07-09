@@ -5,6 +5,7 @@ import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import {
   abrirFolioMesa,
+  cargarCarritosMesasAbiertos,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
   folioSigueAbierto,
@@ -37,6 +38,7 @@ export default function MesaCarritoPanel({
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
+  const folioIdPropAnteriorRef = useRef(folioIdProp);
 
   const carrito = useCarritoPedido({
     folioId,
@@ -52,6 +54,36 @@ export default function MesaCarritoPanel({
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
   }, [folioIdProp]);
+
+  useEffect(() => {
+    const folioAnterior = folioIdPropAnteriorRef.current;
+    folioIdPropAnteriorRef.current = folioIdProp;
+
+    if (!folioIdProp || folioIdProp === folioAnterior) {
+      return;
+    }
+
+    if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {
+      return;
+    }
+
+    const restaurado = cargarCarritosMesasAbiertos()[folioIdProp];
+    const snapshot = restaurado?.form
+      ? {
+          form: restaurado.form,
+          pagoRecibido: restaurado.pagoRecibido ?? '',
+          nextLineaId: restaurado.nextLineaId ?? 2,
+        }
+      : {
+          form: crearFormularioCapturaMesaVacio(),
+          pagoRecibido: '',
+          nextLineaId: 2,
+        };
+
+    carrito.pausarPersistencia();
+    carrito.aplicarSnapshot(snapshot);
+    carrito.reanudarPersistencia();
+  }, [folioIdProp, carrito.pausarPersistencia, carrito.aplicarSnapshot, carrito.reanudarPersistencia]);
 
   useEffect(() => {
     if (creacionFolioEnCursoRef.current || folioCreacionIniciadaRef.current) {

@@ -41,13 +41,28 @@ export default function VistaMesas({
     setMesasOcupadas(obtenerNumerosMesaOcupados());
   }, []);
 
+  const handleFolioCreadoRemoto = useCallback((folioId) => {
+    setPanelMesa((prev) => (prev ? { ...prev, folioId } : prev));
+    persistirMesaActiva(folioId);
+  }, []);
+
   const sincronizarOcupacion = useCallback(() => {
     setMesasOcupadas(obtenerNumerosMesaOcupados());
 
-    if (panelMesaRef.current?.folioId && !folioSigueAbierto(panelMesaRef.current.folioId)) {
+    const panel = panelMesaRef.current;
+
+    if (panel?.folioId && !folioSigueAbierto(panel.folioId)) {
       handleFolioEliminado();
+      return;
     }
-  }, [handleFolioEliminado]);
+
+    if (panel && !panel.folioId) {
+      const folioRemoto = obtenerFolioAbiertoPorMesa(panel.numero);
+      if (folioRemoto) {
+        handleFolioCreadoRemoto(folioRemoto);
+      }
+    }
+  }, [handleFolioEliminado, handleFolioCreadoRemoto]);
 
   useEffect(() => {
     configurarContextoMesas({ usuarioId, rol });
