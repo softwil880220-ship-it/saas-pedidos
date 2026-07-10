@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
@@ -8,6 +8,7 @@ import {
   cargarCarritosMesasAbiertos,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
+  folioCarritoEnmascaradoParaUsuarioActual,
   folioSigueAbierto,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
@@ -67,6 +68,10 @@ export default function MesaCarritoPanel({
 }) {
   const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
   const folioId = folioIdProp ?? folioIdLocal;
+  const folioAjenoEnmascarado = useMemo(
+    () => Boolean(folioId && folioCarritoEnmascaradoParaUsuarioActual(folioId)),
+    [folioId, folioCacheActualizado?.revision]
+  );
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
@@ -79,7 +84,7 @@ export default function MesaCarritoPanel({
   const carrito = useCarritoPedido({
     folioId,
     modoCaptura: 'mesa',
-    persistir: Boolean(folioId),
+    persistir: Boolean(folioId) && !folioAjenoEnmascarado,
     productos,
     variantesCtx,
   });
@@ -311,6 +316,10 @@ export default function MesaCarritoPanel({
       return undefined;
     }
 
+    if (folioCarritoEnmascaradoParaUsuarioActual(folioId)) {
+      return undefined;
+    }
+
     if (syncSnapshotExternoEnCursoRef.current) {
       return undefined;
     }
@@ -456,7 +465,11 @@ export default function MesaCarritoPanel({
         </p>
       ) : null}
 
-      {productos.length > 0 ? (
+      {folioAjenoEnmascarado ? (
+        <p className="formulario-aviso" role="status">
+          Mesa ocupada por otro usuario. No puedes ver ni modificar este pedido.
+        </p>
+      ) : productos.length > 0 ? (
         <>
           <SelectorProductosPedido
             productos={productosOrdenados}

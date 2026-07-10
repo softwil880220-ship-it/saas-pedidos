@@ -303,6 +303,7 @@ export {
   configurarContextoMesas,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
+  folioCarritoEnmascaradoParaUsuarioActual,
   folioSigueAbierto,
   hidratarFoliosMesas,
   limpiarCarritoFolio,

@@ -125,6 +125,18 @@ export function debeSuprimirPersistEco(snapshot) {
   );
 }
 
+function supabaseAfectoAlMenosUnaFila(data) {
+  return Array.isArray(data) && data.length > 0;
+}
+
+function crearErrorFolioSinFilasAfectadas(operacion) {
+  const error = new Error(
+    `La operación ${operacion} en mesas_folios no afectó ninguna fila.`
+  );
+  error.code = 'FOLIO_SIN_FILAS_AFECTADAS';
+  return error;
+}
+
 function normalizarSnapshotDesdeJson(carritoSnapshot, numeroRondaSiguiente = 1) {
   const entrada = carritoSnapshot && typeof carritoSnapshot === 'object' ? carritoSnapshot : {};
   const formEntrada = entrada.form && typeof entrada.form === 'object' ? entrada.form : {};
@@ -210,16 +222,21 @@ async function flushFolioToSupabase(folioId) {
     return;
   }
 
-  await queryConNegocio(
+  const { data, error } = await queryConNegocio(
     supabase
       .from('mesas_folios')
       .update({
         carrito_snapshot: carritoSnapshot,
         numero_ronda_siguiente: entrada.numeroRondaSiguiente ?? 1,
       })
-      .eq('id', folioId),
+      .eq('id', folioId)
+      .select('id'),
     negocioIdCache
   );
+
+  if (error || !supabaseAfectoAlMenosUnaFila(data)) {
+    return;
+  }
 }
 
 export function crearFormularioCapturaMesaVacio() {
@@ -289,6 +306,17 @@ export function folioSigueAbierto(folioId) {
   return entrada?.estado === 'abierta';
 }
 
+export function folioCarritoEnmascaradoParaUsuarioActual(folioId) {
+  if (!folioId) return false;
+
+  const entrada = cacheFolios.get(String(folioId));
+  if (!entrada || entrada.estado !== 'abierta') {
+    return false;
+  }
+
+  return !puedeVerCarritoMesa({ creado_por: entrada.creadoPor });
+}
+
 export function persistirCarritosMesas(carritos) {
   Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
     if (!folioId) return;
@@ -340,13 +368,17 @@ export async function eliminarFolioMesa(folioId) {
     return false;
   }
 
-  const { error } = await queryConNegocio(
-    supabase.from('mesas_folios').delete().eq('id', folioId),
+  const { data, error } = await queryConNegocio(
+    supabase.from('mesas_folios').delete().eq('id', folioId).select('id'),
     negocioIdCache
   );
 
   if (error) {
     throw error;
+  }
+
+  if (!supabaseAfectoAlMenosUnaFila(data)) {
+    throw crearErrorFolioSinFilasAfectadas('DELETE');
   }
 
   removerFolioDeCache(folioId);
