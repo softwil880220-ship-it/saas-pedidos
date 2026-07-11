@@ -250,6 +250,7 @@ export function obtenerMetadatosMesa(folioId) {
   return {
     numeroRondaSiguiente,
     rondasEnviadas: Math.max(0, numeroRondaSiguiente - 1),
+    abiertaEn: entrada?.abiertaEn ?? null,
   };
 }
 

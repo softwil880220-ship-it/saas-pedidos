@@ -3,6 +3,7 @@ import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
+import MesaRondasEnviadas from './MesaRondasEnviadas.jsx';
 import {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
@@ -72,6 +73,13 @@ export default function MesaCarritoPanel({
     () => Boolean(folioId && folioCarritoEnmascaradoParaUsuarioActual(folioId)),
     [folioId, folioCacheActualizado?.revision]
   );
+  const metadatosFolio = useMemo(() => {
+    if (!folioId) {
+      return { abiertaEn: null };
+    }
+
+    return obtenerMetadatosMesa(folioId);
+  }, [folioId, folioCacheActualizado?.revision]);
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
@@ -471,6 +479,12 @@ export default function MesaCarritoPanel({
         </p>
       ) : productos.length > 0 ? (
         <>
+          <MesaRondasEnviadas
+            negocioId={negocioId}
+            numeroMesa={numeroMesa}
+            abiertaEn={metadatosFolio.abiertaEn}
+            visible={Boolean(folioId) && !folioAjenoEnmascarado}
+          />
           <SelectorProductosPedido
             productos={productosOrdenados}
             frecuenciaCategorias={frecuenciaCategorias}

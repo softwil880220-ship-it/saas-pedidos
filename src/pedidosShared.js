@@ -355,6 +355,31 @@ export function formatearFechaHoraCocina(createdAt) {
   });
 }
 
+export function clienteEtiquetaMesa(numeroMesa) {
+  return `Mesa ${numeroMesa}`;
+}
+
+export function extraerNumeroRondaMesa(referencia) {
+  const coincidencia = String(referencia ?? '').match(/Ronda\s+(\d+)/i);
+  return coincidencia ? Number(coincidencia[1]) : null;
+}
+
+export function pedidoEsRondaMesaEnviada(pedido, { numeroMesa, abiertaEn }) {
+  if (!pedido || pedido.tipo !== 'mesa' || pedido.deleted_at != null) {
+    return false;
+  }
+
+  if (pedido.cliente !== clienteEtiquetaMesa(numeroMesa)) {
+    return false;
+  }
+
+  if (!abiertaEn) {
+    return false;
+  }
+
+  return new Date(pedido.created_at || 0) >= new Date(abiertaEn);
+}
+
 export function resolverNombreCapturaPedido(pedido, nombresPorId = {}) {
   const creadorId = pedido?.created_by;
   if (!creadorId) return null;
