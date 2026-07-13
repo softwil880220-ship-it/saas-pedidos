@@ -4,11 +4,13 @@ import {
   configurarContextoMesas,
   folioSigueAbierto,
   hidratarFoliosMesas,
+  limpiarEstadoCobroMesa,
   limpiarMesaActiva,
   obtenerFolioAbiertoPorMesa,
   obtenerNumeroMesaDeFolio,
   obtenerNumerosMesaOcupados,
   persistirMesaActiva,
+  verificarFolioAbiertoEnServidor,
 } from './pedidoCarritoStorage';
 import { useMesasFoliosRealtime } from './useMesasFoliosRealtime';
 import MesaCarritoPanel from './MesaCarritoPanel';
@@ -43,12 +45,14 @@ export default function VistaMesas({
   const handleFolioEliminado = useCallback(() => {
     setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
     limpiarMesaActiva();
+    limpiarEstadoCobroMesa();
     setMesasOcupadas(obtenerNumerosMesaOcupados());
   }, []);
 
   const handleFolioCerrado = useCallback(() => {
     setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
     limpiarMesaActiva();
+    limpiarEstadoCobroMesa();
     setMesasOcupadas(obtenerNumerosMesaOcupados());
   }, []);
 
@@ -57,27 +61,42 @@ export default function VistaMesas({
     persistirMesaActiva(folioId);
   }, []);
 
-  const sincronizarOcupacion = useCallback(() => {
+  const sincronizarOcupacion = useCallback(async () => {
     setMesasOcupadas(obtenerNumerosMesaOcupados());
 
     const panel = panelMesaRef.current;
 
     if (panel?.folioId && !folioSigueAbierto(panel.folioId)) {
-      handleFolioEliminado();
-      return;
+      const sigueAbiertoEnServidor = await verificarFolioAbiertoEnServidor(
+        panel.folioId,
+        negocioId
+      );
+
+      if (sigueAbiertoEnServidor === false) {
+        handleFolioEliminado();
+        return;
+      }
+
+      if (sigueAbiertoEnServidor === null) {
+        return;
+      }
+
+      setMesasOcupadas(obtenerNumerosMesaOcupados());
     }
 
-    if (panel && !panel.folioId) {
-      const folioRemoto = obtenerFolioAbiertoPorMesa(panel.numero);
+    const panelActualizado = panelMesaRef.current;
+
+    if (panelActualizado && !panelActualizado.folioId) {
+      const folioRemoto = obtenerFolioAbiertoPorMesa(panelActualizado.numero);
       if (folioRemoto) {
         handleFolioCreadoRemoto(folioRemoto);
       }
     }
-  }, [handleFolioEliminado, handleFolioCreadoRemoto]);
+  }, [handleFolioEliminado, handleFolioCreadoRemoto, negocioId]);
 
   const manejarCambioCacheMesas = useCallback(
     (detalle) => {
-      sincronizarOcupacion();
+      void sincronizarOcupacion();
 
       if (detalle?.folioId && detalle.eventType === 'UPDATE') {
         setFolioCacheActualizado((prev) => ({
@@ -105,7 +124,7 @@ export default function VistaMesas({
         if (!activo) return;
 
         setHidrato(true);
-        sincronizarOcupacion();
+        await sincronizarOcupacion();
 
         const guardada = cargarMesaActiva();
         if (guardada && folioSigueAbierto(guardada)) {
@@ -150,7 +169,7 @@ export default function VistaMesas({
           limpiarMesaActiva();
         }
       }
-      sincronizarOcupacion();
+      void sincronizarOcupacion();
     };
 
     window.addEventListener('pageshow', restaurarMesaActivaAlMostrarPagina);
@@ -184,14 +203,15 @@ export default function VistaMesas({
   const cerrarPanel = () => {
     setPanelMesa(null);
     limpiarMesaActiva();
-    sincronizarOcupacion();
+    limpiarEstadoCobroMesa();
+    void sincronizarOcupacion();
   };
 
   const handleFolioCreado = useCallback(
     (folioId) => {
       setPanelMesa((prev) => (prev ? { ...prev, folioId } : prev));
       persistirMesaActiva(folioId);
-      sincronizarOcupacion();
+      void sincronizarOcupacion();
     },
     [sincronizarOcupacion]
   );

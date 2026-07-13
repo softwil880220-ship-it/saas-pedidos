@@ -15,6 +15,7 @@ import {
   folioCarritoEnmascaradoParaUsuarioActual,
   folioSigueAbierto,
   limpiarEstadoCobroMesa,
+  MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
   persistirEstadoCobroMesa,
@@ -109,10 +110,20 @@ export default function MesaCarritoPanel({
   const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
   const [estadoCobroPersistido, setEstadoCobroPersistido] = useState(null);
+  const [revisionModalCobro, setRevisionModalCobro] = useState(0);
   const [errorCobroMesa, setErrorCobroMesa] = useState(null);
+  const modalCobroAbiertoRef = useRef(modalCobroAbierto);
+
+  useEffect(() => {
+    modalCobroAbiertoRef.current = modalCobroAbierto;
+  }, [modalCobroAbierto]);
 
   useEffect(() => {
     if (!folioId) {
+      if (modalCobroAbiertoRef.current) {
+        setErrorCobroMesa(MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO);
+      }
+
       setEstadoCobroPersistido(null);
       setModalCobroAbierto(false);
       return;
@@ -142,6 +153,13 @@ export default function MesaCarritoPanel({
     },
     [folioId, modalCobroAbierto]
   );
+
+  const handleCancelarCobroMesa = useCallback(() => {
+    limpiarEstadoCobroMesa();
+    setEstadoCobroPersistido(null);
+    setModalCobroAbierto(false);
+    setRevisionModalCobro((revision) => revision + 1);
+  }, []);
 
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
@@ -615,7 +633,7 @@ export default function MesaCarritoPanel({
             </div>
           </PedidoLineasCarrito>
           <MesaCobroModal
-            key={`mesa-cobro-${folioId ?? 'sin-folio'}`}
+            key={`mesa-cobro-${folioId ?? 'sin-folio'}-${revisionModalCobro}`}
             abierto={modalCobroAbierto}
             folioId={folioId}
             numeroMesa={numeroMesa}
@@ -625,7 +643,7 @@ export default function MesaCarritoPanel({
             rol={rol}
             estadoPersistido={estadoCobroPersistido}
             onPersistirEstado={handlePersistirEstadoCobro}
-            onCancelar={() => setModalCobroAbierto(false)}
+            onCancelar={handleCancelarCobroMesa}
             onConfirmar={handleConfirmarCobro}
           />
         </>

@@ -4,6 +4,9 @@ import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 export const STORAGE_KEY_MESA_ACTIVA = 'pos_mesa_activa';
 export const STORAGE_KEY_MESA_COBRO_MODAL = 'pos_mesa_cobro_modal';
+export const ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS = 'FOLIO_SIN_FILAS_AFECTADAS';
+export const MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO =
+  'Esta mesa ya fue cobrada por otro usuario.';
 
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
 const cacheFolios = new Map();
@@ -131,10 +134,13 @@ function supabaseAfectoAlMenosUnaFila(data) {
 }
 
 function crearErrorFolioSinFilasAfectadas(operacion) {
-  const error = new Error(
-    `La operación ${operacion} en mesas_folios no afectó ninguna fila.`
-  );
-  error.code = 'FOLIO_SIN_FILAS_AFECTADAS';
+  const mensaje =
+    operacion === 'UPDATE cierre'
+      ? MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO
+      : `La operación ${operacion} en mesas_folios no afectó ninguna fila.`;
+
+  const error = new Error(mensaje);
+  error.code = ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS;
   return error;
 }
 
@@ -306,6 +312,42 @@ export function obtenerNumerosMesaOcupados() {
 export function folioSigueAbierto(folioId) {
   const entrada = cacheFolios.get(String(folioId));
   return entrada?.estado === 'abierta';
+}
+
+export async function verificarFolioAbiertoEnServidor(folioId, negocioId = negocioIdCache) {
+  if (!folioId) {
+    return null;
+  }
+
+  const negocio = negocioId ?? negocioIdCache;
+  if (!negocio) {
+    return null;
+  }
+
+  const { data, error } = await queryConNegocio(
+    supabase
+      .from('mesas_folios_vista')
+      .select(
+        'id, negocio_id, numero_mesa, estado, creado_por, abierta_en, numero_ronda_siguiente, carrito_snapshot'
+      )
+      .eq('id', folioId)
+      .maybeSingle(),
+    negocio
+  );
+
+  if (error) {
+    return null;
+  }
+
+  if (!data) {
+    removerFolioDeCache(folioId);
+    reconstruirIndiceMesasAbiertas();
+    return false;
+  }
+
+  aplicarFilaACache(data);
+  reconstruirIndiceMesasAbiertas();
+  return data.estado === 'abierta';
 }
 
 export function folioCarritoEnmascaradoParaUsuarioActual(folioId) {
@@ -655,7 +697,6 @@ export function limpiarMesaActiva() {
 
   try {
     window.localStorage.removeItem(STORAGE_KEY_MESA_ACTIVA);
-    window.localStorage.removeItem(STORAGE_KEY_MESA_COBRO_MODAL);
   } catch {
     // Ignorar errores de almacenamiento local.
   }

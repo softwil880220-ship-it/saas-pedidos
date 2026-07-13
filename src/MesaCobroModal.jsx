@@ -7,6 +7,10 @@ import {
   puedeAplicarDescuentoMesaCobro,
 } from './mesaCobroCalculos';
 import { formatearMoneda } from './pedidosShared';
+import {
+  ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS,
+  MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO,
+} from './pedidoCarritoStorage';
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
 const PORCENTAJES_PROPINA_RAPIDOS = [5, 10, 15, 20];
@@ -119,6 +123,10 @@ export default function MesaCobroModal({
 
   useEffect(() => {
     if (!folioId || !onPersistirEstado) {
+      return;
+    }
+
+    if (!abierto && !hidratacionAplicadaRef.current) {
       return;
     }
 
@@ -263,8 +271,12 @@ export default function MesaCobroModal({
         formaPago,
         cerradoPor: usuarioId,
       });
-    } catch {
-      setErrorConfirmacion('No se pudo confirmar el cobro. Intenta de nuevo.');
+    } catch (error) {
+      if (error?.code === ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS) {
+        setErrorConfirmacion(MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO);
+      } else {
+        setErrorConfirmacion('No se pudo confirmar el cobro. Intenta de nuevo.');
+      }
       setConfirmando(false);
     }
   };
