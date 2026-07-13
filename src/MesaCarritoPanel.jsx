@@ -4,9 +4,11 @@ import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import MesaRondasEnviadas from './MesaRondasEnviadas.jsx';
+import MesaCobroModal from './MesaCobroModal.jsx';
 import {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
+  cerrarFolioMesa,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
   folioCarritoEnmascaradoParaUsuarioActual,
@@ -62,9 +64,11 @@ export default function MesaCarritoPanel({
   variantesCtx,
   negocioId,
   usuarioId,
+  rol,
   onCerrar,
   onFolioCreado,
   onFolioEliminado,
+  onFolioCerrado,
   onRondaEnviada,
 }) {
   const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
@@ -79,7 +83,7 @@ export default function MesaCarritoPanel({
     }
 
     return obtenerMetadatosMesa(folioId);
-  }, [folioId, folioCacheActualizado?.revision]);
+  }, [folioId, folioCacheActualizado?.revision, revisionMetadatosFolio]);
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
@@ -99,6 +103,9 @@ export default function MesaCarritoPanel({
   const [enviandoCocina, setEnviandoCocina] = useState(false);
   const [errorEnvioCocina, setErrorEnvioCocina] = useState(null);
   const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
+  const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
+  const [errorCobroMesa, setErrorCobroMesa] = useState(null);
+  const [revisionMetadatosFolio, setRevisionMetadatosFolio] = useState(0);
 
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
@@ -448,6 +455,7 @@ export default function MesaCarritoPanel({
     });
 
     carrito.reanudarPersistencia();
+    setRevisionMetadatosFolio((revision) => revision + 1);
     onRondaEnviada?.();
     setEnviandoCocina(false);
   };
@@ -457,6 +465,37 @@ export default function MesaCarritoPanel({
     carrito.lineasPedidoActivas.length > 0 &&
     carrito.totalPedido > 0 &&
     !enviandoCocina;
+
+  const rondasEnviadas = metadatosFolio.rondasEnviadas ?? 0;
+  const carritoActivoVacio = !carritoTieneProductos(carrito.snapshot);
+  const puedeCobrarMesa =
+    Boolean(folioId) &&
+    !folioAjenoEnmascarado &&
+    rondasEnviadas > 0 &&
+    carritoActivoVacio &&
+    !enviandoCocina &&
+    !modalCobroAbierto;
+
+  const handleConfirmarCobro = async (datosCobro) => {
+    if (!folioId) {
+      throw new Error('No hay folio activo para cobrar.');
+    }
+
+    await cerrarFolioMesa(folioId, datosCobro);
+
+    carrito.pausarPersistencia();
+    carrito.aplicarSnapshot({
+      form: crearFormularioCapturaMesaVacio(),
+      pagoRecibido: '',
+      nextLineaId: 2,
+    });
+    carrito.reanudarPersistencia();
+
+    setFolioIdLocal(null);
+    setModalCobroAbierto(false);
+    setErrorCobroMesa(null);
+    onFolioCerrado?.();
+  };
 
   return (
     <section className="mesa-carrito-panel">
@@ -503,21 +542,49 @@ export default function MesaCarritoPanel({
             onCambiarVariante={carrito.cambiarVarianteLinea}
           >
             <div className="mesa-carrito-acciones">
-              <button
-                type="button"
-                className="guardar-btn mesa-enviar-cocina-btn"
-                disabled={!puedeEnviarCocina}
-                onClick={() => void handleEnviarCocina()}
-              >
-                {enviandoCocina ? 'Enviando...' : 'Enviar a cocina'}
-              </button>
+              <div className="mesa-carrito-acciones-botones">
+                <button
+                  type="button"
+                  className="guardar-btn mesa-enviar-cocina-btn"
+                  disabled={!puedeEnviarCocina}
+                  onClick={() => void handleEnviarCocina()}
+                >
+                  {enviandoCocina ? 'Enviando...' : 'Enviar a cocina'}
+                </button>
+                <button
+                  type="button"
+                  className="guardar-btn mesa-cobrar-mesa-btn"
+                  disabled={!puedeCobrarMesa}
+                  onClick={() => {
+                    setErrorCobroMesa(null);
+                    setModalCobroAbierto(true);
+                  }}
+                >
+                  Cobrar mesa
+                </button>
+              </div>
               {errorEnvioCocina ? (
                 <p className="formulario-error-guardar" role="alert">
                   {errorEnvioCocina}
                 </p>
               ) : null}
+              {errorCobroMesa ? (
+                <p className="formulario-error-guardar" role="alert">
+                  {errorCobroMesa}
+                </p>
+              ) : null}
             </div>
           </PedidoLineasCarrito>
+          <MesaCobroModal
+            abierto={modalCobroAbierto}
+            numeroMesa={numeroMesa}
+            negocioId={negocioId}
+            abiertaEn={metadatosFolio.abiertaEn}
+            usuarioId={usuarioId}
+            rol={rol}
+            onCancelar={() => setModalCobroAbierto(false)}
+            onConfirmar={handleConfirmarCobro}
+          />
         </>
       ) : (
         <p className="formulario-aviso">

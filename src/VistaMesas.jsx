@@ -46,6 +46,12 @@ export default function VistaMesas({
     setMesasOcupadas(obtenerNumerosMesaOcupados());
   }, []);
 
+  const handleFolioCerrado = useCallback(() => {
+    setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
+    limpiarMesaActiva();
+    setMesasOcupadas(obtenerNumerosMesaOcupados());
+  }, []);
+
   const handleFolioCreadoRemoto = useCallback((folioId) => {
     setPanelMesa((prev) => (prev ? { ...prev, folioId } : prev));
     persistirMesaActiva(folioId);
@@ -247,9 +253,11 @@ export default function VistaMesas({
           variantesCtx={variantesCtx}
           negocioId={negocioId}
           usuarioId={usuarioId}
+          rol={rol}
           onCerrar={cerrarPanel}
           onFolioCreado={handleFolioCreado}
           onFolioEliminado={handleFolioEliminado}
+          onFolioCerrado={handleFolioCerrado}
           onRondaEnviada={sincronizarOcupacion}
         />
       ) : null}

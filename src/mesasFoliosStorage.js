@@ -361,7 +361,53 @@ export function persistirCarritosMesas(carritos) {
 }
 
 export function limpiarCarritoFolio() {
-  // El cierre de folio (estado = cerrada) se implementará en el paso de cobro.
+  // El folio cerrado se elimina del cache; no se reutiliza para nuevas sesiones de mesa.
+}
+
+export async function cerrarFolioMesa(folioId, cobro = {}) {
+  if (!folioId || !negocioIdCache) {
+    throw new Error('No se pudo cerrar el folio de la mesa.');
+  }
+
+  const payload = {
+    estado: 'cerrada',
+    cerrada_en: new Date().toISOString(),
+    cerrado_por: cobro.cerradoPor ?? null,
+    subtotal: cobro.subtotal ?? 0,
+    descuento_tipo: cobro.descuentoTipo ?? null,
+    descuento_valor: cobro.descuentoValor ?? null,
+    descuento_monto_aplicado: cobro.descuentoMontoAplicado ?? 0,
+    descuento_razon: cobro.descuentoRazon ?? null,
+    descuento_autorizado_por: cobro.descuentoAutorizadoPor ?? null,
+    propina_tipo: cobro.propinaTipo ?? null,
+    propina_valor: cobro.propinaValor ?? null,
+    propina_monto_aplicado: cobro.propinaMontoAplicado ?? 0,
+    total_cobrado: cobro.totalCobrado ?? 0,
+  };
+
+  const { data, error } = await queryConNegocio(
+    supabase
+      .from('mesas_folios')
+      .update(payload)
+      .eq('id', folioId)
+      .eq('estado', 'abierta')
+      .select(
+        'id, negocio_id, numero_mesa, estado, creado_por, abierta_en, numero_ronda_siguiente, carrito_snapshot'
+      ),
+    negocioIdCache
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  if (!supabaseAfectoAlMenosUnaFila(data)) {
+    throw crearErrorFolioSinFilasAfectadas('UPDATE cierre');
+  }
+
+  aplicarFilaACache(data[0]);
+  reconstruirIndiceMesasAbiertas();
+  return data[0];
 }
 
 export async function eliminarFolioMesa(folioId) {
