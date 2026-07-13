@@ -2793,7 +2793,10 @@ function Dashboard() {
                                     {!esPresencialPedido && (
                                       <option value="">Sin especificar</option>
                                     )}
-                                    {FORMAS_PAGO.map((forma) => (
+                                    {FORMAS_PAGO.filter(
+                                      (forma) =>
+                                        !esPresencialPedido || forma.value !== 'link_pago'
+                                    ).map((forma) => (
                                       <option key={forma.value} value={forma.value}>
                                         {forma.label}
                                       </option>
@@ -4861,7 +4864,9 @@ function Dashboard() {
                       onChange={handleFormChange}
                     >
                       {!esModoPresencial && <option value="">Sin especificar</option>}
-                      {FORMAS_PAGO.map((forma) => (
+                      {FORMAS_PAGO.filter(
+                        (forma) => !esModoPresencial || forma.value !== 'link_pago'
+                      ).map((forma) => (
                         <option key={forma.value} value={forma.value}>
                           {forma.label}
                         </option>

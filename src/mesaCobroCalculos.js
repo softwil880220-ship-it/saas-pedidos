@@ -11,48 +11,149 @@ export function puedeAplicarDescuentoMesaCobro(rol) {
   return rol != null && ROLES_CON_DESCUENTO_MESA.has(rol);
 }
 
-function claveConsolidacionLinea(linea) {
-  const productoId = linea?.productoId != null ? String(linea.productoId) : '';
-  const descripcion = String(linea?.descripcion ?? '').trim();
-  return `${productoId}|${descripcion}`;
+function extraerNombreBase(descripcion, nombreLinea) {
+  const nombre = String(nombreLinea ?? '').trim();
+  if (nombre) {
+    return nombre;
+  }
+
+  const texto = String(descripcion ?? '').trim();
+  const indiceVariantes = texto.indexOf(' (');
+  return indiceVariantes >= 0 ? texto.slice(0, indiceVariantes).trim() : texto;
+}
+
+function extraerEtiquetaVariantes(descripcion) {
+  const texto = String(descripcion ?? '').trim();
+  const coincidencia = texto.match(/\(([^)]+)\)\s*$/);
+  if (!coincidencia) {
+    return null;
+  }
+
+  return coincidencia[1].trim() || null;
+}
+
+function normalizarLineaDetalleCobro(linea) {
+  const cantidad = Math.max(1, parseInt(linea?.cantidad, 10) || 1);
+  const extras = redondearMoneda(Number(linea?.extras) || 0);
+  const precioUnitarioGuardado = Number(linea?.precioUnitario ?? linea?.precio_unitario);
+  const precioBaseGuardado = Number(linea?.precioBase);
+  const precioBase = Number.isFinite(precioBaseGuardado)
+    ? redondearMoneda(precioBaseGuardado)
+    : Number.isFinite(precioUnitarioGuardado)
+      ? redondearMoneda(precioUnitarioGuardado - extras)
+      : redondearMoneda((Number(linea?.subtotal) || 0) / cantidad - extras);
+
+  const subtotal = redondearMoneda(Number(linea?.subtotal) || precioBase * cantidad + extras * cantidad);
+  const subtotalBase = redondearMoneda(precioBase * cantidad);
+  const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
+  const nombre = extraerNombreBase(linea?.descripcion, linea?.nombre);
+  const etiquetaVariantes = extras > 0 ? extraerEtiquetaVariantes(linea?.descripcion) : null;
+
+  return {
+    productoId: linea?.productoId != null ? String(linea.productoId) : '',
+    nombre,
+    cantidad,
+    precioUnitario: precioBase,
+    subtotalBase,
+    subtotalExtras,
+    etiquetaVariantes,
+    tieneVariantes: extras > 0,
+  };
+}
+
+function claveLineaBase({ productoId, nombre, precioUnitario }) {
+  return `base|${productoId}|${nombre}|${precioUnitario}`;
+}
+
+function claveLineaConVariantes({ productoId, nombre, precioUnitario, etiquetaVariantes }) {
+  return `variante|${productoId}|${nombre}|${precioUnitario}|${etiquetaVariantes ?? ''}`;
 }
 
 export function consolidarProductosRondasMesa(rondas) {
-  const mapa = new Map();
+  const mapaBase = new Map();
+  const mapaVariantes = new Map();
 
   (rondas || []).forEach((ronda) => {
     const lineas = Array.isArray(ronda?.lineas_detalle) ? ronda.lineas_detalle : [];
 
-    lineas.forEach((linea) => {
-      const clave = claveConsolidacionLinea(linea);
-      const cantidad = Math.max(1, parseInt(linea?.cantidad, 10) || 1);
-      const subtotal = redondearMoneda(Number(linea?.subtotal) || 0);
+    lineas.forEach((lineaCruda) => {
+      const linea = normalizarLineaDetalleCobro(lineaCruda);
 
-      if (mapa.has(clave)) {
-        const existente = mapa.get(clave);
-        mapa.set(clave, {
-          ...existente,
-          cantidad: existente.cantidad + cantidad,
-          subtotal: redondearMoneda(existente.subtotal + subtotal),
+      if (linea.tieneVariantes) {
+        const clave = claveLineaConVariantes(linea);
+        const existente = mapaVariantes.get(clave);
+
+        if (existente) {
+          mapaVariantes.set(clave, {
+            ...existente,
+            cantidad: existente.cantidad + linea.cantidad,
+            subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
+            extrasLineas: [
+              {
+                etiqueta: existente.extrasLineas[0].etiqueta,
+                subtotal: redondearMoneda(
+                  existente.extrasLineas[0].subtotal + linea.subtotalExtras
+                ),
+              },
+            ],
+          });
+          return;
+        }
+
+        mapaVariantes.set(clave, {
+          clave,
+          nombre: linea.nombre,
+          cantidad: linea.cantidad,
+          precioUnitario: linea.precioUnitario,
+          subtotalBase: linea.subtotalBase,
+          extrasLineas: [
+            {
+              etiqueta: linea.etiquetaVariantes || 'Extra',
+              subtotal: linea.subtotalExtras,
+            },
+          ],
         });
         return;
       }
 
-      mapa.set(clave, {
-        productoId: linea?.productoId != null ? String(linea.productoId) : '',
-        descripcion: String(linea?.descripcion ?? '').trim(),
-        cantidad,
-        subtotal,
+      const clave = claveLineaBase(linea);
+      const existente = mapaBase.get(clave);
+
+      if (existente) {
+        mapaBase.set(clave, {
+          ...existente,
+          cantidad: existente.cantidad + linea.cantidad,
+          subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
+        });
+        return;
+      }
+
+      mapaBase.set(clave, {
+        clave,
+        nombre: linea.nombre,
+        cantidad: linea.cantidad,
+        precioUnitario: linea.precioUnitario,
+        subtotalBase: linea.subtotalBase,
+        extrasLineas: [],
       });
     });
   });
 
-  return [...mapa.values()].sort((a, b) => a.descripcion.localeCompare(b.descripcion, 'es'));
+  return [...mapaBase.values(), ...mapaVariantes.values()].sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, 'es')
+  );
 }
 
 export function calcularSubtotalConsolidadoMesa(productosConsolidados) {
   return redondearMoneda(
-    (productosConsolidados || []).reduce((suma, item) => suma + Number(item.subtotal || 0), 0)
+    (productosConsolidados || []).reduce((suma, grupo) => {
+      const totalExtras = (grupo.extrasLineas || []).reduce(
+        (acumulado, extra) => acumulado + Number(extra.subtotal || 0),
+        0
+      );
+
+      return suma + Number(grupo.subtotalBase || 0) + totalExtras;
+    }, 0)
   );
 }
 

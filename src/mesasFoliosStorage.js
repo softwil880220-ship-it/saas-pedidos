@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 export const STORAGE_KEY_MESA_ACTIVA = 'pos_mesa_activa';
+export const STORAGE_KEY_MESA_COBRO_MODAL = 'pos_mesa_cobro_modal';
 
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
 const cacheFolios = new Map();
@@ -383,6 +384,7 @@ export async function cerrarFolioMesa(folioId, cobro = {}) {
     propina_valor: cobro.propinaValor ?? null,
     propina_monto_aplicado: cobro.propinaMontoAplicado ?? 0,
     total_cobrado: cobro.totalCobrado ?? 0,
+    forma_pago: cobro.formaPago ?? null,
   };
 
   const { data, error } = await queryConNegocio(
@@ -536,6 +538,97 @@ export function sincronizarFilaDesdeRealtime(payload) {
   reconstruirIndiceMesasAbiertas();
 }
 
+function normalizarEstadoCobroMesa(entrada) {
+  if (!entrada || typeof entrada !== 'object') {
+    return null;
+  }
+
+  const folioId = entrada.folioId != null ? String(entrada.folioId) : null;
+  if (!folioId) {
+    return null;
+  }
+
+  const propinaPorcentaje = entrada.propinaPorcentajeSeleccionado;
+  const propinaPorcentajeNormalizado =
+    propinaPorcentaje == null || propinaPorcentaje === ''
+      ? null
+      : Number(propinaPorcentaje);
+
+  return {
+    folioId,
+    abierto: Boolean(entrada.abierto),
+    descuentoTipo:
+      entrada.descuentoTipo === 'monto_fijo' ? 'monto_fijo' : 'porcentaje',
+    descuentoValor: entrada.descuentoValor != null ? String(entrada.descuentoValor) : '',
+    descuentoRazon: entrada.descuentoRazon != null ? String(entrada.descuentoRazon) : '',
+    propinaPorcentajeSeleccionado: Number.isFinite(propinaPorcentajeNormalizado)
+      ? propinaPorcentajeNormalizado
+      : null,
+    propinaMontoExacto:
+      entrada.propinaMontoExacto != null ? String(entrada.propinaMontoExacto) : '',
+    propinaMontoExactoActivo: Boolean(entrada.propinaMontoExactoActivo),
+    formaPago: entrada.formaPago != null ? String(entrada.formaPago) : '',
+    pagoRecibido: entrada.pagoRecibido != null ? String(entrada.pagoRecibido) : '',
+  };
+}
+
+export function persistirEstadoCobroMesa(folioId, estado = {}) {
+  if (!folioId || typeof window === 'undefined') {
+    return;
+  }
+
+  const normalizado = normalizarEstadoCobroMesa({
+    folioId: String(folioId),
+    ...estado,
+  });
+
+  if (!normalizado) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY_MESA_COBRO_MODAL, JSON.stringify(normalizado));
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarEstadoCobroMesa(folioId) {
+  if (!folioId || typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const serializado = window.localStorage.getItem(STORAGE_KEY_MESA_COBRO_MODAL);
+    if (!serializado) {
+      return null;
+    }
+
+    const parsed = JSON.parse(serializado);
+    const normalizado = normalizarEstadoCobroMesa(parsed);
+
+    if (!normalizado || normalizado.folioId !== String(folioId)) {
+      return null;
+    }
+
+    return normalizado;
+  } catch {
+    return null;
+  }
+}
+
+export function limpiarEstadoCobroMesa() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_MESA_COBRO_MODAL);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
 export function cargarMesaActiva() {
   if (typeof window === 'undefined') return null;
 
@@ -562,6 +655,7 @@ export function limpiarMesaActiva() {
 
   try {
     window.localStorage.removeItem(STORAGE_KEY_MESA_ACTIVA);
+    window.localStorage.removeItem(STORAGE_KEY_MESA_COBRO_MODAL);
   } catch {
     // Ignorar errores de almacenamiento local.
   }

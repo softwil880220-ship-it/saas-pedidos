@@ -299,6 +299,7 @@ export function cargarCarritoPresencialDisponible() {
 export {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
+  cargarEstadoCobroMesa,
   cargarMesaActiva,
   cerrarFolioMesa,
   configurarContextoMesas,
@@ -308,6 +309,7 @@ export {
   folioSigueAbierto,
   hidratarFoliosMesas,
   limpiarCarritoFolio,
+  limpiarEstadoCobroMesa,
   limpiarMesaActiva,
   mesaEstaOcupada,
   obtenerFolioAbiertoPorMesa,
@@ -316,6 +318,7 @@ export {
   obtenerNumeroMesaDeFolio,
   obtenerNumerosMesaOcupados,
   persistirCarritosMesas,
+  persistirEstadoCobroMesa,
   persistirMesaActiva,
   serializarSnapshotParaComparacion,
   setUltimoSnapshotRemotoAplicado,

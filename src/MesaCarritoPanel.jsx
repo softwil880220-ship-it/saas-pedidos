@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
@@ -8,13 +8,16 @@ import MesaCobroModal from './MesaCobroModal.jsx';
 import {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
+  cargarEstadoCobroMesa,
   cerrarFolioMesa,
   crearFormularioCapturaMesaVacio,
   eliminarFolioMesa,
   folioCarritoEnmascaradoParaUsuarioActual,
   folioSigueAbierto,
+  limpiarEstadoCobroMesa,
   obtenerMetadatosMesa,
   persistirCarritosMesas,
+  persistirEstadoCobroMesa,
   serializarSnapshotParaComparacion,
   setUltimoSnapshotRemotoAplicado,
 } from './pedidoCarritoStorage';
@@ -72,6 +75,7 @@ export default function MesaCarritoPanel({
   onRondaEnviada,
 }) {
   const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
+  const [revisionMetadatosFolio, setRevisionMetadatosFolio] = useState(0);
   const folioId = folioIdProp ?? folioIdLocal;
   const folioAjenoEnmascarado = useMemo(
     () => Boolean(folioId && folioCarritoEnmascaradoParaUsuarioActual(folioId)),
@@ -104,8 +108,40 @@ export default function MesaCarritoPanel({
   const [errorEnvioCocina, setErrorEnvioCocina] = useState(null);
   const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
+  const [estadoCobroPersistido, setEstadoCobroPersistido] = useState(null);
   const [errorCobroMesa, setErrorCobroMesa] = useState(null);
-  const [revisionMetadatosFolio, setRevisionMetadatosFolio] = useState(0);
+
+  useEffect(() => {
+    if (!folioId) {
+      setEstadoCobroPersistido(null);
+      setModalCobroAbierto(false);
+      return;
+    }
+
+    const guardado = cargarEstadoCobroMesa(folioId);
+    if (guardado) {
+      setEstadoCobroPersistido(guardado);
+      setModalCobroAbierto(Boolean(guardado.abierto));
+      return;
+    }
+
+    setEstadoCobroPersistido(null);
+    setModalCobroAbierto(false);
+  }, [folioId]);
+
+  const handlePersistirEstadoCobro = useCallback(
+    (campos) => {
+      if (!folioId) {
+        return;
+      }
+
+      persistirEstadoCobroMesa(folioId, {
+        abierto: modalCobroAbierto,
+        ...campos,
+      });
+    },
+    [folioId, modalCobroAbierto]
+  );
 
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
@@ -483,6 +519,9 @@ export default function MesaCarritoPanel({
 
     await cerrarFolioMesa(folioId, datosCobro);
 
+    limpiarEstadoCobroMesa();
+    setEstadoCobroPersistido(null);
+
     carrito.pausarPersistencia();
     carrito.aplicarSnapshot({
       form: crearFormularioCapturaMesaVacio(),
@@ -576,12 +615,16 @@ export default function MesaCarritoPanel({
             </div>
           </PedidoLineasCarrito>
           <MesaCobroModal
+            key={`mesa-cobro-${folioId ?? 'sin-folio'}`}
             abierto={modalCobroAbierto}
+            folioId={folioId}
             numeroMesa={numeroMesa}
             negocioId={negocioId}
             abiertaEn={metadatosFolio.abiertaEn}
             usuarioId={usuarioId}
             rol={rol}
+            estadoPersistido={estadoCobroPersistido}
+            onPersistirEstado={handlePersistirEstadoCobro}
             onCancelar={() => setModalCobroAbierto(false)}
             onConfirmar={handleConfirmarCobro}
           />
