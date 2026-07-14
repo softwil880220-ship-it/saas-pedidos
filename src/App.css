@@ -3698,35 +3698,6 @@
     display: none;
   }
 
-  .reportes-por-producto-fila {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      'nombre total'
-      'cantidad cantidad';
-    gap: 0.25rem 0.75rem;
-  }
-
-  .reporte-producto-nombre {
-    grid-area: nombre;
-    font-weight: 600;
-  }
-
-  .reporte-producto-cantidad {
-    grid-area: cantidad;
-    text-align: left;
-    font-size: 0.8rem;
-    color: #64748b;
-  }
-
-  .reporte-producto-cantidad::before {
-    content: 'Cantidad vendida: ';
-    font-weight: 600;
-  }
-
-  .reporte-producto-total {
-    grid-area: total;
-  }
-
   .reportes-controles {
     flex-direction: column;
     align-items: stretch;
@@ -3784,6 +3755,58 @@
 
   .reporte-total {
     grid-area: total;
+  }
+
+  .reportes-por-producto-tabla .reportes-por-producto-fila.reportes-tabla-fila {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas: none;
+    gap: 0.35rem;
+    padding: 0.85rem 0.75rem;
+    align-items: stretch;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-nombre {
+    grid-area: auto;
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-cantidad,
+  .reportes-por-producto-tabla .reporte-producto-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    text-align: right;
+    font-size: 0.82rem;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-cantidad {
+    color: #64748b;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-cantidad::before {
+    content: 'Cantidad vendida';
+    font-weight: 600;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-total {
+    color: #14532d;
+    font-weight: 600;
+  }
+
+  .reportes-por-producto-tabla .reporte-producto-total::before {
+    content: 'Total facturado';
+    font-weight: 600;
+    color: #64748b;
+    flex-shrink: 0;
   }
 
   .reportes-arqueo-cabecera {

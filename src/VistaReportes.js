@@ -1259,7 +1259,7 @@ export default function VistaReportes() {
               ) : errorFondosFijos ? (
                 <p className="dashboard-vacio reportes-error">{errorFondosFijos}</p>
               ) : fondosFijosArqueos.length === 0 ? (
-                <p className="dashboard-vacio">No hay arqueos registrados.</p>
+                <p className="dashboard-vacio">No hay fondos registrados.</p>
               ) : fondosFijosFiltrados.length === 0 ? (
                 <p className="dashboard-vacio">
                   No hay fondos fijos para el período seleccionado.
