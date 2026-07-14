@@ -47,6 +47,7 @@ import {
 } from './reportesHelpers';
 import {
   cargarCarritoPedido,
+  cargarCarritoMostradorDisponible,
   cargarCarritoPresencialDisponible,
   cargarCarritoWhatsappDisponible,
   crearFormularioPedidoDefault,
@@ -67,7 +68,9 @@ import {
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
+import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import VistaMesas from './VistaMesas.jsx';
+import VistaMostrador from './VistaMostrador.jsx';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
@@ -154,6 +157,7 @@ const FILTROS_SUCURSAL = crearFiltrosPorFlujo(STATUS_FLOW_SUCURSAL);
 
 const MODOS = [
   { value: 'presencial', label: 'Caja' },
+  { value: 'mostrador', label: 'Mostrador' },
   { value: 'whatsapp', label: 'Para recoger/domicilio' },
   { value: 'mesas', label: 'Mesas' },
 ];
@@ -178,6 +182,7 @@ const STORAGE_KEY_TAB_WHATSAPP_PEDIDOS = 'pos_tab_whatsapp_pedidos';
 function normalizarModoPedidos(modo) {
   if (modo === 'whatsapp') return 'whatsapp';
   if (modo === 'mesas') return 'mesas';
+  if (modo === 'mostrador') return 'mostrador';
   return 'presencial';
 }
 
@@ -198,6 +203,7 @@ function cargarModoPedidos() {
     const modo = window.localStorage.getItem(STORAGE_KEY_MODO_PEDIDOS);
     if (modo === 'whatsapp') return 'whatsapp';
     if (modo === 'mesas') return 'mesas';
+    if (modo === 'mostrador') return 'mostrador';
     return 'presencial';
   } catch {
     return 'presencial';
@@ -265,6 +271,19 @@ function cargarEstadoInicialDashboardPedidos() {
       form: crearFormularioPedidoDefault('whatsapp'),
       pagoRecibido: '',
       nextLineaId: 2,
+    };
+  }
+
+  if (modo === 'mostrador') {
+    const restauradoMostrador = cargarCarritoMostradorDisponible();
+    if (restauradoMostrador) {
+      return { ...restauradoMostrador, modo: 'mostrador' };
+    }
+    return {
+      form: crearFormularioPedidoDefault('mostrador'),
+      pagoRecibido: '',
+      nextLineaId: 2,
+      modo: 'mostrador',
     };
   }
 
@@ -1065,9 +1084,12 @@ function Dashboard() {
     ? cargarEstadoInicialDashboardPedidos()
     : cargarEstadoInicialCapturaPedidoWeb();
   const modoInicialGuardado = cargarModoPedidos();
-  const [modo, setModo] = useState(
-    modoInicialGuardado === 'mesas' ? 'mesas' : (estadoInicialCaptura.modo ?? 'presencial')
-  );
+  const [modo, setModo] = useState(() => {
+    if (modoInicialGuardado === 'mesas' || modoInicialGuardado === 'mostrador') {
+      return modoInicialGuardado;
+    }
+    return estadoInicialCaptura.modo ?? 'presencial';
+  });
   const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
   const [filtroSucursal, setFiltroSucursal] = useState('todos');
   const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(() =>
@@ -1557,20 +1579,18 @@ function Dashboard() {
       }
 
       const flujo = obtenerFlujoStatus(value);
-      setForm({
-        cliente: '',
-        telefono: '',
-        tipoEntrega: value,
-        direccion: '',
-        formaPago: '',
-        referencia: '',
-        lineas: [crearLineaPedido(1, variantesCtx)],
-        status: flujo.includes(STATUS_DEFAULT_WHATSAPP_FORM)
-          ? STATUS_DEFAULT_WHATSAPP_FORM
-          : flujo[0],
+      setForm((prev) => {
+        const status = flujo.includes(prev.status)
+          ? prev.status
+          : STATUS_DEFAULT_WHATSAPP_FORM;
+        const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
+        return {
+          ...prev,
+          tipoEntrega: value,
+          status,
+          direccion: esDomicilio ? prev.direccion : '',
+        };
       });
-      setPagoRecibido('');
-      nextLineaId.current = 2;
       return;
     }
 
@@ -1714,10 +1734,7 @@ function Dashboard() {
       limpiarCarritoPedido(modoActual, form.tipoEntrega);
     }
 
-    nextLineaId.current = 2;
-    setPagoRecibido('');
-    setCategoriaPedidoActiva(null);
-    setForm({
+    const formVacio = {
       cliente: '',
       telefono: '',
       tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
@@ -1726,7 +1743,21 @@ function Dashboard() {
       referencia: '',
       lineas: [crearLineaPedido(1, variantesCtx)],
       status: statusDefaultFormularioPedido(modoActual),
-    });
+    };
+
+    nextLineaId.current = 2;
+    setPagoRecibido('');
+    setCategoriaPedidoActiva(null);
+    setForm(formVacio);
+
+    if (limpiarStorage && modoActual === 'whatsapp') {
+      persistirCarritoPedido({
+        modo: modoActual,
+        form: formVacio,
+        pagoRecibido: '',
+        nextLineaId: nextLineaId.current,
+      });
+    }
   };
 
   const limpiarPedidoCaptura = () => {
@@ -1750,7 +1781,9 @@ function Dashboard() {
         nextLineaId: nextLineaId.current,
       });
     }
-    persistirModoCaptura(nuevoModo === 'mesas' ? 'presencial' : nuevoModo);
+    persistirModoCaptura(
+      nuevoModo === 'mesas' ? 'presencial' : nuevoModo
+    );
     persistirModoPedidos(nuevoModo);
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
@@ -1761,7 +1794,7 @@ function Dashboard() {
     setEditandoPedidoId(null);
     setPedidoEditForm(null);
 
-    if (nuevoModo === 'mesas') {
+    if (nuevoModo === 'mesas' || nuevoModo === 'mostrador') {
       return;
     }
 
@@ -2319,6 +2352,7 @@ function Dashboard() {
 
   const esModoPresencial = modo === 'presencial';
   const esModoMesas = modo === 'mesas';
+  const esModoMostrador = modo === 'mostrador';
 
   const avanzarPedido = async (id) => {
     const pedido = pedidos.find((p) => p.id === id);
@@ -4758,6 +4792,16 @@ function Dashboard() {
                   usuarioId={usuario?.id}
                   rol={rol}
                 />
+              ) : esModoMostrador ? (
+                <VistaMostrador
+                  productos={productos}
+                  productosOrdenados={productosOrdenados}
+                  frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                  frecuenciaLista={frecuenciaLista}
+                  variantesCtx={variantesCtx}
+                  negocioId={negocioId}
+                  usuarioId={usuario?.id}
+                />
               ) : (
                 <>
               <h2 className="formulario-titulo">
@@ -4906,30 +4950,14 @@ function Dashboard() {
                     onAjustarCantidad={carrito.ajustarCantidadLinea}
                     onEliminarLinea={carrito.eliminarLinea}
                   >
-                    <div className="caja-pago">
-                      <div className="formulario-campo caja-pago-campo">
-                        <label htmlFor="pago-recibido">Pago recibido</label>
-                        <input
-                          id="pago-recibido"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={carrito.pagoRecibido}
-                          onChange={(e) => carrito.setPagoRecibido(e.target.value)}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      {pagoValido &&
-                        (pagoInsuficiente ? (
-                          <p className="caja-pago-alerta caja-pago-insuficiente">
-                            Pago insuficiente
-                          </p>
-                        ) : (
-                          <p className="caja-pago-alerta caja-pago-cambio">
-                            Cambio: {formatearMoneda(cambio)}
-                          </p>
-                        ))}
-                    </div>
+                    <CajaPagoEfectivo
+                      formaPago={carrito.form.formaPago}
+                      pagoRecibido={carrito.pagoRecibido}
+                      onPagoRecibidoChange={carrito.setPagoRecibido}
+                      pagoValido={pagoValido}
+                      pagoInsuficiente={pagoInsuficiente}
+                      cambio={cambio}
+                    />
                     <div className="pedido-acciones-principales">
                       <button
                         type="button"
@@ -5084,7 +5112,7 @@ function Dashboard() {
               )}
             </section>
 
-            {!esModoMesas && (
+            {!esModoMesas && !esModoMostrador && (
             <>
             <section className="dashboard-filtros dashboard-filtros-fecha">
               <div className="filtro-fecha-campo">
@@ -5727,7 +5755,7 @@ function App() {
           <Route
             path="/equipo"
             element={
-              <ProtectedRoute rolesPermitidos={['dueno']}>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <VistaEquipo />
               </ProtectedRoute>
             }

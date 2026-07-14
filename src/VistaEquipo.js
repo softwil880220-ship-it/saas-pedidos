@@ -5,23 +5,29 @@ import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import DashboardNav from './DashboardNav';
 import PanelCajeros from './PanelCajeros';
 import PanelPinSeguridad from './PanelPinSeguridad';
+import PanelAjustesMostrador from './PanelAjustesMostrador';
 import { useAuth } from './AuthContext';
 
 const ROLES_PIN_SEGURIDAD = ['dueno', 'administrador'];
+const ROLES_AJUSTES_MOSTRADOR = ['dueno', 'administrador'];
 
 export default function VistaEquipo() {
   const { negocioId, rol } = useAuth();
   const [tabEquipo, setTabEquipo] = useState('usuarios');
 
   const puedeConfigurarPin = ROLES_PIN_SEGURIDAD.includes(rol);
+  const puedeConfigurarMostrador = ROLES_AJUSTES_MOSTRADOR.includes(rol);
 
   const tabsEquipo = useMemo(() => {
     const tabs = [{ value: 'usuarios', label: 'Usuarios' }];
     if (puedeConfigurarPin) {
       tabs.push({ value: 'pin-seguridad', label: 'PIN de seguridad' });
     }
+    if (puedeConfigurarMostrador) {
+      tabs.push({ value: 'ajustes-mostrador', label: 'Ajustes de Mostrador' });
+    }
     return tabs;
-  }, [puedeConfigurarPin]);
+  }, [puedeConfigurarPin, puedeConfigurarMostrador]);
 
   const tabActivo = tabsEquipo.some((tab) => tab.value === tabEquipo)
     ? tabEquipo
@@ -51,6 +57,9 @@ export default function VistaEquipo() {
 
         {tabActivo === 'usuarios' ? <PanelCajeros negocioId={negocioId} /> : null}
         {tabActivo === 'pin-seguridad' && puedeConfigurarPin ? <PanelPinSeguridad /> : null}
+        {tabActivo === 'ajustes-mostrador' && puedeConfigurarMostrador ? (
+          <PanelAjustesMostrador negocioId={negocioId} />
+        ) : null}
       </main>
     </div>
   );

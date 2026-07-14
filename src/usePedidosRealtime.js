@@ -88,16 +88,20 @@ export function sincronizarListaConEvento(prev, payload, options = {}) {
 
   const index = prev.findIndex((item) => idsCoinciden(item.id, id));
   const enLista = index !== -1;
+  const registroFusionado =
+    enLista && eventType === 'UPDATE'
+      ? { ...prev[index], ...registro }
+      : registro;
 
   if (eventType === 'INSERT' || eventType === 'UPDATE') {
-    if (cumple(registro)) {
+    if (cumple(registroFusionado)) {
       if (enLista) {
         const next = [...prev];
-        next[index] = { ...prev[index], ...registro };
+        next[index] = registroFusionado;
         return aplicarOrden(next);
       }
       return aplicarOrden(
-        deduplicarListaPorId(agregarRegistroSinDuplicarId(prev, registro))
+        deduplicarListaPorId(agregarRegistroSinDuplicarId(prev, registroFusionado))
       );
     }
 

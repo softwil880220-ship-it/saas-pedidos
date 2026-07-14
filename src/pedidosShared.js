@@ -91,6 +91,10 @@ export function obtenerStatusCocinaPedido(pedido, cocina) {
     return STATUS_COCINA.EN_COCINA;
   }
 
+  if (pedido?.status === 'en-preparacion' && pedidoRequiereCocina(pedido, cocina)) {
+    return STATUS_COCINA.EN_COCINA;
+  }
+
   return null;
 }
 
@@ -131,6 +135,7 @@ export function todasCocinasRequeridasListas(pedido) {
 
 export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsapp') {
   if (tipoPedido === 'presencial' || tipoPedido === 'mesa') return 'entregado';
+  if (tipoPedido === 'mostrador') return 'listo-para-recoger';
 
   return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'listo-para-recoger'
@@ -155,13 +160,16 @@ export function construirUpdateAlMarcarCocinaLista(pedido, cocina) {
   const update = { [campo]: STATUS_COCINA.LISTO };
 
   if (
-    pedido.status === 'en-cocina' &&
+    ['en-cocina', 'en-preparacion'].includes(pedido.status) &&
     todasCocinasRequeridasListas(pedidoActualizado)
   ) {
     update.status = obtenerStatusGlobalTrasCocinas(
       pedido.tipo_entrega,
       pedido.tipo
     );
+    if (pedido.tipo === 'mostrador') {
+      update.mostrador_listo_at = new Date().toISOString();
+    }
   }
 
   return update;
@@ -274,8 +282,29 @@ export function formatearProgresoCocinas(pedido) {
   return partes.join(' · ');
 }
 
-export function pedidoVisibleEnCocina(pedido, cocina, productos) {
+export function pedidoVisibleEnCocina(pedido, cocina, productos, mostradorFlujoCocina = 0) {
   if (pedido?.tipo === 'presencial') return false;
+
+  if (esPedidoMostrador(pedido)) {
+    if (mostradorFlujoCocina === 0) return false;
+    if (pedido.status === 'entregado') return false;
+
+    if (
+      mostradorFlujoCocina === 3 &&
+      pedido.status === 'listo-para-recoger'
+    ) {
+      if (Array.isArray(productos) && productos.length === 0) return true;
+      return pedidoRequiereCocina(pedido, cocina);
+    }
+
+    if (!['en-cocina', 'en-preparacion'].includes(pedido?.status)) return false;
+    if (Array.isArray(productos) && productos.length === 0) {
+      return true;
+    }
+    if (!pedidoRequiereCocina(pedido, cocina)) return false;
+    return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
+  }
+
   if (!['en-cocina'].includes(pedido?.status)) return false;
   if (Array.isArray(productos) && productos.length === 0) {
     return true;
@@ -335,6 +364,140 @@ export function construirUrlWhatsApp(telefono, mensaje = '') {
 
 export function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
+}
+
+export function esPedidoMostrador(pedido) {
+  return pedido?.tipo === 'mostrador';
+}
+
+export function esPedidoMesa(pedido) {
+  return pedido?.tipo === 'mesa';
+}
+
+export const ETIQUETA_CANAL_MOSTRADOR = 'Mostrador';
+
+export const STATUS_MOSTRADOR_LABELS = {
+  'en-cocina': 'En cocina',
+  'en-preparacion': 'En preparación',
+  'listo-para-recoger': 'Listo para entregar',
+  entregado: 'Entregado',
+};
+
+export function etiquetaStatusMostrador(status) {
+  return STATUS_MOSTRADOR_LABELS[status] || status || '—';
+}
+
+export function resolverEstadoMostradorPendiente(pedido) {
+  if (!esPedidoMostrador(pedido)) {
+    return pedido?.status ?? null;
+  }
+
+  const status = pedido?.status;
+
+  if (
+    ['en-cocina', 'en-preparacion'].includes(status) &&
+    pedidoRequiereAlgunaCocina(pedido) &&
+    todasCocinasRequeridasListas(pedido)
+  ) {
+    return 'listo-para-recoger';
+  }
+
+  return status;
+}
+
+export function pedidoPendienteEntregaMostrador(pedido) {
+  return (
+    esPedidoMostrador(pedido) &&
+    pedido.deleted_at == null &&
+    pedido.status !== 'entregado'
+  );
+}
+
+export function determinarStatusInicialMostrador(mostradorFlujoCocina, pedidoEnriquecido) {
+  const ahora = new Date().toISOString();
+
+  if (mostradorFlujoCocina === 0) {
+    return {
+      status: 'listo-para-recoger',
+      status_cocina1: null,
+      status_cocina2: null,
+      mostrador_listo_at: ahora,
+      mostrador_en_preparacion_at: null,
+      mostrador_entregado_at: null,
+    };
+  }
+
+  const cocinas = prepararStatusCocinasAlEntrar(pedidoEnriquecido);
+
+  return {
+    status: cocinas.requiereAlgunaCocina ? 'en-cocina' : 'listo-para-recoger',
+    status_cocina1: cocinas.status_cocina1,
+    status_cocina2: cocinas.status_cocina2,
+    mostrador_listo_at: cocinas.requiereAlgunaCocina ? null : ahora,
+    mostrador_en_preparacion_at: null,
+    mostrador_entregado_at: null,
+  };
+}
+
+export function construirUpdateMostradorEnPreparacion(pedido) {
+  if (!esPedidoMostrador(pedido) || pedido.status !== 'en-cocina') {
+    return null;
+  }
+
+  return {
+    status: 'en-preparacion',
+    mostrador_en_preparacion_at: new Date().toISOString(),
+  };
+}
+
+export function construirUpdateMostradorEntregado(pedido) {
+  if (!esPedidoMostrador(pedido) || pedido.status !== 'listo-para-recoger') {
+    return null;
+  }
+
+  return {
+    status: 'entregado',
+    mostrador_entregado_at: new Date().toISOString(),
+  };
+}
+
+export function construirUpdateEntregadoMostradorPendientes(pedido) {
+  if (!pedidoPendienteEntregaMostrador(pedido)) {
+    return null;
+  }
+
+  return {
+    status: 'entregado',
+    mostrador_entregado_at: new Date().toISOString(),
+  };
+}
+
+export function botonesMostradorCocina(mostradorFlujoCocina, pedido) {
+  if (!esPedidoMostrador(pedido) || mostradorFlujoCocina === 0) {
+    return { enPreparacion: false, listo: false, entregado: false };
+  }
+
+  const enCocina = pedido.status === 'en-cocina';
+  const enPreparacion = pedido.status === 'en-preparacion';
+  const listoParaEntregar = pedido.status === 'listo-para-recoger';
+
+  return {
+    enPreparacion: mostradorFlujoCocina >= 2 && enCocina,
+    listo:
+      mostradorFlujoCocina >= 1 &&
+      (enCocina || enPreparacion),
+    entregado: mostradorFlujoCocina === 3 && listoParaEntregar,
+  };
+}
+
+export function pedidoVisibleEnCocinaColumnaIzquierda(pedido) {
+  return esPedidoMesa(pedido);
+}
+
+export function pedidoVisibleEnCocinaColumnaDerecha(pedido, mostradorFlujoCocina) {
+  if (esPedidoWhatsapp(pedido)) return true;
+  if (esPedidoMostrador(pedido)) return mostradorFlujoCocina > 0;
+  return false;
 }
 
 export function etiquetaCanalEntregaCocina(tipoEntrega) {

@@ -2,12 +2,18 @@ import { TIPOS_ENTREGA } from './pedidosShared';
 
 export const STORAGE_KEYS = {
   CAJA: 'pos_carrito_caja',
+  MOSTRADOR: 'pos_carrito_mostrador',
   WHATSAPP_BORRADOR: 'pos_carrito_whatsapp_borrador',
   WHATSAPP_DOMICILIO: 'pos_carrito_whatsapp_domicilio',
   WHATSAPP_SUCURSAL: 'pos_carrito_whatsapp_sucursal',
   MODO_CAPTURA: 'pos_modo_captura',
   SECCION_ACTIVA: 'pos_seccion_activa',
+  TAB_MOSTRADOR: 'pos_tab_mostrador',
 };
+
+const TABS_MOSTRADOR_VALIDOS = new Set(['nuevo', 'pendientes']);
+
+export const CLIENTE_MOSTRADOR = 'Mostrador';
 
 const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'reportes', 'equipo']);
 
@@ -31,13 +37,14 @@ export function crearLineaPedidoVacia(id) {
 
 export function crearFormularioPedidoDefault(modoActual, tipoEntrega = TIPO_ENTREGA_SIN_SELECCION) {
   const esPresencial = modoActual === 'presencial';
+  const esMostrador = modoActual === 'mostrador';
 
   return {
-    cliente: esPresencial ? CLIENTE_PUBLICO : '',
+    cliente: esPresencial ? CLIENTE_PUBLICO : esMostrador ? CLIENTE_MOSTRADOR : '',
     telefono: '',
-    tipoEntrega: esPresencial ? TIPOS_ENTREGA.DOMICILIO : tipoEntrega,
+    tipoEntrega: esPresencial || esMostrador ? TIPOS_ENTREGA.DOMICILIO : tipoEntrega,
     direccion: '',
-    formaPago: esPresencial ? FORMA_PAGO_DEFAULT_CAJA : '',
+    formaPago: esPresencial || esMostrador ? FORMA_PAGO_DEFAULT_CAJA : '',
     referencia: '',
     lineas: [crearLineaPedidoVacia(1)],
     status: esPresencial ? 'por-aceptar' : STATUS_DEFAULT_WHATSAPP,
@@ -47,6 +54,10 @@ export function crearFormularioPedidoDefault(modoActual, tipoEntrega = TIPO_ENTR
 export function obtenerClaveCarritoPedido(modo, tipoEntrega) {
   if (modo === 'presencial') {
     return STORAGE_KEYS.CAJA;
+  }
+
+  if (modo === 'mostrador') {
+    return STORAGE_KEYS.MOSTRADOR;
   }
 
   if (tipoEntrega === TIPOS_ENTREGA.DOMICILIO) {
@@ -105,7 +116,7 @@ function esCarritoVacio({ form, pagoRecibido }, modo, tipoEntrega) {
     return false;
   }
 
-  if (modo === 'presencial') {
+  if (modo === 'presencial' || modo === 'mostrador') {
     return (
       !form?.referencia?.trim() &&
       (form?.formaPago || FORMA_PAGO_DEFAULT_CAJA) === FORMA_PAGO_DEFAULT_CAJA &&
@@ -165,7 +176,19 @@ export function limpiarCarritoEnStorage(clave) {
 }
 
 export function limpiarCarritoPedido(modo, tipoEntrega) {
-  const clave = obtenerClaveCarritoPedido(modo, tipoEntrega);
+  if (modo === 'whatsapp') {
+    limpiarCarritoEnStorage(STORAGE_KEYS.WHATSAPP_BORRADOR);
+    limpiarCarritoEnStorage(STORAGE_KEYS.WHATSAPP_DOMICILIO);
+    limpiarCarritoEnStorage(STORAGE_KEYS.WHATSAPP_SUCURSAL);
+    return;
+  }
+
+  const clave = obtenerClaveCarritoPedido(
+    modo,
+    modo === 'presencial' || modo === 'mostrador'
+      ? TIPOS_ENTREGA.DOMICILIO
+      : tipoEntrega
+  );
   limpiarCarritoEnStorage(clave);
 }
 
@@ -296,6 +319,37 @@ export function cargarCarritoPresencialDisponible() {
   return null;
 }
 
+export function cargarCarritoMostradorDisponible() {
+  const restaurado = cargarCarritoPedido('mostrador', TIPOS_ENTREGA.DOMICILIO);
+
+  if (carritoGuardadoTieneContenido(restaurado, 'mostrador')) {
+    return restaurado;
+  }
+
+  return null;
+}
+
+export function persistirTabMostrador(tab) {
+  if (typeof window === 'undefined' || !TABS_MOSTRADOR_VALIDOS.has(tab)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.TAB_MOSTRADOR, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarTabMostrador() {
+  if (typeof window === 'undefined') return 'nuevo';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEYS.TAB_MOSTRADOR);
+    return TABS_MOSTRADOR_VALIDOS.has(tab) ? tab : 'nuevo';
+  } catch {
+    return 'nuevo';
+  }
+}
+
 export {
   abrirFolioMesa,
   cargarCarritosMesasAbiertos,
@@ -373,7 +427,8 @@ export function cargarModoPedidosInicialWeb() {
   try {
     const modo = window.localStorage.getItem(STORAGE_KEY_MODO_PEDIDOS);
     if (modo === 'whatsapp') return 'whatsapp';
-    if (modo === 'presencial') return 'presencial';
+    if (modo === 'mesas') return 'mesas';
+    if (modo === 'mostrador') return 'mostrador';
     return 'presencial';
   } catch {
     return 'presencial';
@@ -382,6 +437,29 @@ export function cargarModoPedidosInicialWeb() {
 
 export function cargarEstadoInicialCapturaPedidoWeb() {
   const modo = cargarModoPedidosInicialWeb();
+
+  if (modo === 'mesas') {
+    return {
+      modo: 'mesas',
+      form: crearFormularioPedidoDefault('whatsapp'),
+      pagoRecibido: '',
+      nextLineaId: 2,
+    };
+  }
+
+  if (modo === 'mostrador') {
+    const restauradoMostrador = cargarCarritoMostradorDisponible();
+    if (restauradoMostrador) {
+      return { ...restauradoMostrador, modo: 'mostrador' };
+    }
+    return {
+      form: crearFormularioPedidoDefault('mostrador'),
+      pagoRecibido: '',
+      nextLineaId: 2,
+      modo: 'mostrador',
+    };
+  }
+
   const restaurado =
     modo === 'whatsapp'
       ? cargarCarritoWhatsappDisponible()

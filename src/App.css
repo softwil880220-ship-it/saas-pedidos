@@ -417,6 +417,28 @@
   color: #fff;
 }
 
+@media (max-width: 720px) {
+  .dashboard-nav,
+  .modo-nav {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+  }
+
+  .dashboard-nav .nav-btn,
+  .modo-nav .modo-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+}
+
 .vista-mesas {
   margin-bottom: 1.5rem;
 }

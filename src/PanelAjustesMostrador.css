@@ -1,0 +1,80 @@
+.panel-ajustes-mostrador {
+  max-width: 42rem;
+}
+
+.panel-ajustes-mostrador-cabecera {
+  margin-bottom: 1.25rem;
+}
+
+.panel-ajustes-mostrador-titulo {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+}
+
+.panel-ajustes-mostrador-descripcion {
+  margin: 0;
+  color: var(--texto-secundario, #5c5c5c);
+  line-height: 1.45;
+}
+
+.panel-ajustes-mostrador-estado {
+  margin: 0;
+  color: var(--texto-secundario, #5c5c5c);
+}
+
+.panel-ajustes-mostrador-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.panel-ajustes-mostrador-opciones {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-ajustes-mostrador-pregunta {
+  margin: 0 0 0.5rem;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.panel-ajustes-mostrador-opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--borde-suave, #e2e2e2);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  line-height: 1.45;
+}
+
+.panel-ajustes-mostrador-opcion:has(input:checked) {
+  border-color: var(--acento, #2563eb);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.panel-ajustes-mostrador-opcion input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.panel-ajustes-mostrador-error {
+  margin: 0;
+  color: #b91c1c;
+}
+
+.panel-ajustes-mostrador-exito {
+  margin: 0;
+  color: #15803d;
+}
+
+.panel-ajustes-mostrador-guardar {
+  align-self: flex-start;
+}

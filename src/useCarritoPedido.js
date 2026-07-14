@@ -10,14 +10,15 @@ import {
   consolidarLineasPorProducto,
 } from './pedidoCarritoCalculos';
 import {
-  cargarCarritoPedido,
-  cargarCarritosMesasAbiertos,
+  CLIENTE_MOSTRADOR,
   crearFormularioPedidoDefault,
   debeSuprimirPersistEco,
   limpiarCarritoFolio,
   limpiarCarritoPedido,
   persistirCarritoPedido,
   persistirCarritosMesas,
+  cargarCarritoPedido,
+  cargarCarritosMesasAbiertos,
 } from './pedidoCarritoStorage';
 import {
   crearVariantesLineaVacias,
@@ -47,7 +48,9 @@ function toggleIdEnLinea(ids, id) {
 }
 
 function modoCapturaAModoStorage(modoCaptura) {
-  return modoCaptura === 'whatsapp' ? 'whatsapp' : 'presencial';
+  if (modoCaptura === 'whatsapp') return 'whatsapp';
+  if (modoCaptura === 'mostrador') return 'mostrador';
+  return 'presencial';
 }
 
 function crearFormularioInicial(modoCaptura, variantesCtx, tipoEntrega = TIPO_ENTREGA_SIN_SELECCION) {
@@ -65,6 +68,20 @@ function crearFormularioInicial(modoCaptura, variantesCtx, tipoEntrega = TIPO_EN
       referencia: '',
       lineas: [crearLineaPedido(1, variantesCtx)],
       status: 'por-aceptar',
+    };
+  }
+
+  if (modoCaptura === 'mostrador') {
+    return {
+      ...base,
+      cliente: CLIENTE_MOSTRADOR,
+      telefono: '',
+      tipoEntrega: TIPOS_ENTREGA.SUCURSAL,
+      direccion: '',
+      formaPago: FORMA_PAGO_DEFAULT_CAJA,
+      referencia: '',
+      lineas: [crearLineaPedido(1, variantesCtx)],
+      status: 'listo-para-recoger',
     };
   }
 
@@ -87,7 +104,7 @@ function esCarritoVacioLocal({ form, pagoRecibido }, modoCaptura) {
     return false;
   }
 
-  if (modoCaptura === 'presencial') {
+  if (modoCaptura === 'presencial' || modoCaptura === 'mostrador') {
     return (
       !form?.referencia?.trim() &&
       (form?.formaPago || FORMA_PAGO_DEFAULT_CAJA) === FORMA_PAGO_DEFAULT_CAJA &&
@@ -216,16 +233,20 @@ export default function useCarritoPedido({
     [lineasPedidoActivas, productos, variantesCtx]
   );
 
+  const pagoEsEfectivo =
+    (modoCaptura === 'presencial' || modoCaptura === 'mostrador') &&
+    (form.formaPago || FORMA_PAGO_DEFAULT_CAJA) === FORMA_PAGO_DEFAULT_CAJA;
+
   const pagoValido =
-    modoCaptura === 'presencial' &&
+    pagoEsEfectivo &&
     pagoRecibido !== '' &&
     !Number.isNaN(parseFloat(pagoRecibido));
 
   const montoPago = parseFloat(pagoRecibido);
   const cambio =
-    modoCaptura === 'presencial' && pagoValido ? montoPago - totalPedido : null;
+    pagoEsEfectivo && pagoValido ? montoPago - totalPedido : null;
   const pagoInsuficiente =
-    modoCaptura === 'presencial' && pagoValido && cambio < 0;
+    pagoEsEfectivo && pagoValido && cambio < 0;
 
   const estaVacio = useMemo(
     () => esCarritoVacioLocal({ form, pagoRecibido }, modoCaptura),
@@ -280,23 +301,36 @@ export default function useCarritoPedido({
 
   const resetCarrito = useCallback(
     ({ limpiarStorage = true } = {}) => {
+      const formVacio = crearFormularioInicial(modoCaptura, variantesCtx, form.tipoEntrega);
+
       if (limpiarStorage) {
         if (folioId) {
           limpiarCarritoFolio(folioId);
         } else {
           limpiarCarritoPedido(
             modoStorage,
-            modoCaptura === 'presencial' ? TIPOS_ENTREGA.DOMICILIO : form.tipoEntrega
+            modoCaptura === 'presencial' || modoCaptura === 'mostrador'
+              ? TIPOS_ENTREGA.DOMICILIO
+              : form.tipoEntrega
           );
+        }
+
+        if (persistir && !folioId) {
+          persistirCarritoPedido({
+            modo: modoStorage,
+            form: formVacio,
+            pagoRecibido: '',
+            nextLineaId: 2,
+          });
         }
       }
 
       nextLineaId.current = 2;
       setPagoRecibido('');
       setCategoriaPedidoActiva(null);
-      setForm(crearFormularioInicial(modoCaptura, variantesCtx, form.tipoEntrega));
+      setForm(formVacio);
     },
-    [folioId, modoStorage, modoCaptura, variantesCtx, form.tipoEntrega]
+    [folioId, modoStorage, modoCaptura, variantesCtx, form.tipoEntrega, persistir]
   );
 
   const setCampoCaptura = useCallback(
@@ -326,20 +360,18 @@ export default function useCarritoPedido({
         }
 
         const flujo = obtenerFlujoStatus(value);
-        setForm({
-          cliente: '',
-          telefono: '',
-          tipoEntrega: value,
-          direccion: '',
-          formaPago: '',
-          referencia: '',
-          lineas: [crearLineaPedido(1, variantesCtx)],
-          status: flujo.includes(STATUS_DEFAULT_WHATSAPP_FORM)
-            ? STATUS_DEFAULT_WHATSAPP_FORM
-            : flujo[0],
+        setForm((prev) => {
+          const status = flujo.includes(prev.status)
+            ? prev.status
+            : STATUS_DEFAULT_WHATSAPP_FORM;
+          const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
+          return {
+            ...prev,
+            tipoEntrega: value,
+            status,
+            direccion: esDomicilio ? prev.direccion : '',
+          };
         });
-        setPagoRecibido('');
-        nextLineaId.current = 2;
         return;
       }
 
@@ -367,6 +399,14 @@ export default function useCarritoPedido({
         }
         return { ...prev, [name]: value };
       });
+
+      if (
+        name === 'formaPago' &&
+        (modoCaptura === 'presencial' || modoCaptura === 'mostrador') &&
+        value !== FORMA_PAGO_DEFAULT_CAJA
+      ) {
+        setPagoRecibido('');
+      }
     },
     [modoCaptura, persistirSnapshotActual, aplicarSnapshot, variantesCtx]
   );

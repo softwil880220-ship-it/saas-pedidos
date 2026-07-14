@@ -1,0 +1,64 @@
+.vista-cocina-dos-columnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.vista-cocina-columna {
+  min-width: 0;
+}
+
+.vista-cocina-columna-cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--borde-suave, #e5e7eb);
+}
+
+.vista-cocina-columna-titulo {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.vista-cocina-columna-contador {
+  font-size: 0.85rem;
+  color: var(--texto-secundario, #6b7280);
+}
+
+.vista-cocina-columna-vacio {
+  margin: 0;
+  padding: 1rem 0;
+}
+
+.vista-cocina-columna-grid {
+  grid-template-columns: 1fr;
+}
+
+.vista-operativa-canal-texto {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--borde-suave, #d1d5db);
+  font-weight: 500;
+}
+
+.vista-operativa-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.vista-operativa-btn.en-preparacion-btn {
+  background: #f59e0b;
+}
+
+@media (max-width: 900px) {
+  .vista-cocina-dos-columnas {
+    grid-template-columns: 1fr;
+  }
+}
