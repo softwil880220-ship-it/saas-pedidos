@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
 import {
   construirUrlWhatsApp,
@@ -53,12 +54,15 @@ export default function VistaRepartidor() {
 
   return (
     <div className="vista-operativa vista-repartidor">
-      <header className="vista-operativa-header">
-        <h1>Repartidor</h1>
-        <p className="vista-operativa-subtitulo">
-          Pedidos en camino · actualización en tiempo real
-        </p>
-        <span className="vista-operativa-contador">{pedidos.length} pendientes</span>
+      <header className="vista-operativa-header vista-operativa-header-con-acciones">
+        <div className="vista-operativa-header-contenido">
+          <h1>Repartidor</h1>
+          <p className="vista-operativa-subtitulo">
+            Pedidos en camino · actualización en tiempo real
+          </p>
+          <span className="vista-operativa-contador">{pedidos.length} pendientes</span>
+        </div>
+        <BotonCerrarSesion />
       </header>
 
       {cargando ? (

@@ -2837,6 +2837,30 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
+.vista-operativa-header-con-acciones {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vista-operativa-header-contenido {
+  min-width: 0;
+  flex: 1;
+}
+
+.vista-operativa-header-con-acciones .header-logout-btn {
+  position: static;
+  flex-shrink: 0;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.vista-operativa-header-con-acciones .header-logout-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
 .vista-cocina .vista-operativa-header {
   border-left: 5px solid #c2410c;
 }

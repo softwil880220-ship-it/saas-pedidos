@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
 import './VistaCocinaMostrador.css';
+import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
 import {
   DesgloseProductosPedido,
@@ -344,12 +345,15 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
 
   return (
     <div className={`vista-operativa ${claseVista}`}>
-      <header className="vista-operativa-header">
-        <h1>{titulo}</h1>
-        <p className="vista-operativa-subtitulo">
-          Pedidos en preparación · actualización en tiempo real
-        </p>
-        <span className="vista-operativa-contador">{pedidos.length} en cola</span>
+      <header className="vista-operativa-header vista-operativa-header-con-acciones">
+        <div className="vista-operativa-header-contenido">
+          <h1>{titulo}</h1>
+          <p className="vista-operativa-subtitulo">
+            Pedidos en preparación · actualización en tiempo real
+          </p>
+          <span className="vista-operativa-contador">{pedidos.length} en cola</span>
+        </div>
+        <BotonCerrarSesion />
       </header>
 
       {cargando ? (
