@@ -9,10 +9,12 @@ export const PERIODOS_REPORTE = {
 
 export const FILTROS_VENTA_REPORTE = [
   { value: 'todos', label: 'Todos' },
-  { value: 'caja', label: 'Solo Caja' },
-  { value: 'whatsapp', label: 'Solo WhatsApp (todos)' },
-  { value: 'whatsapp_domicilio', label: 'Solo WhatsApp / A domicilio' },
-  { value: 'whatsapp_sucursal', label: 'Solo WhatsApp / A recoger en sucursal' },
+  { value: 'caja', label: 'Caja' },
+  { value: 'mostrador', label: 'Mostrador' },
+  { value: 'whatsapp_domicilio', label: 'A domicilio' },
+  { value: 'whatsapp_sucursal', label: 'Para recoger en sucursal' },
+  { value: 'whatsapp', label: 'A domicilio / para recoger en sucursal (ambos)' },
+  { value: 'mesas', label: 'Mesas' },
 ];
 
 const CLIENTE_PUBLICO = 'Público general';
@@ -168,12 +170,18 @@ export function pedidoDentroDePeriodo(pedido, configPeriodo) {
 
 export function pedidoCoincideFiltroVenta(pedido, filtro) {
   const esCaja = pedido.tipo === 'presencial';
+  const esMostrador = pedido.tipo === 'mostrador';
+  const esMesa = pedido.tipo === 'mesa';
   const esWhatsapp = !pedido.tipo || pedido.tipo === 'whatsapp';
   const tipoEntrega = normalizarTipoEntrega(pedido.tipo_entrega);
 
   switch (filtro) {
     case 'caja':
       return esCaja;
+    case 'mostrador':
+      return esMostrador;
+    case 'mesas':
+      return esMesa;
     case 'whatsapp':
       return esWhatsapp;
     case 'whatsapp_domicilio':
@@ -218,6 +226,14 @@ export function formatearClienteReporte(pedido) {
 export function etiquetaTipoEntregaReporte(pedido) {
   if (pedido.tipo === 'presencial') {
     return 'Caja';
+  }
+
+  if (pedido.tipo === 'mesa') {
+    return 'En Mesa';
+  }
+
+  if (pedido.tipo === 'mostrador') {
+    return 'Mostrador';
   }
 
   const tipoEntrega = normalizarTipoEntrega(pedido.tipo_entrega);
