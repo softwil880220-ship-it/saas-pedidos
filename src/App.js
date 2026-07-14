@@ -1075,9 +1075,12 @@ function esMobileDashboardInicial() {
   return window.matchMedia('(max-width: 720px)').matches;
 }
 
+const ROLES_VENTAS_TOTALES_DASHBOARD = ['dueno', 'administrador'];
+
 function Dashboard() {
   const location = useLocation();
   const { negocioId, session, rol, usuario } = useAuth();
+  const puedeVerVentasTotalesDashboard = ROLES_VENTAS_TOTALES_DASHBOARD.includes(rol);
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const estadoInicialCaptura = esMobileDashboardInicial()
@@ -4203,6 +4206,7 @@ function Dashboard() {
               </h1>
             </div>
           </div>
+          {puedeVerVentasTotalesDashboard ? (
           <div className="header-stats">
             <div className="header-stat header-stat-principal">
               <span className="header-stat-label">Ventas totales hoy</span>
@@ -4245,6 +4249,7 @@ function Dashboard() {
               </div>
             </div>
           </div>
+          ) : null}
         </div>
         <BotonCerrarSesion />
       </header>
