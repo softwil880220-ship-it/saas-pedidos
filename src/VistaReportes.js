@@ -4,6 +4,7 @@ import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import {
   agruparPedidosPorDia,
+  calcularReportePorProducto,
   calcularResumenReporte,
   claveFechaDesdeDate,
   descripcionPeriodoTarjeta,
@@ -384,6 +385,11 @@ export default function VistaReportes() {
 
   const resumen = useMemo(
     () => calcularResumenReporte(pedidosFiltrados),
+    [pedidosFiltrados]
+  );
+
+  const reportePorProducto = useMemo(
+    () => calcularReportePorProducto(pedidosFiltrados),
     [pedidosFiltrados]
   );
 
@@ -842,6 +848,42 @@ export default function VistaReportes() {
               </span>
             </article>
           </div>
+
+          {!reporteDeshabilitado && !cargando && !error ? (
+            <section
+              className="reportes-por-producto"
+              aria-labelledby="reportes-por-producto-titulo"
+            >
+              <h3 id="reportes-por-producto-titulo" className="reportes-por-producto-titulo">
+                Reporte por producto
+              </h3>
+              {reportePorProducto.length === 0 ? (
+                <p className="dashboard-vacio reportes-por-producto-vacio">
+                  No hay productos para el período y tipo de venta seleccionados.
+                </p>
+              ) : (
+                <div className="reportes-tabla reportes-por-producto-tabla">
+                  <div className="reportes-tabla-header reportes-por-producto-header">
+                    <span>Producto</span>
+                    <span>Cantidad vendida</span>
+                    <span>Total facturado</span>
+                  </div>
+                  {reportePorProducto.map((fila, indice) => (
+                    <div
+                      key={`${fila.nombre}-${indice}`}
+                      className="reportes-tabla-fila reportes-por-producto-fila"
+                    >
+                      <span className="reporte-producto-nombre">{fila.nombre}</span>
+                      <span className="reporte-producto-cantidad">{fila.cantidadVendida}</span>
+                      <span className="reporte-producto-total">
+                        {formatearMoneda(fila.totalFacturado)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {reporteDeshabilitado ? (
             <p className="dashboard-vacio reportes-error">

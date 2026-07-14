@@ -3576,6 +3576,73 @@
   color: #b91c1c;
 }
 
+.reportes-por-producto {
+  margin-bottom: 1.5rem;
+}
+
+.reportes-por-producto-titulo {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #14532d;
+}
+
+.reportes-por-producto-vacio {
+  margin: 0;
+}
+
+.reportes-por-producto-tabla {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+}
+
+.reportes-por-producto-header,
+.reportes-por-producto-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(5rem, 1fr) minmax(6.5rem, auto);
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+}
+
+.reportes-por-producto-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.reportes-por-producto-fila {
+  font-size: 0.85rem;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.reportes-por-producto-fila:last-child {
+  border-bottom: none;
+}
+
+.reporte-producto-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reporte-producto-cantidad,
+.reporte-producto-total {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.reporte-producto-total {
+  font-weight: 600;
+  color: #14532d;
+}
+
 .reportes-tabla-header,
 .reportes-tabla-fila {
   grid-template-columns:
@@ -3625,6 +3692,39 @@
 @media (max-width: 720px) {
   .reportes-resumen {
     grid-template-columns: 1fr;
+  }
+
+  .reportes-por-producto-header {
+    display: none;
+  }
+
+  .reportes-por-producto-fila {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'nombre total'
+      'cantidad cantidad';
+    gap: 0.25rem 0.75rem;
+  }
+
+  .reporte-producto-nombre {
+    grid-area: nombre;
+    font-weight: 600;
+  }
+
+  .reporte-producto-cantidad {
+    grid-area: cantidad;
+    text-align: left;
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .reporte-producto-cantidad::before {
+    content: 'Cantidad vendida: ';
+    font-weight: 600;
+  }
+
+  .reporte-producto-total {
+    grid-area: total;
   }
 
   .reportes-controles {

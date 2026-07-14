@@ -212,6 +212,102 @@ export function calcularResumenReporte(pedidos) {
   return { totalPedidos, montoAcumulado };
 }
 
+function obtenerNombreBaseProductoReporte(linea) {
+  const nombre = String(linea?.nombre ?? '').trim();
+  if (nombre) {
+    return nombre;
+  }
+
+  const texto = String(linea?.descripcion ?? '').trim();
+  const indiceVariantes = texto.indexOf(' (');
+  return indiceVariantes >= 0 ? texto.slice(0, indiceVariantes).trim() : texto || 'Producto';
+}
+
+function obtenerClaveAgrupacionProductoReporte(linea) {
+  const productoId = linea?.productoId;
+  if (productoId != null && String(productoId).trim() !== '') {
+    return `id:${String(productoId)}`;
+  }
+
+  const nombre = obtenerNombreBaseProductoReporte(linea);
+  return `nombre:${nombre.toLocaleLowerCase('es')}`;
+}
+
+function obtenerCantidadLineaReporte(linea) {
+  const cantidad = parseInt(linea?.cantidad, 10);
+  return Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1;
+}
+
+function obtenerSubtotalLineaReporte(linea) {
+  const subtotal = Number(linea?.subtotal);
+  if (Number.isFinite(subtotal)) {
+    return subtotal;
+  }
+
+  const cantidad = obtenerCantidadLineaReporte(linea);
+  const precioUnitario = Number(linea?.precio_unitario ?? linea?.precioUnitario);
+  if (Number.isFinite(precioUnitario)) {
+    return precioUnitario * cantidad;
+  }
+
+  return 0;
+}
+
+export function calcularReportePorProducto(pedidos) {
+  const mapa = new Map();
+
+  const agregar = (clave, nombre, cantidad, subtotal) => {
+    const previo = mapa.get(clave);
+    if (previo) {
+      mapa.set(clave, {
+        nombre: previo.nombre,
+        cantidadVendida: previo.cantidadVendida + cantidad,
+        totalFacturado: previo.totalFacturado + subtotal,
+      });
+      return;
+    }
+
+    mapa.set(clave, {
+      nombre,
+      cantidadVendida: cantidad,
+      totalFacturado: subtotal,
+    });
+  };
+
+  (pedidos || []).forEach((pedido) => {
+    const lineas = Array.isArray(pedido.lineas_detalle) ? pedido.lineas_detalle : [];
+
+    if (lineas.length > 0) {
+      lineas.forEach((linea) => {
+        agregar(
+          obtenerClaveAgrupacionProductoReporte(linea),
+          obtenerNombreBaseProductoReporte(linea),
+          obtenerCantidadLineaReporte(linea),
+          obtenerSubtotalLineaReporte(linea)
+        );
+      });
+      return;
+    }
+
+    const resumen = pedido.producto?.trim();
+    if (!resumen) return;
+
+    agregar(`resumen:${resumen}`, resumen, 1, Number(pedido.total) || 0);
+  });
+
+  return Array.from(mapa.values())
+    .map(({ nombre, cantidadVendida, totalFacturado }) => ({
+      nombre,
+      cantidadVendida,
+      totalFacturado:
+        Math.round((totalFacturado + Number.EPSILON) * 100) / 100,
+    }))
+    .sort(
+      (a, b) =>
+        b.totalFacturado - a.totalFacturado || b.cantidadVendida - a.cantidadVendida
+    );
+}
+
 export function formatearClienteReporte(pedido) {
   const cliente = pedido.cliente?.trim() || CLIENTE_PUBLICO;
   const referencia = pedido.referencia?.trim();
@@ -381,6 +477,33 @@ export function exportarReportePdf({
   doc.text(`Total de pedidos: ${resumen.totalPedidos}`, 14, 40);
   doc.text(`Monto acumulado: ${formatearMoneda(resumen.montoAcumulado)}`, 14, 46);
 
+  const reportePorProducto = calcularReportePorProducto(pedidos);
+
+  doc.setFontSize(11);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte por producto', 14, 52);
+
+  autoTable(doc, {
+    startY: 56,
+    head: [['Producto', 'Cantidad vendida', 'Total facturado']],
+    body: reportePorProducto.length
+      ? reportePorProducto.map((fila) => [
+          fila.nombre,
+          String(fila.cantidadVendida),
+          formatearMoneda(fila.totalFacturado),
+        ])
+      : [['—', '0', '—']],
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+    alternateRowStyles: { fillColor: [236, 253, 245] },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+    },
+  });
+
+  const inicioTablaPedidos = (doc.lastAutoTable?.finalY ?? 56) + 8;
+
   const multiplesDias = periodoMultiplesDias(configPeriodo);
   let filas = [];
 
@@ -423,7 +546,7 @@ export function exportarReportePdf({
   }
 
   autoTable(doc, {
-    startY: 54,
+    startY: inicioTablaPedidos,
     head: [
       [
         multiplesDias ? 'Hora' : 'Fecha',
