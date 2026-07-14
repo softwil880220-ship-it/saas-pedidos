@@ -1,3 +1,9 @@
+import {
+  calcularSubtotalLineaDesdeProducto,
+  esProductoPorPeso,
+  formatearLineaProductoVenta,
+} from './productoUnidadVenta';
+
 export const TAB_CATEGORIAS_VARIANTES = 'categorias-variantes';
 
 export function categoriasVariantesActivas(categorias) {
@@ -263,8 +269,6 @@ export function formatearDetalleVariantesLinea(linea, ctx, idsPermitidosPorCateg
 }
 
 export function formatearLineaResumen(linea, producto, ctx) {
-  const cantidad = parseInt(linea.cantidad, 10);
-  let texto = cantidad > 1 ? `${producto.nombre} x${cantidad}` : producto.nombre;
   const mapa = parsearVariantesActivasProducto(producto, ctx);
   const detalles = categoriasVariantesActivas(ctx.categorias).flatMap((categoria) => {
     const categoriaId = String(categoria.id);
@@ -280,9 +284,24 @@ export function formatearLineaResumen(linea, producto, ctx) {
     }
     return [`${formato.clave}: ${nombres.join(', ')}`];
   });
+  const variantesTexto = detalles.join('; ');
 
-  if (detalles.length) {
-    texto += ` (${detalles.join('; ')})`;
+  if (esProductoPorPeso(producto)) {
+    const subtotal = calcularSubtotalLineaDesdeProducto(linea, producto, ctx);
+    return formatearLineaProductoVenta({
+      nombre: producto.nombre,
+      cantidad: linea.cantidad,
+      unidadVenta: producto.unidad_venta,
+      subtotal,
+      variantesTexto,
+    });
+  }
+
+  const cantidad = parseInt(linea.cantidad, 10);
+  let texto = cantidad > 1 ? `${producto.nombre} x${cantidad}` : producto.nombre;
+
+  if (variantesTexto) {
+    texto += ` (${variantesTexto})`;
   }
 
   return texto;

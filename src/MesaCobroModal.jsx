@@ -318,11 +318,15 @@ export default function MesaCobroModal({
                 <li key={grupo.clave} className="mesa-cobro-modal-producto-grupo">
                   <div className="mesa-cobro-modal-producto-fila">
                     <span className="mesa-cobro-modal-producto-etiqueta">
-                      {grupo.cantidad}x {grupo.nombre} ({formatearMoneda(grupo.precioUnitario)} c/u)
+                      {grupo.textoLinea
+                        ? grupo.textoLinea
+                        : `${grupo.cantidad}x ${grupo.nombre} (${formatearMoneda(grupo.precioUnitario)} c/u)`}
                     </span>
-                    <span className="mesa-cobro-modal-producto-subtotal">
-                      {formatearMoneda(grupo.subtotalBase)}
-                    </span>
+                    {!grupo.textoLinea ? (
+                      <span className="mesa-cobro-modal-producto-subtotal">
+                        {formatearMoneda(grupo.subtotalBase)}
+                      </span>
+                    ) : null}
                   </div>
                   {(grupo.extrasLineas || []).map((extra) => (
                     <div

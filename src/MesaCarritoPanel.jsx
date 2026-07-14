@@ -596,6 +596,7 @@ export default function MesaCarritoPanel({
             variantesCtx={variantesCtx}
             totalPedido={carrito.totalPedido}
             onAjustarCantidad={carrito.ajustarCantidadLinea}
+            onActualizarCantidad={carrito.actualizarCantidadLinea}
             onEliminarLinea={carrito.eliminarLinea}
             onCambiarVariante={carrito.cambiarVarianteLinea}
           >

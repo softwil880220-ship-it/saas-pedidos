@@ -86,6 +86,7 @@ function TarjetaPedidoCocina({
         pedido={pedidoEnriquecido}
         mostrarTotal={false}
         filtrarCocina={cocina}
+        sinPrecio
       />
 
       <div className="vista-operativa-acciones">

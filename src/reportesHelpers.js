@@ -1,6 +1,13 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
+import {
+  esProductoPorPeso,
+  formatearLineaDetalleGuardada,
+  calcularSubtotalPorUnidadVenta,
+  parseCantidadPieza,
+  parseGramosLinea,
+} from './productoUnidadVenta';
 
 export const PERIODOS_REPORTE = {
   SEMANA: 'semana',
@@ -234,6 +241,10 @@ function obtenerClaveAgrupacionProductoReporte(linea) {
 }
 
 function obtenerCantidadLineaReporte(linea) {
+  if (esProductoPorPeso(linea)) {
+    return parseGramosLinea(linea?.cantidad);
+  }
+
   const cantidad = parseInt(linea?.cantidad, 10);
   return Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1;
 }
@@ -244,13 +255,16 @@ function obtenerSubtotalLineaReporte(linea) {
     return subtotal;
   }
 
-  const cantidad = obtenerCantidadLineaReporte(linea);
   const precioUnitario = Number(linea?.precio_unitario ?? linea?.precioUnitario);
-  if (Number.isFinite(precioUnitario)) {
-    return precioUnitario * cantidad;
+  if (!Number.isFinite(precioUnitario)) {
+    return 0;
   }
 
-  return 0;
+  return calcularSubtotalPorUnidadVenta({
+    unidadVenta: linea?.unidad_venta,
+    cantidad: linea?.cantidad,
+    precioUnitario,
+  });
 }
 
 export function calcularReportePorProducto(pedidos) {
@@ -358,8 +372,13 @@ export function formatearProductosReporte(pedido) {
   if (lineas.length > 0) {
     return lineas
       .map((linea) => {
+        const textoPeso = formatearLineaDetalleGuardada(linea);
+        if (textoPeso) {
+          return textoPeso;
+        }
+
         const descripcion = (linea.descripcion || linea.nombre || 'Producto').trim();
-        const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+        const cantidad = parseCantidadPieza(linea.cantidad);
         const precioUnitario = linea.precio_unitario;
 
         if (

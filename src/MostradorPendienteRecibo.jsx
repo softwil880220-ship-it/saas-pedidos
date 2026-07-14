@@ -48,13 +48,19 @@ export default function MostradorPendienteRecibo({
       <div className="mostrador-recibo-lineas" role="list">
         {desglose.lineas.map((linea, index) => (
           <div key={index} className="mostrador-recibo-linea" role="listitem">
-            <span className="mostrador-recibo-cantidad" aria-label={`Cantidad ${linea.cantidad}`}>
-              {linea.cantidad}
-            </span>
-            <span className="mostrador-recibo-nombre">{linea.nombre}</span>
-            <span className="mostrador-recibo-precio">
-              {formatearPrecioLineaRecibo(linea.precioLinea)}
-            </span>
+            {linea.textoLinea ? (
+              <span className="mostrador-recibo-linea-completa">{linea.textoLinea}</span>
+            ) : (
+              <>
+                <span className="mostrador-recibo-cantidad" aria-label={`Cantidad ${linea.cantidad}`}>
+                  {linea.cantidad}
+                </span>
+                <span className="mostrador-recibo-nombre">{linea.nombre}</span>
+                <span className="mostrador-recibo-precio">
+                  {formatearPrecioLineaRecibo(linea.precioLinea)}
+                </span>
+              </>
+            )}
           </div>
         ))}
       </div>

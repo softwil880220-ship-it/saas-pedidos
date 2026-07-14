@@ -4,6 +4,7 @@ import {
   ordenarCategoriasPorFrecuencia,
 } from './categoriaFrecuenciaPedidos';
 import { formatearMoneda } from './pedidosShared';
+import { etiquetaPrecioProducto } from './productoUnidadVenta';
 
 function agruparProductosPorCategoria(productos, frecuenciaCategorias) {
   const map = new Map();
@@ -110,6 +111,7 @@ export default function SelectorProductosPedido({
                 <span className="selector-productos-item-nombre">{producto.nombre}</span>
                 <span className="selector-productos-item-precio">
                   {formatearMoneda(producto.precio)}
+                  {etiquetaPrecioProducto(producto) === 'c/kg' ? ' /kg' : ''}
                 </span>
               </div>
               <button

@@ -3,6 +3,11 @@ import {
   calcularSubtotal,
 } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
+import {
+  esProductoPorPeso,
+  etiquetaPrecioProducto,
+  formatearLineaProductoVenta,
+} from './productoUnidadVenta';
 import VariantesPedido from './VariantesPedido.jsx';
 
 export default function PedidoLineasCarrito({
@@ -11,6 +16,7 @@ export default function PedidoLineasCarrito({
   variantesCtx,
   totalPedido,
   onAjustarCantidad,
+  onActualizarCantidad,
   onEliminarLinea,
   onCambiarVariante,
   children,
@@ -24,6 +30,16 @@ export default function PedidoLineasCarrito({
         {lineas.map((linea, indice) => {
           const productoSeleccionado = buscarProductoPorId(productos, linea.productoId);
           const subtotal = calcularSubtotal(linea, productos, variantesCtx);
+          const esPorPeso = esProductoPorPeso(productoSeleccionado);
+          const textoLinea =
+            esPorPeso && subtotal > 0
+              ? formatearLineaProductoVenta({
+                  nombre: productoSeleccionado.nombre,
+                  cantidad: linea.cantidad,
+                  unidadVenta: productoSeleccionado.unidad_venta,
+                  subtotal,
+                })
+              : null;
 
           return (
             <div key={linea.id} className="pedido-linea-contenedor">
@@ -33,38 +49,60 @@ export default function PedidoLineasCarrito({
                   <span className="pedido-linea-producto-label">Producto</span>
                   <span className="pedido-linea-producto-nombre">
                     {productoSeleccionado
-                      ? `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} c/u`
+                      ? `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} ${etiquetaPrecioProducto(productoSeleccionado)}`
                       : ''}
                   </span>
+                  {textoLinea ? (
+                    <span className="pedido-linea-producto-resumen">{textoLinea}</span>
+                  ) : null}
                 </div>
                 <div className="formulario-campo pedido-linea-cantidad">
-                  <span className="pedido-linea-cantidad-label">Cantidad</span>
-                  <div
-                    className="cantidad-stepper"
-                    role="group"
-                    aria-label={`Cantidad producto ${indice + 1}`}
-                  >
-                    <button
-                      type="button"
-                      className="cantidad-stepper-btn"
-                      onClick={() => onAjustarCantidad(linea.id, -1)}
-                      disabled={(parseInt(linea.cantidad, 10) || 1) <= 1}
-                      aria-label="Reducir cantidad"
+                  <span className="pedido-linea-cantidad-label">
+                    {esPorPeso ? 'Peso' : 'Cantidad'}
+                  </span>
+                  {esPorPeso ? (
+                    <div className="pedido-linea-gramos">
+                      <input
+                        id={`cantidad-${linea.id}`}
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        className="pedido-linea-gramos-input"
+                        value={linea.cantidad}
+                        onChange={(e) => onActualizarCantidad?.(linea.id, e.target.value)}
+                        aria-label={`Gramos producto ${indice + 1}`}
+                      />
+                      <span className="pedido-linea-gramos-sufijo">gramos</span>
+                    </div>
+                  ) : (
+                    <div
+                      className="cantidad-stepper"
+                      role="group"
+                      aria-label={`Cantidad producto ${indice + 1}`}
                     >
-                      −
-                    </button>
-                    <span className="cantidad-stepper-valor" id={`cantidad-${linea.id}`}>
-                      {parseInt(linea.cantidad, 10) || 1}
-                    </span>
-                    <button
-                      type="button"
-                      className="cantidad-stepper-btn"
-                      onClick={() => onAjustarCantidad(linea.id, 1)}
-                      aria-label="Aumentar cantidad"
-                    >
-                      +
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        className="cantidad-stepper-btn"
+                        onClick={() => onAjustarCantidad(linea.id, -1)}
+                        disabled={(parseInt(linea.cantidad, 10) || 1) <= 1}
+                        aria-label="Reducir cantidad"
+                      >
+                        −
+                      </button>
+                      <span className="cantidad-stepper-valor" id={`cantidad-${linea.id}`}>
+                        {parseInt(linea.cantidad, 10) || 1}
+                      </span>
+                      <button
+                        type="button"
+                        className="cantidad-stepper-btn"
+                        onClick={() => onAjustarCantidad(linea.id, 1)}
+                        aria-label="Aumentar cantidad"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="formulario-campo pedido-linea-subtotal">
                   <label htmlFor={`subtotal-${linea.id}`}>Subtotal</label>

@@ -1,6 +1,15 @@
 import { redondearMoneda } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
 import {
+  UNIDAD_VENTA_PESO,
+  calcularSubtotalPorUnidadVenta,
+  esProductoPorPeso,
+  formatearLineaProductoVenta,
+  normalizarUnidadVenta,
+  parseCantidadPieza,
+  parseGramosLinea,
+} from './productoUnidadVenta';
+import {
   categoriasVariantesActivas,
   combinarVariantesLinea,
   crearVariantesLineaVacias,
@@ -30,7 +39,7 @@ function extraerEtiquetaVariantes(descripcion) {
 }
 
 function normalizarLineaDetalleRecibo(linea) {
-  const cantidad = Math.max(1, parseInt(linea?.cantidad, 10) || 1);
+  const unidadVenta = normalizarUnidadVenta(linea?.unidad_venta);
   const extras = redondearMoneda(Number(linea?.extras) || 0);
   const precioUnitarioGuardado = Number(linea?.precioUnitario ?? linea?.precio_unitario);
   const precioBaseGuardado = Number(linea?.precioBase);
@@ -38,26 +47,70 @@ function normalizarLineaDetalleRecibo(linea) {
     ? redondearMoneda(precioBaseGuardado)
     : Number.isFinite(precioUnitarioGuardado)
       ? redondearMoneda(precioUnitarioGuardado - extras)
+      : 0;
+  const precioUnitario = Number.isFinite(precioUnitarioGuardado)
+    ? redondearMoneda(precioUnitarioGuardado)
+    : redondearMoneda(precioBase + extras);
+  const nombre = extraerNombreBase(linea?.descripcion, linea?.nombre);
+  const etiquetaVariantes = extras > 0 ? extraerEtiquetaVariantes(linea?.descripcion) : null;
+
+  if (unidadVenta === UNIDAD_VENTA_PESO) {
+    const cantidad = parseGramosLinea(linea?.cantidad);
+    const subtotal = redondearMoneda(
+      Number(linea?.subtotal) ||
+        calcularSubtotalPorUnidadVenta({
+          unidadVenta,
+          cantidad,
+          precioUnitario,
+        })
+    );
+    const subtotalBase = calcularSubtotalPorUnidadVenta({
+      unidadVenta,
+      cantidad,
+      precioUnitario: precioBase,
+    });
+    const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
+
+    return {
+      productoId: linea?.productoId != null ? String(linea.productoId) : '',
+      nombre,
+      cantidad,
+      unidad_venta: unidadVenta,
+      precioBase,
+      subtotalBase,
+      subtotalExtras,
+      etiquetaVariantes,
+      tieneVariantes: extras > 0,
+      descripcion: linea?.descripcion || '',
+      subtotal,
+    };
+  }
+
+  const cantidad = parseCantidadPieza(linea?.cantidad);
+  const precioBasePieza = Number.isFinite(precioBaseGuardado)
+    ? redondearMoneda(precioBaseGuardado)
+    : Number.isFinite(precioUnitarioGuardado)
+      ? redondearMoneda(precioUnitarioGuardado - extras)
       : redondearMoneda((Number(linea?.subtotal) || 0) / cantidad - extras);
 
   const subtotal = redondearMoneda(
-    Number(linea?.subtotal) || precioBase * cantidad + extras * cantidad
+    Number(linea?.subtotal) || precioBasePieza * cantidad + extras * cantidad
   );
-  const subtotalBase = redondearMoneda(precioBase * cantidad);
+  const subtotalBase = redondearMoneda(precioBasePieza * cantidad);
   const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
-  const nombre = extraerNombreBase(linea?.descripcion, linea?.nombre);
-  const etiquetaVariantes = extras > 0 ? extraerEtiquetaVariantes(linea?.descripcion) : null;
 
   return {
     productoId: linea?.productoId != null ? String(linea.productoId) : '',
     nombre,
     cantidad,
-    precioBase,
+    unidad_venta: unidadVenta,
+    precioBase: precioBasePieza,
     subtotalBase,
     subtotalExtras,
     etiquetaVariantes,
     tieneVariantes: extras > 0,
     descripcion: linea?.descripcion || '',
+    subtotal,
   };
 }
 
@@ -114,6 +167,21 @@ function filaIngredienteExtraCombinado(normalizada) {
 
 function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
   const normalizada = normalizarLineaDetalleRecibo(lineaCruda);
+
+  if (esProductoPorPeso(normalizada)) {
+    return [
+      {
+        textoLinea: formatearLineaProductoVenta({
+          nombre: normalizada.nombre,
+          cantidad: normalizada.cantidad,
+          unidadVenta: normalizada.unidad_venta,
+          subtotal: normalizada.subtotal,
+        }),
+        precioLinea: normalizada.subtotal,
+      },
+    ];
+  }
+
   const filas = [
     {
       cantidad: normalizada.cantidad,

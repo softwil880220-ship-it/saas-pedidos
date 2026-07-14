@@ -1,3 +1,8 @@
+import {
+  formatearLineaDetalleCocina,
+  formatearLineaDetalleGuardada,
+} from './productoUnidadVenta';
+
 export const TIPOS_ENTREGA = {
   DOMICILIO: 'domicilio',
   SUCURSAL: 'sucursal',
@@ -565,7 +570,12 @@ export function formatearMoneda(valor) {
   return `$${formatearImporte(valor)}`;
 }
 
-export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCocina = null }) {
+export function DesgloseProductosPedido({
+  pedido,
+  mostrarTotal = true,
+  filtrarCocina = null,
+  sinPrecio = false,
+}) {
   if (pedido?.lineas_detalle?.length) {
     const lineas = filtrarCocina
       ? filtrarLineasDetallePorCocina(pedido, filtrarCocina)
@@ -579,19 +589,33 @@ export function DesgloseProductosPedido({ pedido, mostrarTotal = true, filtrarCo
 
     return (
       <div className="pedido-desglose">
-        {lineas.map((linea, index) => (
-          <div key={index} className="pedido-desglose-linea">
-            <span
-              className="pedido-desglose-cantidad"
-              aria-label={`Cantidad: ${linea.cantidad}`}
-            >
-              {linea.cantidad}
-            </span>
-            <div className="pedido-desglose-detalle">
-              <span className="pedido-desglose-nombre">{linea.descripcion}</span>
+        {lineas.map((linea, index) => {
+          const textoPeso = sinPrecio
+            ? formatearLineaDetalleCocina(linea)
+            : formatearLineaDetalleGuardada(linea);
+
+          if (textoPeso) {
+            return (
+              <div key={index} className="pedido-desglose-linea pedido-desglose-linea-peso">
+                <span className="pedido-desglose-nombre">{textoPeso}</span>
+              </div>
+            );
+          }
+
+          return (
+            <div key={index} className="pedido-desglose-linea">
+              <span
+                className="pedido-desglose-cantidad"
+                aria-label={`Cantidad: ${linea.cantidad}`}
+              >
+                {linea.cantidad}
+              </span>
+              <div className="pedido-desglose-detalle">
+                <span className="pedido-desglose-nombre">{linea.descripcion}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {mostrarTotal && (
           <p className="pedido-desglose-total">Total: {formatearMoneda(total)}</p>
         )}

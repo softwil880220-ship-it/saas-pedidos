@@ -1322,6 +1322,66 @@
   font-variant-numeric: tabular-nums;
 }
 
+.pedido-linea-gramos {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.pedido-linea-gramos-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pedido-linea-gramos-sufijo {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.pedido-linea-producto-resumen {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #14532d;
+}
+
+.producto-unidad-venta {
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.producto-unidad-venta-titulo {
+  padding: 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.producto-unidad-venta-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.producto-unidad-venta-opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  color: #1e293b;
+}
+
 .pedido-linea-numero {
   align-self: center;
   font-size: 0.85rem;

@@ -1,4 +1,13 @@
 import { redondearMoneda } from './pedidoCarritoCalculos';
+import {
+  UNIDAD_VENTA_PESO,
+  calcularSubtotalPorUnidadVenta,
+  esProductoPorPeso,
+  formatearLineaProductoVenta,
+  normalizarUnidadVenta,
+  parseCantidadPieza,
+  parseGramosLinea,
+} from './productoUnidadVenta';
 
 export const TIPOS_AJUSTE_MONETARIO = {
   PORCENTAJE: 'porcentaje',
@@ -33,7 +42,7 @@ function extraerEtiquetaVariantes(descripcion) {
 }
 
 function normalizarLineaDetalleCobro(linea) {
-  const cantidad = Math.max(1, parseInt(linea?.cantidad, 10) || 1);
+  const unidadVenta = normalizarUnidadVenta(linea?.unidad_venta);
   const extras = redondearMoneda(Number(linea?.extras) || 0);
   const precioUnitarioGuardado = Number(linea?.precioUnitario ?? linea?.precio_unitario);
   const precioBaseGuardado = Number(linea?.precioBase);
@@ -41,19 +50,70 @@ function normalizarLineaDetalleCobro(linea) {
     ? redondearMoneda(precioBaseGuardado)
     : Number.isFinite(precioUnitarioGuardado)
       ? redondearMoneda(precioUnitarioGuardado - extras)
-      : redondearMoneda((Number(linea?.subtotal) || 0) / cantidad - extras);
-
-  const subtotal = redondearMoneda(Number(linea?.subtotal) || precioBase * cantidad + extras * cantidad);
-  const subtotalBase = redondearMoneda(precioBase * cantidad);
-  const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
+      : 0;
   const nombre = extraerNombreBase(linea?.descripcion, linea?.nombre);
   const etiquetaVariantes = extras > 0 ? extraerEtiquetaVariantes(linea?.descripcion) : null;
+
+  if (unidadVenta === UNIDAD_VENTA_PESO) {
+    const cantidad = parseGramosLinea(linea?.cantidad);
+    const precioUnitario = Number.isFinite(precioUnitarioGuardado)
+      ? redondearMoneda(precioUnitarioGuardado)
+      : redondearMoneda(precioBase + extras);
+    const subtotal = redondearMoneda(
+      Number(linea?.subtotal) ||
+        calcularSubtotalPorUnidadVenta({
+          unidadVenta,
+          cantidad,
+          precioUnitario,
+        })
+    );
+    const subtotalBase = calcularSubtotalPorUnidadVenta({
+      unidadVenta,
+      cantidad,
+      precioUnitario: precioBase,
+    });
+    const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
+
+    return {
+      productoId: linea?.productoId != null ? String(linea.productoId) : '',
+      nombre,
+      cantidad,
+      unidad_venta: unidadVenta,
+      precioUnitario: precioBase,
+      subtotal,
+      subtotalBase,
+      subtotalExtras,
+      etiquetaVariantes,
+      tieneVariantes: extras > 0,
+      textoLinea: formatearLineaProductoVenta({
+        nombre,
+        cantidad,
+        unidadVenta,
+        subtotal,
+      }),
+    };
+  }
+
+  const cantidad = parseCantidadPieza(linea?.cantidad);
+  const precioBasePieza = Number.isFinite(precioBaseGuardado)
+    ? redondearMoneda(precioBaseGuardado)
+    : Number.isFinite(precioUnitarioGuardado)
+      ? redondearMoneda(precioUnitarioGuardado - extras)
+      : redondearMoneda((Number(linea?.subtotal) || 0) / cantidad - extras);
+
+  const subtotal = redondearMoneda(
+    Number(linea?.subtotal) || precioBasePieza * cantidad + extras * cantidad
+  );
+  const subtotalBase = redondearMoneda(precioBasePieza * cantidad);
+  const subtotalExtras = redondearMoneda(subtotal - subtotalBase);
 
   return {
     productoId: linea?.productoId != null ? String(linea.productoId) : '',
     nombre,
     cantidad,
-    precioUnitario: precioBase,
+    unidad_venta: unidadVenta,
+    precioUnitario: precioBasePieza,
+    subtotal,
     subtotalBase,
     subtotalExtras,
     etiquetaVariantes,
@@ -87,7 +147,16 @@ export function consolidarProductosRondasMesa(rondas) {
           mapaVariantes.set(clave, {
             ...existente,
             cantidad: existente.cantidad + linea.cantidad,
+            subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
             subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
+            textoLinea: esProductoPorPeso(linea)
+              ? formatearLineaProductoVenta({
+                  nombre: linea.nombre,
+                  cantidad: existente.cantidad + linea.cantidad,
+                  unidadVenta: linea.unidad_venta,
+                  subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
+                })
+              : existente.textoLinea,
             extrasLineas: [
               {
                 etiqueta: existente.extrasLineas[0].etiqueta,
@@ -104,8 +173,11 @@ export function consolidarProductosRondasMesa(rondas) {
           clave,
           nombre: linea.nombre,
           cantidad: linea.cantidad,
+          unidad_venta: linea.unidad_venta,
           precioUnitario: linea.precioUnitario,
+          subtotal: linea.subtotal,
           subtotalBase: linea.subtotalBase,
+          textoLinea: linea.textoLinea,
           extrasLineas: [
             {
               etiqueta: linea.etiquetaVariantes || 'Extra',
@@ -123,7 +195,16 @@ export function consolidarProductosRondasMesa(rondas) {
         mapaBase.set(clave, {
           ...existente,
           cantidad: existente.cantidad + linea.cantidad,
+          subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
           subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
+          textoLinea: esProductoPorPeso(linea)
+            ? formatearLineaProductoVenta({
+                nombre: linea.nombre,
+                cantidad: existente.cantidad + linea.cantidad,
+                unidadVenta: linea.unidad_venta,
+                subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
+              })
+            : existente.textoLinea,
         });
         return;
       }
@@ -132,8 +213,11 @@ export function consolidarProductosRondasMesa(rondas) {
         clave,
         nombre: linea.nombre,
         cantidad: linea.cantidad,
+        unidad_venta: linea.unidad_venta,
         precioUnitario: linea.precioUnitario,
+        subtotal: linea.subtotal,
         subtotalBase: linea.subtotalBase,
+        textoLinea: linea.textoLinea,
         extrasLineas: [],
       });
     });

@@ -85,6 +85,16 @@ import {
   redondearMoneda,
 } from './pedidoCarritoCalculos';
 import {
+  OPCIONES_UNIDAD_VENTA,
+  cantidadInicialLinea,
+  esProductoPorPeso,
+  etiquetaCampoPrecioCatalogo,
+  etiquetaPrecioProducto,
+  formatearLineaDetalleGuardada,
+  normalizarUnidadVenta,
+  parseCantidadPieza,
+} from './productoUnidadVenta';
+import {
   TAB_CATEGORIAS_VARIANTES,
   agruparItemsPorCategoria,
   catalogosVariantesOrdenadosDesde,
@@ -791,6 +801,11 @@ function normalizarLineasDetallePedido(pedido) {
 }
 
 function formatearLineaDetalleReporteHistorico(linea) {
+  const textoPeso = formatearLineaDetalleGuardada(linea);
+  if (textoPeso) {
+    return textoPeso;
+  }
+
   const descripcion = (linea.descripcion || linea.nombre || 'Producto').trim();
   const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
   const precioUnitario = linea.precio_unitario;
@@ -1158,6 +1173,7 @@ function Dashboard() {
     precio: '',
     categoria: '',
     cocina: COCINAS.COCINA1,
+    unidadVenta: 'pieza',
     variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
   });
   const [varianteForm, setVarianteForm] = useState({ nombre: '', precio: '0' });
@@ -1629,14 +1645,25 @@ function Dashboard() {
       lineas: prev.lineas.map((linea) => {
         if (linea.id !== lineaId) return linea;
         if (campo === 'productoId') {
+          const producto = buscarProductoPorId(productos, valor);
           return {
             ...linea,
             productoId: String(valor),
+            cantidad: cantidadInicialLinea(producto),
             variantes: crearVariantesLineaVacias(variantesCtx.categorias),
           };
         }
         return { ...linea, [campo]: valor };
       }),
+    }));
+  };
+
+  const actualizarCantidadLinea = (lineaId, valor) => {
+    setForm((prev) => ({
+      ...prev,
+      lineas: prev.lineas.map((linea) =>
+        linea.id === lineaId ? { ...linea, cantidad: valor } : linea
+      ),
     }));
   };
 
@@ -1647,12 +1674,17 @@ function Dashboard() {
         prev.lineas.map((linea) => {
           if (linea.id !== lineaId) return linea;
 
-          const cantidadActual = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+          const producto = buscarProductoPorId(productos, linea.productoId);
+          if (esProductoPorPeso(producto)) {
+            return linea;
+          }
+
+          const cantidadActual = parseCantidadPieza(linea.cantidad);
           const cantidadNueva = Math.max(1, cantidadActual + delta);
 
           return { ...linea, cantidad: String(cantidadNueva) };
         }),
-        variantesCtx
+        { ...variantesCtx, productos }
       ),
     }));
   };
@@ -1683,28 +1715,32 @@ function Dashboard() {
 
   const agregarProductoAlPedido = (productoId) => {
     const idStr = String(productoId);
+    const producto = buscarProductoPorId(productos, productoId);
 
     setForm((prev) => {
       const lineasConsolidadas = consolidarLineasPorProducto(
         prev.lineas.filter((linea) => linea.productoId),
-        variantesCtx
-      );
-      const indiceExistente = lineasConsolidadas.findIndex(
-        (linea) => String(linea.productoId) === idStr
+        { ...variantesCtx, productos }
       );
 
-      if (indiceExistente !== -1) {
-        return {
-          ...prev,
-          lineas: lineasConsolidadas.map((linea, indice) =>
-            indice === indiceExistente
-              ? {
-                  ...linea,
-                  cantidad: String((parseInt(linea.cantidad, 10) || 1) + 1),
-                }
-              : linea
-          ),
-        };
+      if (!esProductoPorPeso(producto)) {
+        const indiceExistente = lineasConsolidadas.findIndex(
+          (linea) => String(linea.productoId) === idStr
+        );
+
+        if (indiceExistente !== -1) {
+          return {
+            ...prev,
+            lineas: lineasConsolidadas.map((linea, indice) =>
+              indice === indiceExistente
+                ? {
+                    ...linea,
+                    cantidad: String(parseCantidadPieza(linea.cantidad) + 1),
+                  }
+                : linea
+            ),
+          };
+        }
       }
 
       return {
@@ -1714,6 +1750,7 @@ function Dashboard() {
           {
             ...crearLineaPedido(nextLineaId.current++, variantesCtx),
             productoId: idStr,
+            cantidad: cantidadInicialLinea(producto),
           },
         ],
       };
@@ -1827,8 +1864,8 @@ function Dashboard() {
     [form.lineas]
   );
   const lineasPedidoConProductoWhatsapp = useMemo(
-    () => consolidarLineasPorProducto(lineasPedidoActivas, variantesCtx),
-    [lineasPedidoActivas, variantesCtx]
+    () => consolidarLineasPorProducto(lineasPedidoActivas, { ...variantesCtx, productos }),
+    [lineasPedidoActivas, variantesCtx, productos]
   );
   const totalPedidoWhatsapp = useMemo(
     () => calcularTotalLineas(lineasPedidoActivas, productos, variantesCtx),
@@ -1849,6 +1886,14 @@ function Dashboard() {
       return;
     }
     ajustarCantidadLinea(lineaId, delta);
+  };
+
+  const actualizarCantidadLineaCaptura = (lineaId, valor) => {
+    if (modo === 'presencial') {
+      carrito.actualizarCantidadLinea(lineaId, valor);
+      return;
+    }
+    actualizarCantidadLinea(lineaId, valor);
   };
 
   const eliminarLineaCaptura = (lineaId) => {
@@ -1922,6 +1967,7 @@ function Dashboard() {
       precio: '',
       categoria: '',
       cocina: COCINAS.COCINA1,
+      unidadVenta: 'pieza',
       variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
     });
   };
@@ -1938,6 +1984,7 @@ function Dashboard() {
       precio: String(producto.precio),
       categoria: producto.categoria || '',
       cocina: normalizarCocinaProducto(producto.cocina),
+      unidadVenta: normalizarUnidadVenta(producto.unidad_venta),
       variantesActivas: variantesActivasFormDesdeProducto(producto, variantesCtx),
     });
   };
@@ -2072,6 +2119,7 @@ function Dashboard() {
       precio: parseFloat(productoForm.precio),
       categoria: productoForm.categoria.trim() || null,
       cocina: normalizarCocinaProducto(productoForm.cocina),
+      unidad_venta: normalizarUnidadVenta(productoForm.unidadVenta),
       variantes_configuradas: true,
     };
 
@@ -4951,6 +4999,7 @@ function Dashboard() {
                     variantesCtx={variantesCtx}
                     totalPedido={carrito.totalPedido}
                     onAjustarCantidad={carrito.ajustarCantidadLinea}
+                    onActualizarCantidad={carrito.actualizarCantidadLinea}
                     onEliminarLinea={carrito.eliminarLinea}
                   >
                     <CajaPagoEfectivo
@@ -4984,126 +5033,38 @@ function Dashboard() {
                     ) : null}
                   </PedidoLineasCarrito>
                 ) : (
-                  <>
-                <div className="pedido-lineas">
-                  <div className="pedido-lineas-encabezado">
-                    <span>Productos del pedido</span>
-                  </div>
-                  {lineasPedidoConProducto.map((linea, indice) => {
-                    const productoSeleccionado = buscarProductoPorId(
-                      productos,
-                      linea.productoId
-                    );
-                    const subtotal = calcularSubtotal(
-                      linea,
-                      productos,
-                      variantesCtx
-                    );
-
-                    return (
-                      <div key={linea.id} className="pedido-linea-contenedor">
-                        <div className="pedido-linea">
-                          <div className="pedido-linea-numero">#{indice + 1}</div>
-                          <div className="formulario-campo pedido-linea-producto">
-                            <span className="pedido-linea-producto-label">Producto</span>
-                            <span className="pedido-linea-producto-nombre">
-                              {productoSeleccionado
-                                ? `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} c/u`
-                                : ''}
-                            </span>
-                          </div>
-                          <div className="formulario-campo pedido-linea-cantidad">
-                            <span className="pedido-linea-cantidad-label">Cantidad</span>
-                            <div
-                              className="cantidad-stepper"
-                              role="group"
-                              aria-label={`Cantidad producto ${indice + 1}`}
-                            >
-                              <button
-                                type="button"
-                                className="cantidad-stepper-btn"
-                                onClick={() => ajustarCantidadLineaCaptura(linea.id, -1)}
-                                disabled={(parseInt(linea.cantidad, 10) || 1) <= 1}
-                                aria-label="Reducir cantidad"
-                              >
-                                −
-                              </button>
-                              <span
-                                className="cantidad-stepper-valor"
-                                id={`cantidad-${linea.id}`}
-                              >
-                                {parseInt(linea.cantidad, 10) || 1}
-                              </span>
-                              <button
-                                type="button"
-                                className="cantidad-stepper-btn"
-                                onClick={() => ajustarCantidadLineaCaptura(linea.id, 1)}
-                                aria-label="Aumentar cantidad"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                          <div className="formulario-campo pedido-linea-subtotal">
-                            <label htmlFor={`subtotal-${linea.id}`}>Subtotal</label>
-                            <input
-                              id={`subtotal-${linea.id}`}
-                              type="text"
-                              value={subtotal > 0 ? formatearMoneda(subtotal) : ''}
-                              readOnly
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="eliminar-linea-btn"
-                            onClick={() => eliminarLineaCaptura(linea.id)}
-                            aria-label={`Eliminar producto ${indice + 1}`}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        {!esModoPresencial && productoSeleccionado && (
-                          <VariantesPedido
-                            key={`variantes-${linea.id}-${linea.productoId}`}
-                            linea={linea}
-                            producto={productoSeleccionado}
-                            variantesCtx={variantesCtx}
-                            onToggleVariante={cambiarVarianteLinea}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pedido-acciones">
-                  <div className="pedido-total-pedido">
-                    <span className="pedido-total-label">Total del pedido</span>
-                    <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
-                  </div>
-                  <div className="pedido-acciones-principales">
-                    <button
-                      type="button"
-                      className="limpiar-pedido-btn"
-                      onClick={limpiarPedidoCaptura}
-                    >
-                      Limpiar pedido
-                    </button>
-                    <button
-                      type="submit"
-                      className="guardar-btn"
-                      disabled={productos.length === 0 || totalPedido <= 0}
-                    >
-                      Guardar pedido
-                    </button>
-                  </div>
-                  {errorGuardarPedido ? (
-                    <p className="formulario-error-guardar" role="alert">
-                      {errorGuardarPedido}
-                    </p>
-                  ) : null}
-                </div>
-                  </>
+                  <PedidoLineasCarrito
+                    lineas={lineasPedidoConProducto}
+                    productos={productos}
+                    variantesCtx={variantesCtx}
+                    totalPedido={totalPedido}
+                    onAjustarCantidad={ajustarCantidadLineaCaptura}
+                    onActualizarCantidad={actualizarCantidadLineaCaptura}
+                    onEliminarLinea={eliminarLineaCaptura}
+                    onCambiarVariante={cambiarVarianteLinea}
+                  >
+                    <div className="pedido-acciones-principales">
+                      <button
+                        type="button"
+                        className="limpiar-pedido-btn"
+                        onClick={limpiarPedidoCaptura}
+                      >
+                        Limpiar pedido
+                      </button>
+                      <button
+                        type="submit"
+                        className="guardar-btn"
+                        disabled={productos.length === 0 || totalPedido <= 0}
+                      >
+                        Guardar pedido
+                      </button>
+                    </div>
+                    {errorGuardarPedido ? (
+                      <p className="formulario-error-guardar" role="alert">
+                        {errorGuardarPedido}
+                      </p>
+                    ) : null}
+                  </PedidoLineasCarrito>
                 )}
               </form>
               {productos.length === 0 && (
@@ -5307,7 +5268,9 @@ function Dashboard() {
                           />
                         </div>
                         <div className="formulario-campo">
-                          <label htmlFor="precio">Precio</label>
+                          <label htmlFor="precio">
+                            {etiquetaCampoPrecioCatalogo(productoForm.unidadVenta)}
+                          </label>
                           <input
                             id="precio"
                             name="precio"
@@ -5319,6 +5282,23 @@ function Dashboard() {
                             required
                           />
                         </div>
+                        <fieldset className="producto-unidad-venta">
+                          <legend className="producto-unidad-venta-titulo">Unidad de venta</legend>
+                          <div className="producto-unidad-venta-opciones">
+                            {OPCIONES_UNIDAD_VENTA.map((opcion) => (
+                              <label key={opcion.value} className="producto-unidad-venta-opcion">
+                                <input
+                                  type="radio"
+                                  name="unidadVenta"
+                                  value={opcion.value}
+                                  checked={productoForm.unidadVenta === opcion.value}
+                                  onChange={handleProductoFormChange}
+                                />
+                                <span>{opcion.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
                         <div className="formulario-campo">
                           <label htmlFor="categoria">Categoría</label>
                           <input
@@ -5445,6 +5425,7 @@ function Dashboard() {
                           </p>
                           <p className="pedido-total">
                             {formatearMoneda(producto.precio)}
+                            {etiquetaPrecioProducto(producto) === 'c/kg' ? ' /kg' : ''}
                           </p>
                           <div className="tarjeta-acciones">
                             <button

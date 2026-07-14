@@ -1,11 +1,20 @@
 import { normalizarCocinaProducto } from './pedidosShared';
 import {
+  UNIDAD_VENTA_PESO,
+  calcularSubtotalPorUnidadVenta,
+  esProductoPorPeso,
+  normalizarUnidadVenta,
+  parseCantidadPieza,
+  parseGramosLinea,
+} from './productoUnidadVenta';
+import {
   calcularExtrasLinea,
   clonarVariantesLinea,
   formatearDetalleVariantesLinea,
 } from './variantesDinamicas';
 
 export function consolidarLineasPorProducto(lineas, ctx) {
+  const productos = ctx?.productos || [];
   const orden = [];
   const map = new Map();
 
@@ -13,13 +22,27 @@ export function consolidarLineasPorProducto(lineas, ctx) {
     if (!linea?.productoId) return;
 
     const productoId = String(linea.productoId);
-    const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+    const producto = buscarProductoPorId(productos, productoId);
+
+    if (esProductoPorPeso(producto)) {
+      const clave = `${productoId}-${linea.id}`;
+      map.set(clave, {
+        ...linea,
+        productoId,
+        cantidad: String(linea.cantidad ?? ''),
+        variantes: clonarVariantesLinea(linea.variantes, ctx?.categorias),
+      });
+      orden.push(clave);
+      return;
+    }
+
+    const cantidad = parseCantidadPieza(linea.cantidad);
 
     if (map.has(productoId)) {
       const existente = map.get(productoId);
       map.set(productoId, {
         ...existente,
-        cantidad: String((parseInt(existente.cantidad, 10) || 1) + cantidad),
+        cantidad: String(parseCantidadPieza(existente.cantidad) + cantidad),
         variantes: clonarVariantesLinea(existente.variantes, ctx?.categorias),
       });
       return;
@@ -35,7 +58,7 @@ export function consolidarLineasPorProducto(lineas, ctx) {
     orden.push(productoId);
   });
 
-  return orden.map((productoId) => map.get(productoId));
+  return orden.map((clave) => map.get(clave));
 }
 
 function buscarPorId(lista, id) {
@@ -69,17 +92,49 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
   const producto = buscarProductoPorId(listaProductos, linea.productoId);
   if (!producto) return null;
 
-  const cantidad = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+  const unidadVenta = normalizarUnidadVenta(producto.unidad_venta);
   const precioBase = parsePrecioCatalogo(producto.precio);
   const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
   const precioUnitario = redondearMoneda(precioBase + extras);
-  const subtotal = redondearMoneda(precioUnitario * cantidad);
   const descripcion = formatearDescripcionLinea(linea, producto, variantesCtx);
+
+  if (unidadVenta === UNIDAD_VENTA_PESO) {
+    const cantidad = parseGramosLinea(linea.cantidad);
+    if (cantidad <= 0) return null;
+
+    const subtotal = calcularSubtotalPorUnidadVenta({
+      unidadVenta,
+      cantidad,
+      precioUnitario,
+    });
+
+    return {
+      productoId: String(producto.id),
+      nombre: producto.nombre,
+      cantidad,
+      unidad_venta: unidadVenta,
+      precioBase,
+      extras,
+      precioUnitario,
+      precio_unitario: precioUnitario,
+      subtotal,
+      descripcion,
+      cocina: normalizarCocinaProducto(producto.cocina),
+    };
+  }
+
+  const cantidad = parseCantidadPieza(linea.cantidad);
+  const subtotal = calcularSubtotalPorUnidadVenta({
+    unidadVenta,
+    cantidad,
+    precioUnitario,
+  });
 
   return {
     productoId: String(producto.id),
     nombre: producto.nombre,
     cantidad,
+    unidad_venta: unidadVenta,
     precioBase,
     extras,
     precioUnitario,

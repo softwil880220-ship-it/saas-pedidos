@@ -10,6 +10,11 @@ import {
   consolidarLineasPorProducto,
 } from './pedidoCarritoCalculos';
 import {
+  cantidadInicialLinea,
+  esProductoPorPeso,
+  parseCantidadPieza,
+} from './productoUnidadVenta';
+import {
   CLIENTE_MOSTRADOR,
   crearFormularioPedidoDefault,
   debeSuprimirPersistEco,
@@ -224,8 +229,8 @@ export default function useCarritoPedido({
   );
 
   const lineasPedidoConProducto = useMemo(
-    () => consolidarLineasPorProducto(lineasPedidoActivas, variantesCtx),
-    [lineasPedidoActivas, variantesCtx]
+    () => consolidarLineasPorProducto(lineasPedidoActivas, { ...variantesCtx, productos }),
+    [lineasPedidoActivas, variantesCtx, productos]
   );
 
   const totalPedido = useMemo(
@@ -418,9 +423,11 @@ export default function useCarritoPedido({
         lineas: prev.lineas.map((linea) => {
           if (linea.id !== lineaId) return linea;
           if (campo === 'productoId') {
+            const producto = buscarProductoPorId(productos, valor);
             return {
               ...linea,
               productoId: String(valor),
+              cantidad: cantidadInicialLinea(producto),
               variantes: crearVariantesLineaVacias(variantesCtx.categorias),
             };
           }
@@ -428,8 +435,17 @@ export default function useCarritoPedido({
         }),
       }));
     },
-    [variantesCtx]
+    [variantesCtx, productos]
   );
+
+  const actualizarCantidadLinea = useCallback((lineaId, valor) => {
+    setForm((prev) => ({
+      ...prev,
+      lineas: prev.lineas.map((linea) =>
+        linea.id === lineaId ? { ...linea, cantidad: valor } : linea
+      ),
+    }));
+  }, []);
 
   const ajustarCantidadLinea = useCallback(
     (lineaId, delta) => {
@@ -439,16 +455,21 @@ export default function useCarritoPedido({
           prev.lineas.map((linea) => {
             if (linea.id !== lineaId) return linea;
 
-            const cantidadActual = Math.max(1, parseInt(linea.cantidad, 10) || 1);
+            const producto = buscarProductoPorId(productos, linea.productoId);
+            if (esProductoPorPeso(producto)) {
+              return linea;
+            }
+
+            const cantidadActual = parseCantidadPieza(linea.cantidad);
             const cantidadNueva = Math.max(1, cantidadActual + delta);
 
             return { ...linea, cantidad: String(cantidadNueva) };
           }),
-          variantesCtx
+          { ...variantesCtx, productos }
         ),
       }));
     },
-    [variantesCtx]
+    [variantesCtx, productos]
   );
 
   const cambiarVarianteLinea = useCallback((lineaId, categoria, itemId) => {
@@ -478,28 +499,32 @@ export default function useCarritoPedido({
   const agregarProductoAlPedido = useCallback(
     (productoId) => {
       const idStr = String(productoId);
+      const producto = buscarProductoPorId(productos, productoId);
 
       setForm((prev) => {
         const lineasConsolidadas = consolidarLineasPorProducto(
           prev.lineas.filter((linea) => linea.productoId),
-          variantesCtx
-        );
-        const indiceExistente = lineasConsolidadas.findIndex(
-          (linea) => String(linea.productoId) === idStr
+          { ...variantesCtx, productos }
         );
 
-        if (indiceExistente !== -1) {
-          return {
-            ...prev,
-            lineas: lineasConsolidadas.map((linea, indice) =>
-              indice === indiceExistente
-                ? {
-                    ...linea,
-                    cantidad: String((parseInt(linea.cantidad, 10) || 1) + 1),
-                  }
-                : linea
-            ),
-          };
+        if (!esProductoPorPeso(producto)) {
+          const indiceExistente = lineasConsolidadas.findIndex(
+            (linea) => String(linea.productoId) === idStr
+          );
+
+          if (indiceExistente !== -1) {
+            return {
+              ...prev,
+              lineas: lineasConsolidadas.map((linea, indice) =>
+                indice === indiceExistente
+                  ? {
+                      ...linea,
+                      cantidad: String(parseCantidadPieza(linea.cantidad) + 1),
+                    }
+                  : linea
+              ),
+            };
+          }
         }
 
         return {
@@ -509,12 +534,13 @@ export default function useCarritoPedido({
             {
               ...crearLineaPedido(nextLineaId.current++, variantesCtx),
               productoId: idStr,
+              cantidad: cantidadInicialLinea(producto),
             },
           ],
         };
       });
     },
-    [variantesCtx]
+    [variantesCtx, productos]
   );
 
   const eliminarLinea = useCallback((lineaId) => {
@@ -548,6 +574,7 @@ export default function useCarritoPedido({
     snapshot,
     agregarProductoAlPedido,
     ajustarCantidadLinea,
+    actualizarCantidadLinea,
     eliminarLinea,
     actualizarLinea,
     cambiarVarianteLinea,
