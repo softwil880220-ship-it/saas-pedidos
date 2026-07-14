@@ -2272,21 +2272,19 @@ function Dashboard() {
       formatearClaveFecha(new Date(pedido.created_at)) === hoyClave
   );
   const pedidosHoyCaja = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'presencial');
-  const pedidosHoyWhatsApp = pedidosHoyTodos.filter((pedido) => esPedidoWhatsapp(pedido));
-  const pedidosHoyDomicilio = pedidosPorTipoEntrega(
-    pedidosHoyWhatsApp,
-    TIPOS_ENTREGA.DOMICILIO
-  );
-  const pedidosHoySucursal = pedidosPorTipoEntrega(
-    pedidosHoyWhatsApp,
-    TIPOS_ENTREGA.SUCURSAL
-  );
+  const pedidosHoyMostrador = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'mostrador');
+  const pedidosHoyRecogerDomicilio = pedidosHoyTodos.filter((pedido) => esPedidoWhatsapp(pedido));
+  const pedidosHoyMesas = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'mesa');
 
   const totalVentasHoyCaja = totalVentasPedidos(pedidosHoyCaja);
-  const totalVentasHoyWhatsApp = totalVentasPedidos(pedidosHoyWhatsApp);
-  const totalVentasHoyTotal = totalVentasHoyCaja + totalVentasHoyWhatsApp;
-  const totalVentasHoyDomicilio = totalVentasPedidos(pedidosHoyDomicilio);
-  const totalVentasHoySucursal = totalVentasPedidos(pedidosHoySucursal);
+  const totalVentasHoyMostrador = totalVentasPedidos(pedidosHoyMostrador);
+  const totalVentasHoyRecogerDomicilio = totalVentasPedidos(pedidosHoyRecogerDomicilio);
+  const totalVentasHoyMesas = totalVentasPedidos(pedidosHoyMesas);
+  const totalVentasHoyTotal =
+    totalVentasHoyCaja +
+    totalVentasHoyMostrador +
+    totalVentasHoyRecogerDomicilio +
+    totalVentasHoyMesas;
   const ventasBrutasPorFormaPago = useMemo(
     () => calcularVentasPorFormaPago(pedidosHoyTodos),
     [pedidosHoyTodos]
@@ -4217,12 +4215,12 @@ function Dashboard() {
                 {formatearMoneda(totalVentasHoyTotal)}
               </span>
               <p className="header-stat-desglose">
-                Caja: {formatearMoneda(totalVentasHoyCaja)} | WhatsApp:{' '}
-                {formatearMoneda(totalVentasHoyWhatsApp)}
+                Caja: {formatearMoneda(totalVentasHoyCaja)} | Mostrador:{' '}
+                {formatearMoneda(totalVentasHoyMostrador)}
               </p>
               <p className="header-stat-desglose header-stat-desglose-whatsapp">
-                🛵 Domicilio: {formatearMoneda(totalVentasHoyDomicilio)} | 🏪 Para recoger:{' '}
-                {formatearMoneda(totalVentasHoySucursal)}
+                Para recoger/domicilio: {formatearMoneda(totalVentasHoyRecogerDomicilio)} | Mesas:{' '}
+                {formatearMoneda(totalVentasHoyMesas)}
               </p>
               <div className="header-acciones-caja">
                 <button
