@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import MesaRondaDesglose from './MesaRondaDesglose.jsx';
 import {
-  DesgloseProductosPedido,
   extraerNumeroRondaMesa,
   formatearFechaHoraCocina,
 } from './pedidosShared';
@@ -19,6 +19,7 @@ export default function MesaRondasEnviadas({
   numeroMesa,
   abiertaEn,
   visible,
+  productos,
 }) {
   const [expandido, setExpandido] = useState(false);
   const { rondas, cargando, resolverNombreCaptura } = useRondasMesaEnviadas({
@@ -83,10 +84,7 @@ export default function MesaRondasEnviadas({
                   </p>
                 ) : null}
 
-                <DesgloseProductosPedido
-                  pedido={ronda}
-                  mostrarTotal={false}
-                />
+                <MesaRondaDesglose pedido={ronda} productos={productos} />
               </article>
             );
           })}

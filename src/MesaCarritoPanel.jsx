@@ -580,6 +580,7 @@ export default function MesaCarritoPanel({
             numeroMesa={numeroMesa}
             abiertaEn={metadatosFolio.abiertaEn}
             visible={Boolean(folioId) && !folioAjenoEnmascarado}
+            productos={productos}
           />
           <SelectorProductosPedido
             productos={productosOrdenados}
