@@ -31,12 +31,34 @@ export function coincideCocina(cocinaA, cocinaB) {
   return normalizarCocinaProducto(cocinaA) === normalizarCocinaProducto(cocinaB);
 }
 
-export function enriquecerLineasDetalleCocina(pedido, productos = []) {
-  if (!pedido?.lineas_detalle?.length || !productos?.length) {
-    return pedido;
+export function normalizarLineasDetallePedido(pedido) {
+  const raw = pedido?.lineas_detalle;
+
+  if (Array.isArray(raw)) {
+    return raw;
   }
 
-  const lineas = pedido.lineas_detalle.map((linea) => {
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+export function enriquecerLineasDetalleCocina(pedido, productos = []) {
+  const lineasDetalle = normalizarLineasDetallePedido(pedido);
+  const pedidoNormalizado = { ...pedido, lineas_detalle: lineasDetalle };
+
+  if (!lineasDetalle.length || !productos?.length) {
+    return pedidoNormalizado;
+  }
+
+  const lineas = lineasDetalle.map((linea) => {
     const producto = productos.find(
       (item) => String(item.id) === String(linea.productoId)
     );
@@ -48,7 +70,7 @@ export function enriquecerLineasDetalleCocina(pedido, productos = []) {
     };
   });
 
-  return { ...pedido, lineas_detalle: lineas };
+  return { ...pedidoNormalizado, lineas_detalle: lineas };
 }
 
 export function etiquetaCocinaProducto(cocina) {
@@ -59,14 +81,16 @@ export function etiquetaCocinaProducto(cocina) {
 }
 
 export function filtrarLineasDetallePorCocina(pedido, cocina) {
-  if (!pedido?.lineas_detalle?.length) {
+  const lineasDetalle = normalizarLineasDetallePedido(pedido);
+
+  if (!lineasDetalle.length) {
     if (cocina === COCINAS.COCINA1 && pedido?.producto?.trim()) {
       return [{ cantidad: 1, descripcion: pedido.producto, subtotal: pedido.total }];
     }
     return [];
   }
 
-  return pedido.lineas_detalle.filter((linea) =>
+  return lineasDetalle.filter((linea) =>
     coincideCocina(linea.cocina, cocina)
   );
 }
@@ -288,7 +312,8 @@ export function formatearProgresoCocinas(pedido) {
 }
 
 export function pedidoVisibleEnCocina(pedido, cocina, productos, mostradorFlujoCocina = 0) {
-  if (pedido?.tipo === 'presencial') return false;
+  if (!pedido || pedido.deleted_at != null) return false;
+  if (pedido.tipo === 'presencial') return false;
 
   if (esPedidoMostrador(pedido)) {
     if (mostradorFlujoCocina === 0) return false;

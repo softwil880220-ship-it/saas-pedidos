@@ -1077,6 +1077,25 @@
   }
 }
 
+.mesa-rondas-enviadas-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.mesa-ronda-editor {
+  margin-top: 0.75rem;
+}
+
+.mesa-ronda-editor-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
 .venta-resumen {
   margin-bottom: 1.5rem;
   padding: 1.25rem 1.5rem;

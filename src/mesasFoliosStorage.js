@@ -7,8 +7,16 @@ export const STORAGE_KEY_MESA_COBRO_MODAL = 'pos_mesa_cobro_modal';
 export const ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS = 'FOLIO_SIN_FILAS_AFECTADAS';
 export const MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO =
   'Esta mesa ya fue cobrada por otro usuario.';
+export const MENSAJE_MESA_PEDIDO_MODIFICADO_SIN_COBRAR =
+  'El pedido fue modificado desde otro dispositivo y ya no hay nada que cobrar.';
+
+export const MOTIVO_CIERRE_FOLIO_MESA = {
+  COBRADA_REMOTO: 'cobrada',
+  MODIFICADA_SIN_COBRAR: 'modificada',
+};
 
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
+const foliosCerradosPorCobro = new Set();
 const cacheFolios = new Map();
 const folioAbiertoPorNumeroMesa = new Map();
 let negocioIdCache = null;
@@ -194,8 +202,49 @@ function removerFolioDeCache(folioId) {
   }
 }
 
+export function marcarFolioCerradoPorCobro(folioId) {
+  if (folioId != null) {
+    foliosCerradosPorCobro.add(String(folioId));
+  }
+}
+
+export function folioFueCerradoPorCobro(folioId) {
+  return folioId != null && foliosCerradosPorCobro.has(String(folioId));
+}
+
+export function limpiarMarcaFolioCerradoPorCobro(folioId) {
+  if (folioId != null) {
+    foliosCerradosPorCobro.delete(String(folioId));
+  }
+}
+
+export function resolverMotivoCierreFolioDesdeRealtime(detalle, folioIdPanel) {
+  if (!detalle?.folioId || !folioIdPanel) {
+    return null;
+  }
+
+  if (String(detalle.folioId) !== String(folioIdPanel)) {
+    return null;
+  }
+
+  const eventType = String(detalle.eventType ?? '').toUpperCase();
+
+  if (eventType === 'DELETE') {
+    return MOTIVO_CIERRE_FOLIO_MESA.MODIFICADA_SIN_COBRAR;
+  }
+
+  if (eventType === 'UPDATE' && detalle.estadoNuevo === 'cerrada') {
+    return MOTIVO_CIERRE_FOLIO_MESA.COBRADA_REMOTO;
+  }
+
+  return null;
+}
+
 function aplicarFilaACache(fila) {
   if (!fila?.id || filaEstadoCerrada(fila)) {
+    if (fila?.estado === 'cerrada') {
+      marcarFolioCerradoPorCobro(fila.id);
+    }
     removerFolioDeCache(fila?.id);
     return;
   }
@@ -261,14 +310,41 @@ export function obtenerMetadatosMesa(folioId) {
   };
 }
 
+export function decrementarNumeroRondaSiguienteFolio(folioId) {
+  const clave = String(folioId);
+  const entrada = cacheFolios.get(clave);
+
+  if (!entrada || entrada.estado !== 'abierta') {
+    return false;
+  }
+
+  const actual = entrada.numeroRondaSiguiente ?? 1;
+  const nuevo = Math.max(1, actual - 1);
+
+  if (nuevo === actual) {
+    return false;
+  }
+
+  persistirCarritosMesas({
+    [clave]: {
+      form: entrada.form,
+      pagoRecibido: entrada.pagoRecibido ?? '',
+      nextLineaId: entrada.nextLineaId ?? 2,
+      numeroRondaSiguiente: nuevo,
+    },
+  });
+
+  return true;
+}
+
 export function obtenerNumeroMesaDeFolio(folioId) {
   const entrada = cacheFolios.get(String(folioId));
   return entrada?.numeroMesa ?? null;
 }
 
 export function mesaEstaOcupada(snapshot, meta = null) {
-  if (meta?.estado === 'abierta') {
-    return true;
+  if (meta?.estado !== 'abierta') {
+    return false;
   }
 
   if (!snapshot) return false;
@@ -304,9 +380,19 @@ export function obtenerFolioAbiertoPorMesa(numeroMesa) {
 }
 
 export function obtenerNumerosMesaOcupados() {
-  return new Set(
-    [...folioAbiertoPorNumeroMesa.keys()].map((numero) => String(numero))
-  );
+  const ocupados = new Set();
+
+  cacheFolios.forEach((entrada) => {
+    if (entrada.estado !== 'abierta' || entrada.numeroMesa == null) {
+      return;
+    }
+
+    if (mesaEstaOcupada(entrada, { estado: entrada.estado })) {
+      ocupados.add(String(entrada.numeroMesa));
+    }
+  });
+
+  return ocupados;
 }
 
 export function folioSigueAbierto(folioId) {
@@ -342,12 +428,18 @@ export async function verificarFolioAbiertoEnServidor(folioId, negocioId = negoc
   if (!data) {
     removerFolioDeCache(folioId);
     reconstruirIndiceMesasAbiertas();
-    return false;
+    return 'eliminado';
   }
 
   aplicarFilaACache(data);
   reconstruirIndiceMesasAbiertas();
-  return data.estado === 'abierta';
+
+  if (data.estado === 'abierta') {
+    return 'abierta';
+  }
+
+  marcarFolioCerradoPorCobro(folioId);
+  return 'cerrada';
 }
 
 export function folioCarritoEnmascaradoParaUsuarioActual(folioId) {
@@ -456,6 +548,10 @@ export async function cerrarFolioMesa(folioId, cobro = {}) {
 
 export async function eliminarFolioMesa(folioId) {
   if (!folioId || !negocioIdCache) {
+    return false;
+  }
+
+  if (folioFueCerradoPorCobro(folioId)) {
     return false;
   }
 

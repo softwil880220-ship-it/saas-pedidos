@@ -66,6 +66,11 @@ import {
   obtenerPedidosPendientesSync,
 } from './pedidoPendingSyncStorage';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
+import {
+  lineasFormularioDesdePedido,
+  normalizarLineasDetallePedido,
+  tituloAutorizacionPinPedido,
+} from './pedidoEdicionHelpers';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
@@ -781,25 +786,6 @@ function resumenProductos(lineas, listaProductos, variantesCtx) {
     .join(', ');
 }
 
-function normalizarLineasDetallePedido(pedido) {
-  const raw = pedido?.lineas_detalle;
-
-  if (Array.isArray(raw)) {
-    return raw;
-  }
-
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-}
-
 function formatearLineaDetalleReporteHistorico(linea) {
   const textoPeso = formatearLineaDetalleGuardada(linea);
   if (textoPeso) {
@@ -829,52 +815,6 @@ function formatearProductosPedidoReporteHistorico(pedido) {
   }
 
   return lineas.map(formatearLineaDetalleReporteHistorico).join(', ');
-}
-
-function productoIdDesdeLineaDetalle(linea, listaProductos) {
-  if (linea?.productoId != null && linea.productoId !== '') {
-    return String(linea.productoId);
-  }
-
-  if (linea?.nombre) {
-    const producto = listaProductos.find((item) => item.nombre === linea.nombre);
-    if (producto) return String(producto.id);
-  }
-
-  return '';
-}
-
-function variantesFormularioDesdeLineaDetalle(linea, listaProductos, variantesCtx) {
-  if (!linea?.descripcion?.trim()) {
-    return crearVariantesLineaVacias(variantesCtx.categorias);
-  }
-
-  const parsed = parsearLineaPedidoDesdeTexto(
-    linea.descripcion,
-    listaProductos,
-    variantesCtx
-  );
-
-  return parsed?.variantes || crearVariantesLineaVacias(variantesCtx.categorias);
-}
-
-function lineasFormularioDesdePedido(pedido, listaProductos, variantesCtx) {
-  const lineasDetalle = normalizarLineasDetallePedido(pedido);
-
-  if (lineasDetalle.length > 0) {
-    return lineasDetalle.map((linea, index) => ({
-      id: index + 1,
-      productoId: productoIdDesdeLineaDetalle(linea, listaProductos),
-      cantidad: String(Math.max(1, parseInt(linea.cantidad, 10) || 1)),
-      variantes: variantesFormularioDesdeLineaDetalle(
-        linea,
-        listaProductos,
-        variantesCtx
-      ),
-    }));
-  }
-
-  return [crearLineaPedido(1, variantesCtx)];
 }
 
 function parsearLineaPedidoDesdeTexto(parte, listaProductos, variantesCtx, id = 1) {
@@ -1225,9 +1165,11 @@ function Dashboard() {
   const [errorArqueo, setErrorArqueo] = useState(null);
   const [modalAutorizacionPinArqueoAbierto, setModalAutorizacionPinArqueoAbierto] =
     useState(false);
-  const [modalAutorizacionPinEliminarPedidoAbierto, setModalAutorizacionPinEliminarPedidoAbierto] =
+  const [modalAutorizacionPinPedidoAbierto, setModalAutorizacionPinPedidoAbierto] =
     useState(false);
-  const [pedidoPendienteEliminar, setPedidoPendienteEliminar] = useState(null);
+  const [pedidoPendienteAutorizacion, setPedidoPendienteAutorizacion] = useState(null);
+  const [accionPendienteAutorizacionPedido, setAccionPendienteAutorizacionPedido] =
+    useState(null);
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
 
   const cargarProductoItemsVariantes = async (catalogos, productoIds) => {
@@ -2457,7 +2399,7 @@ function Dashboard() {
         .from('pedidos')
         .update({
           deleted_at: new Date().toISOString(),
-          deleted_by: session?.user?.id ?? null,
+          deleted_by: usuario?.id ?? null,
           autorizado_por: autorizadoPor,
         })
         .eq('id', id),
@@ -3269,26 +3211,37 @@ function Dashboard() {
       return;
     }
 
-    setPedidoPendienteEliminar(pedido);
-    setModalAutorizacionPinEliminarPedidoAbierto(true);
+    setPedidoPendienteAutorizacion(pedido);
+    setAccionPendienteAutorizacionPedido('eliminar');
+    setModalAutorizacionPinPedidoAbierto(true);
   };
 
-  const cerrarAutorizacionPinEliminarPedido = () => {
-    setModalAutorizacionPinEliminarPedidoAbierto(false);
-    setPedidoPendienteEliminar(null);
+  const cerrarAutorizacionPinPedido = () => {
+    setModalAutorizacionPinPedidoAbierto(false);
+    setPedidoPendienteAutorizacion(null);
+    setAccionPendienteAutorizacionPedido(null);
   };
 
-  const onAutorizadoEliminarPedido = ({ autorizado_por }) => {
-    const pedido = pedidoPendienteEliminar;
-    if (pedido?.id) {
+  const onAutorizadoPedido = ({ autorizado_por }) => {
+    const pedido = pedidoPendienteAutorizacion;
+    const accion = accionPendienteAutorizacionPedido;
+
+    if (!pedido?.id || !accion) return;
+
+    if (accion === 'eliminar') {
       void eliminarPedido(pedido.id, autorizado_por ?? null);
+      return;
+    }
+
+    if (accion === 'editar') {
+      void iniciarEdicionPedido(pedido);
     }
   };
 
-  const tituloAutorizacionPinEliminarPedido =
-    pedidoPendienteEliminar?.tipo === 'presencial'
-      ? 'Autoriza la eliminación de la venta'
-      : 'Autoriza la eliminación del pedido';
+  const tituloModalAutorizacionPinPedido = tituloAutorizacionPinPedido(
+    accionPendienteAutorizacionPedido,
+    pedidoPendienteAutorizacion
+  );
 
   const intentarEditarPedido = async (pedido) => {
     try {
@@ -3306,7 +3259,9 @@ function Dashboard() {
       return;
     }
 
-    await iniciarEdicionPedido(pedido);
+    setPedidoPendienteAutorizacion(pedido);
+    setAccionPendienteAutorizacionPedido('editar');
+    setModalAutorizacionPinPedidoAbierto(true);
   };
 
   const intentarAvanzarPedido = async (id) => {
@@ -4775,10 +4730,10 @@ function Dashboard() {
       />
 
       <ModalAutorizacionPin
-        visible={modalAutorizacionPinEliminarPedidoAbierto}
-        titulo={tituloAutorizacionPinEliminarPedido}
-        onClose={cerrarAutorizacionPinEliminarPedido}
-        onAutorizado={onAutorizadoEliminarPedido}
+        visible={modalAutorizacionPinPedidoAbierto}
+        titulo={tituloModalAutorizacionPinPedido}
+        onClose={cerrarAutorizacionPinPedido}
+        onAutorizado={onAutorizadoPedido}
       />
 
       <main className="dashboard-main">

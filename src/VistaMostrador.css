@@ -215,10 +215,27 @@
 }
 
 .mostrador-recibo-entregado {
-  width: 100%;
-  margin-top: 0.25rem;
+  flex: 1 1 auto;
+  margin-top: 0;
   padding: 0.45rem 0.65rem;
   font-size: 0.85rem;
+}
+
+.mostrador-recibo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.mostrador-recibo-editar,
+.mostrador-recibo-eliminar {
+  flex: 1 1 calc(50% - 0.25rem);
+  min-width: 0;
+}
+
+.mostrador-recibo-acciones .mostrador-recibo-entregado {
+  width: 100%;
 }
 
 @media (max-width: 640px) {

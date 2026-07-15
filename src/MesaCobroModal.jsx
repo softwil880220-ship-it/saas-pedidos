@@ -11,7 +11,6 @@ import {
   ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS,
   MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO,
 } from './pedidoCarritoStorage';
-import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
 const PORCENTAJES_PROPINA_RAPIDOS = [5, 10, 15, 20];
 
@@ -50,22 +49,18 @@ export default function MesaCobroModal({
   abierto,
   folioId,
   numeroMesa,
-  negocioId,
-  abiertaEn,
   usuarioId,
   rol,
+  productosConsolidados,
+  subtotal,
+  cargandoPedidosFolio,
   estadoPersistido = null,
   onPersistirEstado,
   onCancelar,
   onConfirmar,
 }) {
   const puedeAplicarDescuento = puedeAplicarDescuentoMesaCobro(rol);
-  const { productosConsolidados, subtotal, cargando } = usePedidosFolioMesa({
-    negocioId,
-    numeroMesa,
-    abiertaEn,
-    activo: abierto,
-  });
+  const cargando = cargandoPedidosFolio;
 
   const [descuentoTipo, setDescuentoTipo] = useState(TIPOS_AJUSTE_MONETARIO.PORCENTAJE);
   const [descuentoValor, setDescuentoValor] = useState('');
@@ -119,7 +114,7 @@ export default function MesaCobroModal({
     setConfirmando(false);
     setErrorConfirmacion(null);
     setSesionCobroLista(true);
-  }, [abierto, estadoPersistido, numeroMesa, abiertaEn]);
+  }, [abierto, estadoPersistido, numeroMesa]);
 
   useEffect(() => {
     if (!folioId || !onPersistirEstado) {

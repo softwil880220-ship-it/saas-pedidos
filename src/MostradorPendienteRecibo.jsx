@@ -17,7 +17,11 @@ export default function MostradorPendienteRecibo({
   variantesCtx,
   estado,
   actualizando,
+  editando,
+  eliminando,
   onEntregado,
+  onEditar,
+  onEliminar,
 }) {
   const pedidoEnriquecido = productos?.length
     ? enriquecerLineasDetalleCocina(pedido, productos)
@@ -70,14 +74,32 @@ export default function MostradorPendienteRecibo({
         <span>{formatearMoneda(desglose.total)}</span>
       </div>
 
-      <button
-        type="button"
-        className="vista-operativa-btn entregado-btn mostrador-recibo-entregado"
-        disabled={actualizando}
-        onClick={() => onEntregado(pedido)}
-      >
-        {actualizando ? 'Guardando...' : 'Entregado'}
-      </button>
+      <div className="mostrador-recibo-acciones">
+        <button
+          type="button"
+          className="editar-btn mostrador-recibo-editar"
+          disabled={editando || eliminando || actualizando}
+          onClick={() => onEditar?.(pedido)}
+        >
+          Editar
+        </button>
+        <button
+          type="button"
+          className="eliminar-btn mostrador-recibo-eliminar"
+          disabled={editando || eliminando || actualizando}
+          onClick={() => onEliminar?.(pedido)}
+        >
+          {eliminando ? 'Eliminando...' : 'Eliminar'}
+        </button>
+        <button
+          type="button"
+          className="vista-operativa-btn entregado-btn mostrador-recibo-entregado"
+          disabled={actualizando || editando || eliminando}
+          onClick={() => onEntregado(pedido)}
+        >
+          {actualizando ? 'Guardando...' : 'Entregado'}
+        </button>
+      </div>
     </article>
   );
 }

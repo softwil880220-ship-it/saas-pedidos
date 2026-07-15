@@ -10,6 +10,8 @@ import {
   obtenerNumeroMesaDeFolio,
   obtenerNumerosMesaOcupados,
   persistirMesaActiva,
+  MOTIVO_CIERRE_FOLIO_MESA,
+  resolverMotivoCierreFolioDesdeRealtime,
   verificarFolioAbiertoEnServidor,
 } from './pedidoCarritoStorage';
 import { useMesasFoliosRealtime } from './useMesasFoliosRealtime';
@@ -36,17 +38,33 @@ export default function VistaMesas({
     folioId: null,
     eventType: null,
   });
+  const [motivoCierreFolio, setMotivoCierreFolio] = useState(null);
+  const motivoCierreFolioRef = useRef(null);
   const panelMesaRef = useRef(panelMesa);
 
   useEffect(() => {
     panelMesaRef.current = panelMesa;
   }, [panelMesa]);
 
-  const handleFolioEliminado = useCallback(() => {
+  const cerrarFolioPanelRemoto = useCallback((motivo) => {
+    if (motivo) {
+      motivoCierreFolioRef.current = motivo;
+      setMotivoCierreFolio(motivo);
+    }
+
     setPanelMesa((prev) => (prev ? { ...prev, folioId: null } : prev));
     limpiarMesaActiva();
     limpiarEstadoCobroMesa();
     setMesasOcupadas(obtenerNumerosMesaOcupados());
+  }, []);
+
+  const handleFolioEliminado = useCallback((motivo = null) => {
+    cerrarFolioPanelRemoto(motivo);
+  }, [cerrarFolioPanelRemoto]);
+
+  const handleMotivoCierreFolioConsumido = useCallback(() => {
+    motivoCierreFolioRef.current = null;
+    setMotivoCierreFolio(null);
   }, []);
 
   const handleFolioCerrado = useCallback(() => {
@@ -67,17 +85,22 @@ export default function VistaMesas({
     const panel = panelMesaRef.current;
 
     if (panel?.folioId && !folioSigueAbierto(panel.folioId)) {
-      const sigueAbiertoEnServidor = await verificarFolioAbiertoEnServidor(
+      const estadoServidor = await verificarFolioAbiertoEnServidor(
         panel.folioId,
         negocioId
       );
 
-      if (sigueAbiertoEnServidor === false) {
-        handleFolioEliminado();
+      if (estadoServidor === 'cerrada') {
+        handleFolioEliminado(MOTIVO_CIERRE_FOLIO_MESA.COBRADA_REMOTO);
         return;
       }
 
-      if (sigueAbiertoEnServidor === null) {
+      if (estadoServidor === 'eliminado') {
+        handleFolioEliminado(MOTIVO_CIERRE_FOLIO_MESA.MODIFICADA_SIN_COBRAR);
+        return;
+      }
+
+      if (estadoServidor === null) {
         return;
       }
 
@@ -96,6 +119,17 @@ export default function VistaMesas({
 
   const manejarCambioCacheMesas = useCallback(
     (detalle) => {
+      const panel = panelMesaRef.current;
+      const motivoRealtime = resolverMotivoCierreFolioDesdeRealtime(
+        detalle,
+        panel?.folioId
+      );
+
+      if (motivoRealtime) {
+        cerrarFolioPanelRemoto(motivoRealtime);
+        return;
+      }
+
       void sincronizarOcupacion();
 
       if (detalle?.folioId && detalle.eventType === 'UPDATE') {
@@ -106,7 +140,7 @@ export default function VistaMesas({
         }));
       }
     },
-    [sincronizarOcupacion]
+    [cerrarFolioPanelRemoto, sincronizarOcupacion]
   );
 
   useEffect(() => {
@@ -278,7 +312,11 @@ export default function VistaMesas({
           onFolioCreado={handleFolioCreado}
           onFolioEliminado={handleFolioEliminado}
           onFolioCerrado={handleFolioCerrado}
+          motivoCierreFolio={motivoCierreFolio}
+          motivoCierreFolioRef={motivoCierreFolioRef}
+          onMotivoCierreFolioConsumido={handleMotivoCierreFolioConsumido}
           onRondaEnviada={sincronizarOcupacion}
+          onRondasCambiadas={sincronizarOcupacion}
         />
       ) : null}
     </section>

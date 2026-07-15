@@ -34,10 +34,16 @@ export function useMesasFoliosRealtime({ negocioId, onCambio }) {
           (payload) => {
             if (!activo) return;
             const eventType = String(payload.eventType ?? payload.type ?? '').toUpperCase();
+            const registro =
+              payload.new && Object.keys(payload.new).length > 0 ? payload.new : null;
+            const anterior =
+              payload.old && Object.keys(payload.old).length > 0 ? payload.old : null;
             sincronizarFilaDesdeRealtime(payload);
             onCambio?.({
               folioId: obtenerFolioIdDesdePayloadRealtime(payload),
               eventType,
+              estadoNuevo: registro?.estado ?? null,
+              estadoAnterior: anterior?.estado ?? null,
             });
           }
         );

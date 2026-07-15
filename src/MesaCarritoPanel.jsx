@@ -16,12 +16,17 @@ import {
   folioSigueAbierto,
   limpiarEstadoCobroMesa,
   MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO,
+  MENSAJE_MESA_PEDIDO_MODIFICADO_SIN_COBRAR,
+  MOTIVO_CIERRE_FOLIO_MESA,
   obtenerMetadatosMesa,
+  folioFueCerradoPorCobro,
+  limpiarMarcaFolioCerradoPorCobro,
   persistirCarritosMesas,
   persistirEstadoCobroMesa,
   serializarSnapshotParaComparacion,
   setUltimoSnapshotRemotoAplicado,
 } from './pedidoCarritoStorage';
+import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
 function carritoTieneProductos(snapshot) {
   const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
@@ -74,10 +79,16 @@ export default function MesaCarritoPanel({
   onFolioEliminado,
   onFolioCerrado,
   onRondaEnviada,
+  onRondasCambiadas,
+  motivoCierreFolio,
+  motivoCierreFolioRef,
+  onMotivoCierreFolioConsumido,
 }) {
   const [folioIdLocal, setFolioIdLocal] = useState(folioIdProp ?? null);
   const [revisionMetadatosFolio, setRevisionMetadatosFolio] = useState(0);
   const folioId = folioIdProp ?? folioIdLocal;
+  const abiertaEnSesionRef = useRef(null);
+  const folioIdSesionRef = useRef(folioId);
   const folioAjenoEnmascarado = useMemo(
     () => Boolean(folioId && folioCarritoEnmascaradoParaUsuarioActual(folioId)),
     [folioId, folioCacheActualizado?.revision]
@@ -89,6 +100,34 @@ export default function MesaCarritoPanel({
 
     return obtenerMetadatosMesa(folioId);
   }, [folioId, folioCacheActualizado?.revision, revisionMetadatosFolio]);
+
+  useEffect(() => {
+    if (folioId !== folioIdSesionRef.current) {
+      folioIdSesionRef.current = folioId;
+      if (!folioId) {
+        abiertaEnSesionRef.current = null;
+      }
+    }
+
+    if (metadatosFolio.abiertaEn) {
+      abiertaEnSesionRef.current = metadatosFolio.abiertaEn;
+    }
+  }, [folioId, metadatosFolio.abiertaEn]);
+
+  const abiertaEnFolio = metadatosFolio.abiertaEn ?? abiertaEnSesionRef.current;
+
+  const {
+    pedidos: pedidosFolioMesa,
+    productosConsolidados: productosConsolidadosFolio,
+    subtotal: subtotalFolio,
+    cargando: cargandoPedidosFolio,
+  } = usePedidosFolioMesa({
+    negocioId,
+    numeroMesa,
+    abiertaEn: abiertaEnFolio,
+    activo: Boolean(folioId) && Boolean(abiertaEnFolio) && !folioAjenoEnmascarado,
+  });
+  const tieneRondasVigentes = pedidosFolioMesa.length > 0;
   const creacionFolioEnCursoRef = useRef(false);
   const folioCreacionIniciadaRef = useRef(false);
   const eliminacionFolioEnCursoRef = useRef(false);
@@ -118,14 +157,56 @@ export default function MesaCarritoPanel({
     modalCobroAbiertoRef.current = modalCobroAbierto;
   }, [modalCobroAbierto]);
 
-  useEffect(() => {
-    if (!folioId) {
-      if (modalCobroAbiertoRef.current) {
-        setErrorCobroMesa(MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO);
+  const aplicarMensajeCierreModalSiCorresponde = useCallback(
+    (motivo) => {
+      if (!modalCobroAbiertoRef.current || !motivo) {
+        return;
       }
 
-      setEstadoCobroPersistido(null);
-      setModalCobroAbierto(false);
+      if (motivo === MOTIVO_CIERRE_FOLIO_MESA.COBRADA_REMOTO) {
+        setErrorCobroMesa(MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO);
+      } else if (motivo === MOTIVO_CIERRE_FOLIO_MESA.MODIFICADA_SIN_COBRAR) {
+        setErrorCobroMesa(MENSAJE_MESA_PEDIDO_MODIFICADO_SIN_COBRAR);
+      }
+
+      onMotivoCierreFolioConsumido?.();
+    },
+    [onMotivoCierreFolioConsumido]
+  );
+
+  useLayoutEffect(() => {
+    if (folioIdProp !== null) {
+      return;
+    }
+
+    const motivo =
+      motivoCierreFolioRef?.current ??
+      motivoCierreFolio ??
+      null;
+
+    aplicarMensajeCierreModalSiCorresponde(motivo);
+    setEstadoCobroPersistido(null);
+    setModalCobroAbierto(false);
+
+    if (folioIdSesionRef.current) {
+      limpiarMarcaFolioCerradoPorCobro(folioIdSesionRef.current);
+    }
+
+    abiertaEnSesionRef.current = null;
+
+    if (folioIdLocal) {
+      setFolioIdLocal(null);
+    }
+  }, [
+    folioIdProp,
+    folioIdLocal,
+    motivoCierreFolio,
+    motivoCierreFolioRef,
+    aplicarMensajeCierreModalSiCorresponde,
+  ]);
+
+  useEffect(() => {
+    if (!folioId) {
       return;
     }
 
@@ -160,6 +241,11 @@ export default function MesaCarritoPanel({
     setModalCobroAbierto(false);
     setRevisionModalCobro((revision) => revision + 1);
   }, []);
+
+  const handleRondasCambiadas = useCallback(() => {
+    setRevisionMetadatosFolio((revision) => revision + 1);
+    onRondasCambiadas?.();
+  }, [onRondasCambiadas]);
 
   useEffect(() => {
     setFolioIdLocal(folioIdProp ?? null);
@@ -381,7 +467,7 @@ export default function MesaCarritoPanel({
   ]);
 
   useEffect(() => {
-    if (!folioId || carrito.lineasPedidoActivas.length > 0) {
+    if (!folioId || carritoTieneProductos(carrito.snapshot)) {
       return undefined;
     }
 
@@ -398,6 +484,22 @@ export default function MesaCarritoPanel({
       if (ultimoSnapshotRemotoAplicadoRef.current === snapshotActual) {
         return undefined;
       }
+    }
+
+    if (metadatosFolio.abiertaEn && cargandoPedidosFolio) {
+      return undefined;
+    }
+
+    if (modalCobroAbiertoRef.current) {
+      return undefined;
+    }
+
+    if (folioFueCerradoPorCobro(folioId)) {
+      return undefined;
+    }
+
+    if (tieneRondasVigentes) {
+      return undefined;
     }
 
     const { rondasEnviadas } = obtenerMetadatosMesa(folioId);
@@ -421,10 +523,17 @@ export default function MesaCarritoPanel({
 
         setFolioIdLocal(null);
         folioCreacionIniciadaRef.current = false;
-        onFolioEliminado?.();
+        onFolioEliminado?.(MOTIVO_CIERRE_FOLIO_MESA.MODIFICADA_SIN_COBRAR);
       } catch {
         if (!cancelado) {
           carrito.reanudarPersistencia();
+
+          if (!folioSigueAbierto(folioAEliminar)) {
+            const motivo = folioFueCerradoPorCobro(folioAEliminar)
+              ? MOTIVO_CIERRE_FOLIO_MESA.COBRADA_REMOTO
+              : MOTIVO_CIERRE_FOLIO_MESA.MODIFICADA_SIN_COBRAR;
+            onFolioEliminado?.(motivo);
+          }
         }
       } finally {
         if (!cancelado) {
@@ -440,7 +549,10 @@ export default function MesaCarritoPanel({
     };
   }, [
     folioId,
-    carrito.lineasPedidoActivas.length,
+    carrito.snapshot,
+    cargandoPedidosFolio,
+    metadatosFolio.abiertaEn,
+    tieneRondasVigentes,
     carrito.pausarPersistencia,
     carrito.reanudarPersistencia,
     onFolioEliminado,
@@ -578,9 +690,16 @@ export default function MesaCarritoPanel({
           <MesaRondasEnviadas
             negocioId={negocioId}
             numeroMesa={numeroMesa}
-            abiertaEn={metadatosFolio.abiertaEn}
+            abiertaEn={abiertaEnFolio}
             visible={Boolean(folioId) && !folioAjenoEnmascarado}
             productos={productos}
+            productosOrdenados={productosOrdenados}
+            frecuenciaCategorias={frecuenciaCategorias}
+            frecuenciaLista={frecuenciaLista}
+            variantesCtx={variantesCtx}
+            usuarioId={usuarioId}
+            folioId={folioId}
+            onRondasCambiadas={handleRondasCambiadas}
           />
           <SelectorProductosPedido
             productos={productosOrdenados}
@@ -639,10 +758,11 @@ export default function MesaCarritoPanel({
             abierto={modalCobroAbierto}
             folioId={folioId}
             numeroMesa={numeroMesa}
-            negocioId={negocioId}
-            abiertaEn={metadatosFolio.abiertaEn}
             usuarioId={usuarioId}
             rol={rol}
+            productosConsolidados={productosConsolidadosFolio}
+            subtotal={subtotalFolio}
+            cargandoPedidosFolio={cargandoPedidosFolio}
             estadoPersistido={estadoCobroPersistido}
             onPersistirEstado={handlePersistirEstadoCobro}
             onCancelar={handleCancelarCobroMesa}

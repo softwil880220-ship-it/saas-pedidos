@@ -4,6 +4,7 @@ import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import MostradorPendienteRecibo from './MostradorPendienteRecibo.jsx';
+import ModalAutorizacionPin from './ModalAutorizacionPin.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
@@ -14,6 +15,12 @@ import {
   cargarTabMostrador,
   persistirTabMostrador,
 } from './pedidoCarritoStorage';
+import {
+  construirPayloadEdicionMostrador,
+  construirSnapshotCarritoDesdePedido,
+  resumenProductosDesdeLineas,
+  tituloAutorizacionPinPedido,
+} from './pedidoEdicionHelpers';
 import {
   construirUpdateEntregadoMostradorPendientes,
   formatearMoneda,
@@ -89,8 +96,15 @@ export default function VistaMostrador({
   const [mensajeExito, setMensajeExito] = useState(null);
   const [errorGuardar, setErrorGuardar] = useState(null);
   const [actualizandoEntregaId, setActualizandoEntregaId] = useState(null);
+  const [editandoPedidoId, setEditandoPedidoId] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [eliminandoPedidoId, setEliminandoPedidoId] = useState(null);
+  const [modalPinAbierto, setModalPinAbierto] = useState(false);
+  const [pedidoPendienteAutorizacion, setPedidoPendienteAutorizacion] = useState(null);
+  const [accionPendientePin, setAccionPendientePin] = useState(null);
   const snapshotInicialRef = useRef(cargarCarritoMostradorDisponible() ?? undefined);
   const mensajeExitoTimerRef = useRef(null);
+  const snapshotEdicionRef = useRef(null);
 
   const carrito = useCarritoPedido({
     variantesCtx,
@@ -268,6 +282,164 @@ export default function VistaMostrador({
     setActualizandoEntregaId(null);
   };
 
+  const verificarArqueoBloqueaAccion = async () => {
+    const arqueo = await cargarArqueoDelDia(negocioId);
+    if (arqueo) {
+      setErrorGuardar(
+        'No se puede modificar el pedido: el arqueo del día ya fue realizado.'
+      );
+      return true;
+    }
+    return false;
+  };
+
+  const cerrarPin = () => {
+    setModalPinAbierto(false);
+    setPedidoPendienteAutorizacion(null);
+    setAccionPendientePin(null);
+  };
+
+  const solicitarAutorizacion = async (pedido, accion) => {
+    setErrorGuardar(null);
+
+    try {
+      if (await verificarArqueoBloqueaAccion()) return;
+    } catch (err) {
+      setErrorGuardar(err.message || 'No se pudo verificar el arqueo del día.');
+      return;
+    }
+
+    setPedidoPendienteAutorizacion(pedido);
+    setAccionPendientePin(accion);
+    setModalPinAbierto(true);
+  };
+
+  const iniciarEdicionPedido = (pedido) => {
+    snapshotEdicionRef.current = construirSnapshotCarritoDesdePedido(
+      pedido,
+      productos,
+      variantesCtx
+    );
+    carrito.pausarPersistencia();
+    carrito.aplicarSnapshot(snapshotEdicionRef.current);
+    setEditandoPedidoId(pedido.id);
+    setTabActivo('nuevo');
+  };
+
+  const cancelarEdicionPedido = () => {
+    setEditandoPedidoId(null);
+    setErrorGuardar(null);
+    carrito.resetCarrito({ limpiarStorage: false });
+    carrito.reanudarPersistencia();
+    setTabActivo('pendientes');
+  };
+
+  const eliminarPedido = async (pedido, autorizadoPor) => {
+    setEliminandoPedidoId(pedido.id);
+
+    const { error } = await queryConNegocio(
+      supabase
+        .from('pedidos')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: usuarioId ?? null,
+          autorizado_por: autorizadoPor ?? null,
+        })
+        .eq('id', pedido.id),
+      negocioId
+    );
+
+    if (!error) {
+      setPedidosPendientes((prev) => prev.filter((item) => item.id !== pedido.id));
+      if (editandoPedidoId === pedido.id) {
+        cancelarEdicionPedido();
+      }
+    }
+
+    setEliminandoPedidoId(null);
+  };
+
+  const onAutorizadoPin = ({ autorizado_por }) => {
+    const pedido = pedidoPendienteAutorizacion;
+    const accion = accionPendientePin;
+
+    if (!pedido) return;
+
+    if (accion === 'eliminar') {
+      void eliminarPedido(pedido, autorizado_por ?? null);
+      return;
+    }
+
+    if (accion === 'editar') {
+      iniciarEdicionPedido(pedido);
+    }
+  };
+
+  const guardarEdicionPedido = async (event) => {
+    event.preventDefault();
+    if (!editandoPedidoId || guardandoEdicion) return;
+
+    setErrorGuardar(null);
+
+    try {
+      if (await verificarArqueoBloqueaAccion()) return;
+    } catch (err) {
+      setErrorGuardar(err.message || 'No se pudo verificar el arqueo del día.');
+      return;
+    }
+
+    if (carrito.totalPedido <= 0) return;
+
+    const pedidoOriginal = pedidosPendientes.find((item) => item.id === editandoPedidoId);
+    if (!pedidoOriginal) return;
+
+    setGuardandoEdicion(true);
+
+    const detallePedido = carrito.obtenerDetallePedido();
+    const resumen = resumenProductosDesdeLineas(
+      carrito.lineasPedidoActivas,
+      productos,
+      variantesCtx
+    );
+
+    const payload = construirPayloadEdicionMostrador({
+      pedidoOriginal,
+      detallePedido,
+      resumen,
+      form: carrito.form,
+      productos,
+    });
+
+    const { data, error } = await queryConNegocio(
+      supabase.from('pedidos').update(payload).eq('id', editandoPedidoId).select().single(),
+      negocioId
+    );
+
+    setGuardandoEdicion(false);
+
+    if (error || !data) {
+      setErrorGuardar(
+        'No se pudo guardar los cambios. Verifica tu conexión e intenta de nuevo.'
+      );
+      return;
+    }
+
+    setPedidosPendientes((prev) =>
+      prev.map((item) => (item.id === data.id ? data : item))
+    );
+    setEditandoPedidoId(null);
+    carrito.resetCarrito({ limpiarStorage: true });
+    carrito.reanudarPersistencia();
+    setTabActivo('pendientes');
+  };
+
+  const tituloPin = tituloAutorizacionPinPedido(
+    accionPendientePin,
+    pedidoPendienteAutorizacion
+  );
+
+  const enModoEdicion = Boolean(editandoPedidoId);
+
   return (
     <div className="vista-mostrador">
       <nav className="mostrador-seccion-nav" aria-label="Secciones de mostrador">
@@ -276,7 +448,13 @@ export default function VistaMostrador({
             key={value}
             type="button"
             className={`mostrador-seccion-tab${tabActivo === value ? ' activo' : ''}`}
-            onClick={() => setTabActivo(value)}
+            onClick={() => {
+              if (editandoPedidoId && value !== 'nuevo') {
+                cancelarEdicionPedido();
+                return;
+              }
+              setTabActivo(value);
+            }}
           >
             {label}
           </button>
@@ -285,7 +463,7 @@ export default function VistaMostrador({
 
       {tabActivo === 'nuevo' ? (
         <section className="pedido-formulario mostrador-nuevo-pedido">
-          {mensajeExito ? (
+          {mensajeExito && !enModoEdicion ? (
             <div
               className="mostrador-exito-banner"
               role="status"
@@ -314,8 +492,13 @@ export default function VistaMostrador({
             </div>
           ) : null}
 
-          <h2 className="formulario-titulo">Nuevo pedido de mostrador</h2>
-          <form className="formulario-pedido" onSubmit={registrarVenta}>
+          <h2 className="formulario-titulo">
+            {enModoEdicion ? 'Editar pedido' : 'Nuevo pedido de mostrador'}
+          </h2>
+          <form
+            className="formulario-pedido"
+            onSubmit={enModoEdicion ? guardarEdicionPedido : registrarVenta}
+          >
             <div className="formulario formulario-cabecera">
               <div className="formulario-campo">
                 <label htmlFor="mostrador-cliente">Cliente</label>
@@ -380,32 +563,53 @@ export default function VistaMostrador({
               onEliminarLinea={carrito.eliminarLinea}
               onCambiarVariante={carrito.cambiarVarianteLinea}
             >
-              <CajaPagoEfectivo
-                formaPago={carrito.form.formaPago}
-                pagoRecibido={carrito.pagoRecibido}
-                onPagoRecibidoChange={carrito.setPagoRecibido}
-                pagoValido={carrito.pagoValido}
-                pagoInsuficiente={carrito.pagoInsuficiente}
-                cambio={carrito.cambio}
-                inputId="mostrador-pago-recibido"
-              />
+              {!enModoEdicion ? (
+                <CajaPagoEfectivo
+                  formaPago={carrito.form.formaPago}
+                  pagoRecibido={carrito.pagoRecibido}
+                  onPagoRecibidoChange={carrito.setPagoRecibido}
+                  pagoValido={carrito.pagoValido}
+                  pagoInsuficiente={carrito.pagoInsuficiente}
+                  cambio={carrito.cambio}
+                  inputId="mostrador-pago-recibido"
+                />
+              ) : null}
               <div className="pedido-acciones-principales">
-                <button
-                  type="button"
-                  className="limpiar-pedido-btn"
-                  onClick={() => {
-                    setErrorGuardar(null);
-                    carrito.resetCarrito({ limpiarStorage: true });
-                  }}
-                >
-                  Limpiar pedido
-                </button>
+                {enModoEdicion ? (
+                  <button
+                    type="button"
+                    className="limpiar-pedido-btn"
+                    disabled={guardandoEdicion}
+                    onClick={cancelarEdicionPedido}
+                  >
+                    Cancelar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="limpiar-pedido-btn"
+                    onClick={() => {
+                      setErrorGuardar(null);
+                      carrito.resetCarrito({ limpiarStorage: true });
+                    }}
+                  >
+                    Limpiar pedido
+                  </button>
+                )}
                 <button
                   type="submit"
                   className="guardar-btn"
-                  disabled={productos.length === 0 || carrito.totalPedido <= 0}
+                  disabled={
+                    productos.length === 0 ||
+                    carrito.totalPedido <= 0 ||
+                    guardandoEdicion
+                  }
                 >
-                  Registrar y cobrar
+                  {enModoEdicion
+                    ? guardandoEdicion
+                      ? 'Guardando...'
+                      : 'Guardar cambios'
+                    : 'Registrar y cobrar'}
                 </button>
               </div>
               {errorGuardar ? (
@@ -447,13 +651,24 @@ export default function VistaMostrador({
                   productos={productos}
                   variantesCtx={variantesCtx}
                   actualizando={actualizandoEntregaId === pedido.id}
+                  editando={editandoPedidoId === pedido.id}
+                  eliminando={eliminandoPedidoId === pedido.id}
                   onEntregado={marcarEntregado}
+                  onEditar={(item) => void solicitarAutorizacion(item, 'editar')}
+                  onEliminar={(item) => void solicitarAutorizacion(item, 'eliminar')}
                 />
               ))}
             </div>
           )}
         </section>
       )}
+
+      <ModalAutorizacionPin
+        visible={modalPinAbierto}
+        titulo={tituloPin}
+        onClose={cerrarPin}
+        onAutorizado={onAutorizadoPin}
+      />
     </div>
   );
 }
