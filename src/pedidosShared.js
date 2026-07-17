@@ -443,6 +443,39 @@ export function pedidoPendienteEntregaMostrador(pedido) {
   );
 }
 
+export function formatearClaveFecha(fecha) {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function obtenerFechaHoyClave() {
+  return formatearClaveFecha(new Date());
+}
+
+export function obtenerRangoFechaClave(claveFecha) {
+  const [year, month, day] = claveFecha.split('-').map(Number);
+  return {
+    inicio: new Date(year, month - 1, day, 0, 0, 0, 0),
+    fin: new Date(year, month - 1, day, 23, 59, 59, 999),
+  };
+}
+
+export function pedidoEntregadoMostradorHoy(pedido, hoyClave = obtenerFechaHoyClave()) {
+  if (!esPedidoMostrador(pedido) || pedido.deleted_at != null) {
+    return false;
+  }
+
+  if (pedido.status !== 'entregado' || !pedido.mostrador_entregado_at) {
+    return false;
+  }
+
+  return (
+    formatearClaveFecha(new Date(pedido.mostrador_entregado_at)) === hoyClave
+  );
+}
+
 export function determinarStatusInicialMostrador(mostradorFlujoCocina, pedidoEnriquecido) {
   const ahora = new Date().toISOString();
 
@@ -555,6 +588,28 @@ export function clienteEtiquetaMesa(numeroMesa) {
 export function extraerNumeroRondaMesa(referencia) {
   const coincidencia = String(referencia ?? '').match(/Ronda\s+(\d+)/i);
   return coincidencia ? Number(coincidencia[1]) : null;
+}
+
+export function formatearEtiquetaFolioMesa(folio) {
+  if (!folio) return null;
+
+  const folioExplicito = String(folio.folio ?? '').trim();
+  if (folioExplicito) {
+    return folioExplicito;
+  }
+
+  if (!folio.id) return null;
+
+  const estado = String(folio.estado ?? '').trim().toLowerCase();
+  const esMesaActiva = estado === 'abierta';
+  const esHistoricoSinFolioAsignado = estado === 'cerrada' || estado === '';
+
+  if (!esMesaActiva && !esHistoricoSinFolioAsignado) {
+    return null;
+  }
+
+  const sufijo = String(folio.id).replace(/-/g, '').slice(-6).toUpperCase();
+  return `MESA-${sufijo}`;
 }
 
 export function pedidoEsRondaMesaEnviada(pedido, { numeroMesa, abiertaEn }) {

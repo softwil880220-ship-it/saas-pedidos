@@ -4,28 +4,6 @@
   gap: 1rem;
 }
 
-.mostrador-seccion-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.mostrador-seccion-tab {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--borde-suave, #d1d5db);
-  border-radius: 999px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.mostrador-seccion-tab.activo {
-  border-color: var(--acento, #2563eb);
-  background: rgba(37, 99, 235, 0.08);
-  font-weight: 600;
-}
-
 .mostrador-nuevo-pedido {
   display: flex;
   flex-direction: column;
@@ -242,4 +220,10 @@
   .mostrador-pendientes-lista {
     grid-template-columns: 1fr;
   }
+}
+
+.mostrador-recibo-referencia {
+  margin: 0;
+  color: var(--texto-secundario, #6b7280);
+  font-size: 0.8rem;
 }

@@ -528,7 +528,7 @@ export async function cerrarFolioMesa(folioId, cobro = {}) {
       .eq('id', folioId)
       .eq('estado', 'abierta')
       .select(
-        'id, negocio_id, numero_mesa, estado, creado_por, abierta_en, numero_ronda_siguiente, carrito_snapshot'
+        'id, folio, negocio_id, numero_mesa, estado, creado_por, abierta_en, numero_ronda_siguiente, carrito_snapshot'
       ),
     negocioIdCache
   );

@@ -188,7 +188,11 @@ export default function MesaRondasEnviadas({
                     />
                   ) : (
                     <>
-                      <MesaRondaDesglose pedido={ronda} productos={productos} />
+                      <MesaRondaDesglose
+                        pedido={ronda}
+                        productos={productos}
+                        variantesCtx={variantesCtx}
+                      />
 
                       <div className="mesa-rondas-enviadas-acciones">
                         <button

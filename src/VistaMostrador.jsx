@@ -4,6 +4,7 @@ import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import MostradorPendienteRecibo from './MostradorPendienteRecibo.jsx';
+import MostradorEntregadoRecibo from './MostradorEntregadoRecibo.jsx';
 import ModalAutorizacionPin from './ModalAutorizacionPin.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import { supabase } from './supabase';
@@ -24,6 +25,8 @@ import {
 import {
   construirUpdateEntregadoMostradorPendientes,
   formatearMoneda,
+  obtenerFechaHoyClave,
+  pedidoEntregadoMostradorHoy,
   pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
 import { registrarPedidoMostrador } from './registrarPedidoMostrador';
@@ -31,6 +34,7 @@ import { registrarPedidoMostrador } from './registrarPedidoMostrador';
 const TABS_MOSTRADOR = [
   { value: 'nuevo', label: 'Nuevo pedido' },
   { value: 'pendientes', label: 'Pendientes de entrega' },
+  { value: 'entregados', label: 'Entregados hoy' },
 ];
 
 const FORMAS_PAGO = [
@@ -178,6 +182,8 @@ export default function VistaMostrador({
     };
   }, [mensajeExito]);
 
+  const hoyClave = obtenerFechaHoyClave();
+
   const filtrarPendientes = useCallback(
     (pedido) => pedidoPendienteEntregaMostrador(pedido),
     []
@@ -195,6 +201,24 @@ export default function VistaMostrador({
       filtrar: filtrarPendientes,
       comparar: compararPendientes,
     });
+
+  const filtrarEntregados = useCallback(
+    (pedido) => pedidoEntregadoMostradorHoy(pedido, hoyClave),
+    [hoyClave]
+  );
+
+  const compararEntregados = useCallback(
+    (a, b) =>
+      new Date(b.mostrador_entregado_at || 0) - new Date(a.mostrador_entregado_at || 0),
+    []
+  );
+
+  const { pedidos: pedidosEntregadosHoy } = usePedidosRealtime({
+    channelName: 'mostrador-entregados-hoy',
+    negocioId,
+    filtrar: filtrarEntregados,
+    comparar: compararEntregados,
+  });
 
   const cerrarMensajeExito = () => {
     if (mensajeExitoTimerRef.current) {
@@ -442,12 +466,12 @@ export default function VistaMostrador({
 
   return (
     <div className="vista-mostrador">
-      <nav className="mostrador-seccion-nav" aria-label="Secciones de mostrador">
+      <nav className="seccion-subtabs-nav" aria-label="Secciones de mostrador">
         {TABS_MOSTRADOR.map(({ value, label }) => (
           <button
             key={value}
             type="button"
-            className={`mostrador-seccion-tab${tabActivo === value ? ' activo' : ''}`}
+            className={`seccion-subtabs-tab${tabActivo === value ? ' activo' : ''}`}
             onClick={() => {
               if (editandoPedidoId && value !== 'nuevo') {
                 cancelarEdicionPedido();
@@ -625,7 +649,7 @@ export default function VistaMostrador({
             </p>
           ) : null}
         </section>
-      ) : (
+      ) : tabActivo === 'pendientes' ? (
         <section className="mostrador-pendientes">
           <header className="mostrador-pendientes-cabecera">
             <h2 className="mostrador-pendientes-titulo">Pendientes de entrega</h2>
@@ -656,6 +680,34 @@ export default function VistaMostrador({
                   onEntregado={marcarEntregado}
                   onEditar={(item) => void solicitarAutorizacion(item, 'editar')}
                   onEliminar={(item) => void solicitarAutorizacion(item, 'eliminar')}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="mostrador-entregados">
+          <header className="mostrador-pendientes-cabecera">
+            <h2 className="mostrador-pendientes-titulo">Entregados hoy</h2>
+            <p className="mostrador-pendientes-subtitulo">
+              Pedidos de mostrador marcados como entregados hoy
+            </p>
+            <span className="mostrador-pendientes-contador">
+              {pedidosEntregadosHoy.length} entregado
+              {pedidosEntregadosHoy.length === 1 ? '' : 's'}
+            </span>
+          </header>
+
+          {pedidosEntregadosHoy.length === 0 ? (
+            <p className="mostrador-pendientes-vacio">No hay pedidos entregados hoy.</p>
+          ) : (
+            <div className="mostrador-pendientes-lista">
+              {pedidosEntregadosHoy.map((pedido) => (
+                <MostradorEntregadoRecibo
+                  key={pedido.id}
+                  pedido={pedido}
+                  productos={productos}
+                  variantesCtx={variantesCtx}
                 />
               ))}
             </div>

@@ -439,6 +439,28 @@
   }
 }
 
+.seccion-subtabs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.seccion-subtabs-tab {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--borde-suave, #d1d5db);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.seccion-subtabs-tab.activo {
+  border-color: var(--acento, #2563eb);
+  background: rgba(37, 99, 235, 0.08);
+  font-weight: 600;
+}
+
 .vista-mesas {
   margin-bottom: 1.5rem;
 }
@@ -454,6 +476,180 @@
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+}
+
+.mesa-folios-cobrados-consulta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mesa-folios-cobrados-cabecera {
+  margin-bottom: 0.25rem;
+}
+
+.mesa-folios-cobrados-titulo {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.mesa-folios-cobrados-subtitulo {
+  margin: 0 0 0.35rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.mesa-folios-cobrados-contador {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mesa-folios-cobrados-cargando,
+.mesa-folios-cobrados-vacio {
+  margin: 0;
+  color: #64748b;
+}
+
+.mesa-folios-cobrados-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mesa-folio-cobrado-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.45rem;
+  background: #fff;
+  overflow: hidden;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.mesa-folio-cobrado-resumen {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+  align-items: start;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mesa-folio-cobrado-resumen-principal {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  grid-column: 1;
+}
+
+.mesa-folio-cobrado-resumen-identificadores {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
+}
+
+.mesa-folio-cobrado-folio {
+  font-weight: 600;
+  color: #111827;
+}
+
+.mesa-folio-cobrado-total-resumen {
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.mesa-folio-cobrado-fecha {
+  grid-column: 1;
+  font-size: 0.76rem;
+  color: #6b7280;
+}
+
+.mesa-folio-cobrado-chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #6b7280;
+}
+
+.mesa-folio-cobrado-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0 0.65rem 0.6rem;
+  border-top: 1px dashed #d1d5db;
+}
+
+.mesa-folio-cobrado-recibo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed #d1d5db;
+}
+
+.mesa-folio-cobrado-recibo-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.mesa-folio-cobrado-recibo-ajuste {
+  color: #6b7280;
+}
+
+.mesa-folio-cobrado-recibo-total {
+  font-weight: 600;
+  padding-top: 0.15rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.mesa-folio-cobrado-rondas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mesa-folio-cobrado-ronda {
+  padding-top: 0.1rem;
+}
+
+.mesa-folio-cobrado-ronda-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.mesa-folio-cobrado-ronda-cabecera h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mesa-folio-cobrado-ronda-cabecera time {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.mesa-folio-cobrado-cargando,
+.mesa-folio-cobrado-vacio-rondas {
+  margin: 0.15rem 0 0;
+  color: #6b7280;
+  font-size: 0.82rem;
 }
 
 .mesa-tarjeta {
@@ -968,87 +1164,98 @@
 .mesa-rondas-enviadas-detalle {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0 1rem 1rem;
-  border-top: 1px solid #d1fae5;
+  gap: 0.35rem;
+  padding: 0 0.75rem 0.65rem;
+  border-top: 1px dashed #bbf7d0;
 }
 
 .mesa-rondas-enviadas-item {
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
+  padding: 0.35rem 0 0;
+  border-top: 1px dashed #d1d5db;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+.mesa-rondas-enviadas-item:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 .mesa-rondas-enviadas-item-cabecera {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.35rem;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
 .mesa-rondas-enviadas-item-titulo {
   margin: 0;
-  font-size: 0.95rem;
-  color: #14532d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .mesa-rondas-enviadas-item-hora {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.72rem;
+  color: #9ca3af;
   white-space: nowrap;
 }
 
 .mesa-rondas-enviadas-item-captura {
-  margin: 0 0 0.5rem;
-  font-size: 0.85rem;
-  color: #475569;
+  margin: 0 0 0.15rem;
+  font-size: 0.76rem;
+  color: #6b7280;
 }
 
 .mesa-rondas-enviadas-item-captura span {
   font-weight: 600;
-  color: #1e293b;
+  color: #374151;
 }
 
 .mesa-rondas-enviadas-productos {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.2rem;
 }
 
 .mesa-rondas-enviadas-linea {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    'cantidad nombre'
-    'cantidad estado';
-  gap: 0.25rem 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.35rem 0.5rem;
   align-items: start;
-}
-
-.mesa-rondas-enviadas-cantidad {
-  grid-area: cantidad;
-  min-width: 1.25rem;
-  font-weight: 700;
-  color: #14532d;
-}
-
-.mesa-rondas-enviadas-nombre {
-  grid-area: nombre;
-  min-width: 0;
-  color: #1e293b;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   line-height: 1.35;
+}
+
+.mesa-rondas-enviadas-linea-peso,
+.mesa-rondas-enviadas-linea-sin-estado {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.mesa-rondas-enviadas-descripcion {
+  min-width: 0;
+  color: #1f2937;
   word-break: break-word;
 }
 
-.mesa-rondas-enviadas-estado {
-  grid-area: estado;
-  justify-self: start;
-  font-size: 0.72rem;
+.mesa-rondas-enviadas-precio {
   font-weight: 600;
-  padding: 0.2rem 0.5rem;
+  color: #111827;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.mesa-rondas-enviadas-estado {
+  justify-self: end;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
   border-radius: 999px;
   white-space: nowrap;
   text-align: center;
@@ -1065,23 +1272,11 @@
   color: #166534;
 }
 
-@media (min-width: 520px) {
-  .mesa-rondas-enviadas-linea {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'cantidad nombre estado';
-    gap: 0.5rem;
-  }
-
-  .mesa-rondas-enviadas-estado {
-    justify-self: auto;
-  }
-}
-
 .mesa-rondas-enviadas-acciones {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  margin-top: 0.35rem;
 }
 
 .mesa-ronda-editor {

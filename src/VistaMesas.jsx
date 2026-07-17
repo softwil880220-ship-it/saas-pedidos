@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   cargarMesaActiva,
+  cargarTabMesas,
   configurarContextoMesas,
   folioSigueAbierto,
   hidratarFoliosMesas,
@@ -10,12 +11,19 @@ import {
   obtenerNumeroMesaDeFolio,
   obtenerNumerosMesaOcupados,
   persistirMesaActiva,
+  persistirTabMesas,
   MOTIVO_CIERRE_FOLIO_MESA,
   resolverMotivoCierreFolioDesdeRealtime,
   verificarFolioAbiertoEnServidor,
 } from './pedidoCarritoStorage';
 import { useMesasFoliosRealtime } from './useMesasFoliosRealtime';
 import MesaCarritoPanel from './MesaCarritoPanel';
+import MesaFoliosCobradosConsulta from './MesaFoliosCobradosConsulta.jsx';
+
+const TABS_MESAS = [
+  { value: 'activas', label: 'Mesas activas' },
+  { value: 'cobradas', label: 'Cobradas hoy' },
+];
 
 export const CANTIDAD_MESAS = 10;
 
@@ -31,6 +39,7 @@ export default function VistaMesas({
 }) {
   const [hidrato, setHidrato] = useState(false);
   const [errorHidratacion, setErrorHidratacion] = useState(null);
+  const [tabActivo, setTabActivo] = useState(() => cargarTabMesas());
   const [mesasOcupadas, setMesasOcupadas] = useState(() => obtenerNumerosMesaOcupados());
   const [panelMesa, setPanelMesa] = useState(null);
   const [folioCacheActualizado, setFolioCacheActualizado] = useState({
@@ -148,6 +157,20 @@ export default function VistaMesas({
   }, [usuarioId, rol]);
 
   useEffect(() => {
+    persistirTabMesas(tabActivo);
+  }, [tabActivo]);
+
+  useEffect(() => {
+    const restaurarTabAlMostrarPagina = (evento) => {
+      if (!evento.persisted) return;
+      setTabActivo(cargarTabMesas());
+    };
+
+    window.addEventListener('pageshow', restaurarTabAlMostrarPagina);
+    return () => window.removeEventListener('pageshow', restaurarTabAlMostrarPagina);
+  }, []);
+
+  useEffect(() => {
     let activo = true;
 
     const hidratar = async () => {
@@ -241,6 +264,16 @@ export default function VistaMesas({
     void sincronizarOcupacion();
   };
 
+  const cambiarTabMesas = (value) => {
+    if (value === 'activas') {
+      setTabActivo(value);
+      return;
+    }
+
+    cerrarPanel();
+    setTabActivo(value);
+  };
+
   const handleFolioCreado = useCallback(
     (folioId) => {
       setPanelMesa((prev) => (prev ? { ...prev, folioId } : prev));
@@ -263,8 +296,23 @@ export default function VistaMesas({
     <section className="vista-mesas">
       <h2 className="formulario-titulo">Mesas</h2>
       <p className="vista-mesas-descripcion">
-        Selecciona una mesa para abrir o continuar un pedido.
+        {tabActivo === 'activas'
+          ? 'Selecciona una mesa para abrir o continuar un pedido.'
+          : 'Consulta las mesas cobradas hoy.'}
       </p>
+
+      <nav className="seccion-subtabs-nav" aria-label="Secciones de mesas">
+        {TABS_MESAS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className={`seccion-subtabs-tab${tabActivo === value ? ' activo' : ''}`}
+            onClick={() => cambiarTabMesas(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {errorHidratacion ? (
         <p className="formulario-error-guardar" role="alert">
@@ -272,53 +320,63 @@ export default function VistaMesas({
         </p>
       ) : null}
 
-      <div className="vista-mesas-grilla" role="list" aria-label="Mesas del local">
-        {mesas.map(({ numero, ocupada }) => {
-          const activa = panelMesa?.numero === numero;
+      {tabActivo === 'activas' ? (
+        <>
+          <div className="vista-mesas-grilla" role="list" aria-label="Mesas del local">
+            {mesas.map(({ numero, ocupada }) => {
+              const activa = panelMesa?.numero === numero;
 
-          return (
-            <button
-              key={numero}
-              type="button"
-              role="listitem"
-              className={`mesa-tarjeta${ocupada ? ' mesa-tarjeta-ocupada' : ' mesa-tarjeta-disponible'}${
-                activa ? ' mesa-tarjeta-activa' : ''
-              }`}
-              onClick={() => abrirMesa(numero)}
-              aria-pressed={activa}
-            >
-              <span className="mesa-tarjeta-numero">Mesa {numero}</span>
-              <span className="mesa-tarjeta-estado">{ocupada ? 'Ocupada' : 'Disponible'}</span>
-            </button>
-          );
-        })}
-      </div>
+              return (
+                <button
+                  key={numero}
+                  type="button"
+                  role="listitem"
+                  className={`mesa-tarjeta${ocupada ? ' mesa-tarjeta-ocupada' : ' mesa-tarjeta-disponible'}${
+                    activa ? ' mesa-tarjeta-activa' : ''
+                  }`}
+                  onClick={() => abrirMesa(numero)}
+                  aria-pressed={activa}
+                >
+                  <span className="mesa-tarjeta-numero">Mesa {numero}</span>
+                  <span className="mesa-tarjeta-estado">{ocupada ? 'Ocupada' : 'Disponible'}</span>
+                </button>
+              );
+            })}
+          </div>
 
-      {panelMesa ? (
-        <MesaCarritoPanel
-          key={`mesa-panel-${panelMesa.numero}`}
-          folioId={panelMesa.folioId}
-          folioCacheActualizado={folioCacheActualizado}
-          numeroMesa={panelMesa.numero}
-          productos={productos}
-          productosOrdenados={productosOrdenados}
-          frecuenciaCategorias={frecuenciaCategorias}
-          frecuenciaLista={frecuenciaLista}
-          variantesCtx={variantesCtx}
+          {panelMesa ? (
+            <MesaCarritoPanel
+              key={`mesa-panel-${panelMesa.numero}`}
+              folioId={panelMesa.folioId}
+              folioCacheActualizado={folioCacheActualizado}
+              numeroMesa={panelMesa.numero}
+              productos={productos}
+              productosOrdenados={productosOrdenados}
+              frecuenciaCategorias={frecuenciaCategorias}
+              frecuenciaLista={frecuenciaLista}
+              variantesCtx={variantesCtx}
+              negocioId={negocioId}
+              usuarioId={usuarioId}
+              rol={rol}
+              onCerrar={cerrarPanel}
+              onFolioCreado={handleFolioCreado}
+              onFolioEliminado={handleFolioEliminado}
+              onFolioCerrado={handleFolioCerrado}
+              motivoCierreFolio={motivoCierreFolio}
+              motivoCierreFolioRef={motivoCierreFolioRef}
+              onMotivoCierreFolioConsumido={handleMotivoCierreFolioConsumido}
+              onRondaEnviada={sincronizarOcupacion}
+              onRondasCambiadas={sincronizarOcupacion}
+            />
+          ) : null}
+        </>
+      ) : (
+        <MesaFoliosCobradosConsulta
           negocioId={negocioId}
-          usuarioId={usuarioId}
-          rol={rol}
-          onCerrar={cerrarPanel}
-          onFolioCreado={handleFolioCreado}
-          onFolioEliminado={handleFolioEliminado}
-          onFolioCerrado={handleFolioCerrado}
-          motivoCierreFolio={motivoCierreFolio}
-          motivoCierreFolioRef={motivoCierreFolioRef}
-          onMotivoCierreFolioConsumido={handleMotivoCierreFolioConsumido}
-          onRondaEnviada={sincronizarOcupacion}
-          onRondasCambiadas={sincronizarOcupacion}
+          productos={productos}
+          variantesCtx={variantesCtx}
         />
-      ) : null}
+      )}
     </section>
   );
 }

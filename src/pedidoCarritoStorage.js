@@ -9,9 +9,11 @@ export const STORAGE_KEYS = {
   MODO_CAPTURA: 'pos_modo_captura',
   SECCION_ACTIVA: 'pos_seccion_activa',
   TAB_MOSTRADOR: 'pos_tab_mostrador',
+  TAB_MESAS: 'pos_tab_mesas',
 };
 
-const TABS_MOSTRADOR_VALIDOS = new Set(['nuevo', 'pendientes']);
+const TABS_MOSTRADOR_VALIDOS = new Set(['nuevo', 'pendientes', 'entregados']);
+const TABS_MESAS_VALIDOS = new Set(['activas', 'cobradas']);
 
 export const CLIENTE_MOSTRADOR = 'Mostrador';
 
@@ -347,6 +349,27 @@ export function cargarTabMostrador() {
     return TABS_MOSTRADOR_VALIDOS.has(tab) ? tab : 'nuevo';
   } catch {
     return 'nuevo';
+  }
+}
+
+export function persistirTabMesas(tab) {
+  if (typeof window === 'undefined' || !TABS_MESAS_VALIDOS.has(tab)) return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.TAB_MESAS, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarTabMesas() {
+  if (typeof window === 'undefined') return 'activas';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEYS.TAB_MESAS);
+    return TABS_MESAS_VALIDOS.has(tab) ? tab : 'activas';
+  } catch {
+    return 'activas';
   }
 }
 
