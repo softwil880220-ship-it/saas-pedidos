@@ -357,6 +357,42 @@ function calcularVentasPorFormaPago(pedidosLista) {
   return totales;
 }
 
+function calcularVentasMesasFoliosPorFormaPago(foliosLista) {
+  const totales = {
+    efectivo: 0,
+    tarjeta: 0,
+    transferencia: 0,
+    link_pago: 0,
+  };
+
+  (foliosLista || []).forEach((folio) => {
+    const forma = normalizarFormaPagoPayload(folio.forma_pago);
+    if (!forma) return;
+    totales[forma] = redondearMoneda(
+      totales[forma] + (Number(folio.total_cobrado) || 0)
+    );
+  });
+
+  return totales;
+}
+
+function combinarVentasPorFormaPago(totalesA, totalesB) {
+  return {
+    efectivo: redondearMoneda((totalesA?.efectivo || 0) + (totalesB?.efectivo || 0)),
+    tarjeta: redondearMoneda((totalesA?.tarjeta || 0) + (totalesB?.tarjeta || 0)),
+    transferencia: redondearMoneda(
+      (totalesA?.transferencia || 0) + (totalesB?.transferencia || 0)
+    ),
+    link_pago: redondearMoneda((totalesA?.link_pago || 0) + (totalesB?.link_pago || 0)),
+  };
+}
+
+function sumarCampoFoliosMesas(foliosLista, campo) {
+  return redondearMoneda(
+    (foliosLista || []).reduce((suma, folio) => suma + (Number(folio[campo]) || 0), 0)
+  );
+}
+
 function obtenerRangoFechaClave(claveFecha) {
   const [year, month, day] = claveFecha.split('-').map(Number);
   return {
@@ -1171,6 +1207,7 @@ function Dashboard() {
   const [accionPendienteAutorizacionPedido, setAccionPendienteAutorizacionPedido] =
     useState(null);
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
+  const [foliosMesasCerradosHoy, setFoliosMesasCerradosHoy] = useState([]);
 
   const cargarProductoItemsVariantes = async (catalogos, productoIds) => {
     if (!negocioId || !productoIds?.length) {
@@ -2275,9 +2312,25 @@ function Dashboard() {
     totalVentasHoyMostrador +
     totalVentasHoyRecogerDomicilio +
     totalVentasHoyMesas;
-  const ventasBrutasPorFormaPago = useMemo(
+  const ventasPedidosPorFormaPago = useMemo(
     () => calcularVentasPorFormaPago(pedidosHoyTodos),
     [pedidosHoyTodos]
+  );
+  const ventasMesasFoliosPorFormaPago = useMemo(
+    () => calcularVentasMesasFoliosPorFormaPago(foliosMesasCerradosHoy),
+    [foliosMesasCerradosHoy]
+  );
+  const ventasBrutasPorFormaPago = useMemo(
+    () => combinarVentasPorFormaPago(ventasPedidosPorFormaPago, ventasMesasFoliosPorFormaPago),
+    [ventasPedidosPorFormaPago, ventasMesasFoliosPorFormaPago]
+  );
+  const propinasDelDiaMesas = useMemo(
+    () => sumarCampoFoliosMesas(foliosMesasCerradosHoy, 'propina_monto_aplicado'),
+    [foliosMesasCerradosHoy]
+  );
+  const descuentosDelDiaMesas = useMemo(
+    () => sumarCampoFoliosMesas(foliosMesasCerradosHoy, 'descuento_monto_aplicado'),
+    [foliosMesasCerradosHoy]
   );
   const arqueoSistema = useMemo(() => {
     const ventasEfectivo = ventasBrutasPorFormaPago.efectivo;
@@ -3094,6 +3147,29 @@ function Dashboard() {
     [totalArqueoContado, arqueoSistema.total]
   );
 
+  const cargarFoliosMesasCerradosDelDia = async () => {
+    if (!negocioId) return [];
+
+    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('mesas_folios')
+        .select(
+          'forma_pago, total_cobrado, propina_monto_aplicado, descuento_monto_aplicado'
+        )
+        .eq('estado', 'cerrada')
+        .gte('cerrada_en', inicio.toISOString())
+        .lte('cerrada_en', fin.toISOString()),
+      negocioId
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data || [];
+  };
+
   const cargarRetirosDelDia = async () => {
     if (!negocioId) return 0;
 
@@ -3642,11 +3718,13 @@ function Dashboard() {
     setCargandoArqueoDatos(true);
 
     const errores = [];
-    const [retirosResult, fondoResult, arqueoResult] = await Promise.allSettled([
-      cargarRetirosDelDia(),
-      cargarFondoFijoDelDia(),
-      cargarArqueoDelDia(),
-    ]);
+    const [retirosResult, fondoResult, arqueoResult, foliosMesasResult] =
+      await Promise.allSettled([
+        cargarRetirosDelDia(),
+        cargarFondoFijoDelDia(),
+        cargarArqueoDelDia(),
+        cargarFoliosMesasCerradosDelDia(),
+      ]);
 
     if (arqueoResult.status === 'fulfilled' && arqueoResult.value) {
       const arqueo = arqueoResult.value;
@@ -3682,6 +3760,16 @@ function Dashboard() {
       }
     }
 
+    if (foliosMesasResult.status === 'fulfilled') {
+      setFoliosMesasCerradosHoy(foliosMesasResult.value);
+    } else {
+      setFoliosMesasCerradosHoy([]);
+      errores.push(
+        foliosMesasResult.reason?.message ||
+          'No se pudieron cargar los cobros de mesas del día.'
+      );
+    }
+
     if (errores.length > 0) {
       setErrorArqueo(errores.join(' '));
     }
@@ -3694,6 +3782,7 @@ function Dashboard() {
     setArqueoContado(crearArqueoContadoVacio());
     setArqueoContadoCampoEnfocado(null);
     setArqueoDelDiaGuardado(null);
+    setFoliosMesasCerradosHoy([]);
     setErrorArqueo(null);
   };
 
@@ -4531,18 +4620,7 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
-              Ventas totales del día:{' '}
-              {formatearMoneda(
-                (arqueoModalSoloLectura
-                  ? Number(arqueoDelDiaGuardado.total_sistema) || 0
-                  : arqueoSistema.total) -
-                  (arqueoModalSoloLectura
-                    ? Number(arqueoDelDiaGuardado.fondo_fijo_del_dia) || 0
-                    : fondoFijoDelDia) +
-                  (arqueoModalSoloLectura
-                    ? Number(arqueoDelDiaGuardado.retiros_del_dia) || 0
-                    : retirosDelDia)
-              )}
+              Ventas totales del día: {formatearMoneda(totalVentasHoyTotal)}
             </p>
             <p className="arqueo-modal-descripcion">
               Fondo fijo del día:{' '}
@@ -4557,6 +4635,10 @@ function Dashboard() {
                   ? Number(arqueoDelDiaGuardado.retiros_del_dia) || 0
                   : retirosDelDia
               )}
+            </p>
+            <p className="arqueo-modal-descripcion">
+              Propinas del día: {formatearMoneda(propinasDelDiaMesas)} | Descuentos del día:{' '}
+              {formatearMoneda(descuentosDelDiaMesas)}
             </p>
             {cargandoArqueoDatos ? (
               <p className="arqueo-modal-cargando">Calculando datos del día...</p>
