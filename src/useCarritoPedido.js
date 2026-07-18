@@ -4,6 +4,7 @@ import {
   obtenerFlujoStatus,
 } from './pedidosShared';
 import {
+  aplicarConsolidacionCarrito,
   buscarProductoPorId,
   calcularDetalleLineasPedido,
   calcularTotalLineas,
@@ -223,19 +224,24 @@ export default function useCarritoPedido({
     [form, pagoRecibido]
   );
 
+  const ctxConsolidacion = useMemo(
+    () => ({ ...variantesCtx, productos }),
+    [variantesCtx, productos]
+  );
+
   const lineasPedidoActivas = useMemo(
     () => (form.lineas || []).filter((linea) => linea?.productoId),
     [form.lineas]
   );
 
   const lineasPedidoConProducto = useMemo(
-    () => consolidarLineasPorProducto(lineasPedidoActivas, { ...variantesCtx, productos }),
-    [lineasPedidoActivas, variantesCtx, productos]
+    () => consolidarLineasPorProducto(lineasPedidoActivas, ctxConsolidacion),
+    [lineasPedidoActivas, ctxConsolidacion]
   );
 
   const totalPedido = useMemo(
-    () => calcularTotalLineas(lineasPedidoActivas, productos, variantesCtx),
-    [lineasPedidoActivas, productos, variantesCtx]
+    () => calcularTotalLineas(lineasPedidoConProducto, productos, variantesCtx),
+    [lineasPedidoConProducto, productos, variantesCtx]
   );
 
   const pagoEsEfectivo =
@@ -420,39 +426,48 @@ export default function useCarritoPedido({
     (lineaId, campo, valor) => {
       setForm((prev) => ({
         ...prev,
-        lineas: prev.lineas.map((linea) => {
-          if (linea.id !== lineaId) return linea;
-          if (campo === 'productoId') {
-            const producto = buscarProductoPorId(productos, valor);
-            return {
-              ...linea,
-              productoId: String(valor),
-              cantidad: cantidadInicialLinea(producto),
-              variantes: crearVariantesLineaVacias(variantesCtx.categorias),
-            };
-          }
-          return { ...linea, [campo]: valor };
-        }),
+        lineas: aplicarConsolidacionCarrito(
+          (prev.lineas || []).map((linea) => {
+            if (linea.id !== lineaId) return linea;
+            if (campo === 'productoId') {
+              const producto = buscarProductoPorId(productos, valor);
+              return {
+                ...linea,
+                productoId: String(valor),
+                cantidad: cantidadInicialLinea(producto),
+                variantes: crearVariantesLineaVacias(variantesCtx.categorias),
+              };
+            }
+            return { ...linea, [campo]: valor };
+          }),
+          ctxConsolidacion
+        ),
       }));
     },
-    [variantesCtx, productos]
+    [ctxConsolidacion, variantesCtx, productos]
   );
 
-  const actualizarCantidadLinea = useCallback((lineaId, valor) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: prev.lineas.map((linea) =>
-        linea.id === lineaId ? { ...linea, cantidad: valor } : linea
-      ),
-    }));
-  }, []);
+  const actualizarCantidadLinea = useCallback(
+    (lineaId, valor) => {
+      setForm((prev) => ({
+        ...prev,
+        lineas: aplicarConsolidacionCarrito(
+          (prev.lineas || []).map((linea) =>
+            linea.id === lineaId ? { ...linea, cantidad: valor } : linea
+          ),
+          ctxConsolidacion
+        ),
+      }));
+    },
+    [ctxConsolidacion]
+  );
 
   const ajustarCantidadLinea = useCallback(
     (lineaId, delta) => {
       setForm((prev) => ({
         ...prev,
-        lineas: consolidarLineasPorProducto(
-          prev.lineas.map((linea) => {
+        lineas: aplicarConsolidacionCarrito(
+          (prev.lineas || []).map((linea) => {
             if (linea.id !== lineaId) return linea;
 
             const producto = buscarProductoPorId(productos, linea.productoId);
@@ -465,29 +480,35 @@ export default function useCarritoPedido({
 
             return { ...linea, cantidad: String(cantidadNueva) };
           }),
-          { ...variantesCtx, productos }
+          ctxConsolidacion
         ),
       }));
     },
-    [variantesCtx, productos]
+    [ctxConsolidacion, productos]
   );
 
-  const cambiarVarianteLinea = useCallback((lineaId, categoria, itemId) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: prev.lineas.map((linea) =>
-        linea.id === lineaId
-          ? {
-              ...linea,
-              variantes: {
-                ...linea.variantes,
-                [categoria]: toggleIdEnLinea(linea.variantes?.[categoria], itemId),
-              },
-            }
-          : linea
-      ),
-    }));
-  }, []);
+  const cambiarVarianteLinea = useCallback(
+    (lineaId, categoria, itemId) => {
+      setForm((prev) => ({
+        ...prev,
+        lineas: aplicarConsolidacionCarrito(
+          (prev.lineas || []).map((linea) =>
+            linea.id === lineaId
+              ? {
+                  ...linea,
+                  variantes: {
+                    ...linea.variantes,
+                    [categoria]: toggleIdEnLinea(linea.variantes?.[categoria], itemId),
+                  },
+                }
+              : linea
+          ),
+          ctxConsolidacion
+        ),
+      }));
+    },
+    [ctxConsolidacion]
+  );
 
   const agregarLinea = useCallback(() => {
     setForm((prev) => ({
@@ -501,63 +522,45 @@ export default function useCarritoPedido({
       const idStr = String(productoId);
       const producto = buscarProductoPorId(productos, productoId);
 
-      setForm((prev) => {
-        const lineasConsolidadas = consolidarLineasPorProducto(
-          prev.lineas.filter((linea) => linea.productoId),
-          { ...variantesCtx, productos }
-        );
-
-        if (!esProductoPorPeso(producto)) {
-          const indiceExistente = lineasConsolidadas.findIndex(
-            (linea) => String(linea.productoId) === idStr
-          );
-
-          if (indiceExistente !== -1) {
-            return {
-              ...prev,
-              lineas: lineasConsolidadas.map((linea, indice) =>
-                indice === indiceExistente
-                  ? {
-                      ...linea,
-                      cantidad: String(parseCantidadPieza(linea.cantidad) + 1),
-                    }
-                  : linea
-              ),
-            };
-          }
-        }
-
-        return {
-          ...prev,
-          lineas: [
-            ...lineasConsolidadas,
+      setForm((prev) => ({
+        ...prev,
+        lineas: aplicarConsolidacionCarrito(
+          [
+            ...(prev.lineas || []),
             {
               ...crearLineaPedido(nextLineaId.current++, variantesCtx),
               productoId: idStr,
               cantidad: cantidadInicialLinea(producto),
             },
           ],
-        };
-      });
+          ctxConsolidacion
+        ),
+      }));
     },
-    [variantesCtx, productos]
+    [ctxConsolidacion, variantesCtx, productos]
   );
 
-  const eliminarLinea = useCallback((lineaId) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: prev.lineas.filter((linea) => linea.id !== lineaId),
-    }));
-  }, []);
+  const eliminarLinea = useCallback(
+    (lineaId) => {
+      setForm((prev) => ({
+        ...prev,
+        lineas: aplicarConsolidacionCarrito(
+          (prev.lineas || []).filter((linea) => linea.id !== lineaId),
+          ctxConsolidacion
+        ),
+      }));
+    },
+    [ctxConsolidacion]
+  );
 
   const obtenerDetallePedido = useCallback(
-    () => calcularDetalleLineasPedido(form.lineas, productos, variantesCtx),
-    [form.lineas, productos, variantesCtx]
+    () => calcularDetalleLineasPedido(lineasPedidoConProducto, productos, variantesCtx),
+    [lineasPedidoConProducto, productos, variantesCtx]
   );
 
   const obtenerResumenProductos = useCallback(
-    () => resumenProductos(form.lineas, productos, variantesCtx),
-    [form.lineas, productos, variantesCtx]
+    () => resumenProductos(lineasPedidoConProducto, productos, variantesCtx),
+    [lineasPedidoConProducto, productos, variantesCtx]
   );
 
   return {

@@ -9,9 +9,36 @@ import {
 } from './productoUnidadVenta';
 import {
   calcularExtrasLinea,
+  categoriasVariantesActivas,
   clonarVariantesLinea,
   formatearDetalleVariantesLinea,
 } from './variantesDinamicas';
+
+export function huellaVariantesLineaCarrito(linea, ctx) {
+  const variantes = clonarVariantesLinea(linea?.variantes, ctx?.categorias);
+
+  return categoriasVariantesActivas(ctx?.categorias)
+    .map((categoria) => {
+      const categoriaId = String(categoria.id);
+      const ids = [...(variantes[categoriaId] || [])]
+        .map(String)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+
+      return `${categoriaId}:${ids.join(',')}`;
+    })
+    .join(';');
+}
+
+export function claveConsolidacionLineaCarrito(linea, ctx) {
+  const productoId = String(linea.productoId);
+  const producto = buscarProductoPorId(ctx?.productos || [], productoId);
+
+  if (esProductoPorPeso(producto)) {
+    return `${productoId}-${linea.id}`;
+  }
+
+  return `${productoId}|${huellaVariantesLineaCarrito(linea, ctx)}`;
+}
 
 export function consolidarLineasPorProducto(lineas, ctx) {
   const productos = ctx?.productos || [];
@@ -23,14 +50,15 @@ export function consolidarLineasPorProducto(lineas, ctx) {
 
     const productoId = String(linea.productoId);
     const producto = buscarProductoPorId(productos, productoId);
+    const clave = claveConsolidacionLineaCarrito(linea, ctx);
+    const variantes = clonarVariantesLinea(linea.variantes, ctx?.categorias);
 
     if (esProductoPorPeso(producto)) {
-      const clave = `${productoId}-${linea.id}`;
       map.set(clave, {
         ...linea,
         productoId,
         cantidad: String(linea.cantidad ?? ''),
-        variantes: clonarVariantesLinea(linea.variantes, ctx?.categorias),
+        variantes,
       });
       orden.push(clave);
       return;
@@ -38,9 +66,9 @@ export function consolidarLineasPorProducto(lineas, ctx) {
 
     const cantidad = parseCantidadPieza(linea.cantidad);
 
-    if (map.has(productoId)) {
-      const existente = map.get(productoId);
-      map.set(productoId, {
+    if (map.has(clave)) {
+      const existente = map.get(clave);
+      map.set(clave, {
         ...existente,
         cantidad: String(parseCantidadPieza(existente.cantidad) + cantidad),
         variantes: clonarVariantesLinea(existente.variantes, ctx?.categorias),
@@ -48,17 +76,26 @@ export function consolidarLineasPorProducto(lineas, ctx) {
       return;
     }
 
-    const copia = {
+    map.set(clave, {
       ...linea,
       productoId,
       cantidad: String(cantidad),
-      variantes: clonarVariantesLinea(linea.variantes, ctx?.categorias),
-    };
-    map.set(productoId, copia);
-    orden.push(productoId);
+      variantes,
+    });
+    orden.push(clave);
   });
 
   return orden.map((clave) => map.get(clave));
+}
+
+export function aplicarConsolidacionCarrito(lineas, ctx) {
+  const vacias = (lineas || []).filter((linea) => !linea?.productoId);
+  const consolidadas = consolidarLineasPorProducto(
+    (lineas || []).filter((linea) => linea?.productoId),
+    ctx
+  );
+
+  return [...consolidadas, ...vacias];
 }
 
 function buscarPorId(lista, id) {
