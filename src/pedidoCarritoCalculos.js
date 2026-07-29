@@ -134,6 +134,7 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
   const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
   const precioUnitario = redondearMoneda(precioBase + extras);
   const descripcion = formatearDescripcionLinea(linea, producto, variantesCtx);
+  const variantes = clonarVariantesLinea(linea.variantes, variantesCtx?.categorias);
 
   if (unidadVenta === UNIDAD_VENTA_PESO) {
     const cantidad = parseGramosLinea(linea.cantidad);
@@ -156,6 +157,7 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
       precio_unitario: precioUnitario,
       subtotal,
       descripcion,
+      variantes,
       cocina: normalizarCocinaProducto(producto.cocina),
     };
   }
@@ -178,6 +180,7 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
     precio_unitario: precioUnitario,
     subtotal,
     descripcion,
+    variantes,
     cocina: normalizarCocinaProducto(producto.cocina),
   };
 }

@@ -77,6 +77,7 @@ import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import VistaMesas from './VistaMesas.jsx';
 import VistaMostrador from './VistaMostrador.jsx';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
+import useVariantesCtx from './useVariantesCtx';
 import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
 import {
@@ -102,11 +103,9 @@ import {
 } from './productoUnidadVenta';
 import {
   TAB_CATEGORIAS_VARIANTES,
-  agruparItemsPorCategoria,
   catalogosVariantesOrdenadosDesde,
   categoriasVariantesActivas,
   combinarVariantesLinea,
-  construirProductoItemsMap,
   crearCatalogosVariantesVacios,
   crearVariantesActivasFormVacias,
   crearVariantesLineaVacias,
@@ -1099,9 +1098,16 @@ function Dashboard() {
     channelName: 'dashboard-productos',
     negocioId,
   });
-  const [categoriasVariantes, setCategoriasVariantes] = useState([]);
-  const [catalogosVariantes, setCatalogosVariantes] = useState({});
-  const [productoItemsVariantes, setProductoItemsVariantes] = useState({});
+  const {
+    variantesCtx,
+    categoriasVariantes,
+    catalogosVariantes,
+    productoItemsVariantes,
+    setCategoriasVariantes,
+    setCatalogosVariantes,
+    setProductoItemsVariantes,
+    recargarCatalogos,
+  } = useVariantesCtx(negocioId, productos);
   const [catalogoTab, setCatalogoTab] = useState('productos');
   const productosOrdenados = useMemo(
     () => ordenarProductos(productos),
@@ -1112,14 +1118,6 @@ function Dashboard() {
   const catalogoTabs = useMemo(
     () => crearCatalogoTabs(categoriasVariantes),
     [categoriasVariantes]
-  );
-  const variantesCtx = useMemo(
-    () => ({
-      categorias: categoriasVariantes,
-      catalogos: catalogosVariantes,
-      productoItems: productoItemsVariantes,
-    }),
-    [categoriasVariantes, catalogosVariantes, productoItemsVariantes]
   );
   const ctxConsolidacion = useMemo(
     () => ({ ...variantesCtx, productos }),
@@ -1214,62 +1212,6 @@ function Dashboard() {
   const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
   const [foliosMesasCerradosHoy, setFoliosMesasCerradosHoy] = useState([]);
 
-  const cargarProductoItemsVariantes = async (catalogos, productoIds) => {
-    if (!negocioId || !productoIds?.length) {
-      setProductoItemsVariantes({});
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('producto_categorias_variantes')
-      .select('producto_id, item_variante_id, items_variantes(categoria_id)')
-      .in('producto_id', productoIds);
-
-    if (error) {
-      setProductoItemsVariantes({});
-      return;
-    }
-
-    const links = (data || []).map((row) => ({
-      producto_id: row.producto_id,
-      item_variante_id: row.item_variante_id,
-      categoria_id: row.items_variantes?.categoria_id,
-    }));
-
-    setProductoItemsVariantes(construirProductoItemsMap(links, catalogos));
-  };
-
-  const cargarCatalogosVariantes = async () => {
-    if (!negocioId) {
-      setCategoriasVariantes([]);
-      setCatalogosVariantes({});
-      setProductoItemsVariantes({});
-      return;
-    }
-
-    const { data: categorias, error: errorCategorias } = await queryConNegocio(
-      supabase.from('categorias_variantes').select('*'),
-      negocioId
-    )
-      .order('orden', { ascending: true })
-      .order('nombre', { ascending: true });
-
-    const categoriasLista = !errorCategorias && categorias ? categorias : [];
-
-    const { data: items, error: errorItems } = await supabase
-      .from('items_variantes')
-      .select('*, categorias_variantes!inner(id, negocio_id, nombre, orden, activo)')
-      .eq('categorias_variantes.negocio_id', negocioId)
-      .order('nombre', { ascending: true });
-
-    const itemsLista = !errorItems && items ? items : [];
-    const catalogos = agruparItemsPorCategoria(itemsLista);
-
-    setCategoriasVariantes(categoriasLista);
-    setCatalogosVariantes(catalogos);
-    await cargarProductoItemsVariantes(catalogos, productos.map((producto) => producto.id));
-  };
-
   const sincronizarProductoCategoriasVariantes = async (productoId, formActivas) => {
     const ctx = {
       categorias: categoriasVariantes,
@@ -1311,10 +1253,6 @@ function Dashboard() {
       ...prev,
       [String(productoId)]: mapa,
     }));
-  };
-
-  const cargarCatalogos = async () => {
-    await cargarCatalogosVariantes();
   };
 
   const sincronizarPedidosPendientes = useCallback(async () => {
@@ -1362,10 +1300,6 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    cargarCatalogos();
-  }, [negocioId]);
-
-  useEffect(() => {
     let activo = true;
 
     if (!negocioId) {
@@ -1394,9 +1328,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (seccion === 'pedidos' || seccion === 'catalogo') {
-      cargarCatalogos();
+      void recargarCatalogos();
     }
-  }, [seccion, negocioId]);
+  }, [seccion, negocioId, recargarCatalogos]);
 
   useEffect(() => {
     if (seccion !== 'catalogo') {
@@ -1437,18 +1371,6 @@ function Dashboard() {
       return { ...prev, variantesActivas: merged };
     });
   }, [categoriasVariantes]);
-
-  useEffect(() => {
-    if (!negocioId || productos.length === 0) {
-      if (!negocioId) setProductoItemsVariantes({});
-      return;
-    }
-
-    void cargarProductoItemsVariantes(
-      catalogosVariantes,
-      productos.map((producto) => producto.id)
-    );
-  }, [negocioId, productos, catalogosVariantes]);
 
   useEffect(() => {
     if (seccion === 'pedidos') {

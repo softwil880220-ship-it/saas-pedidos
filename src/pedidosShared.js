@@ -1,7 +1,11 @@
 import {
+  esProductoPorPeso,
   formatearLineaDetalleCocina,
   formatearLineaDetalleGuardada,
+  obtenerNombreBaseLinea,
+  parseGramosLinea,
 } from './productoUnidadVenta';
+import { formatearDetalleVariantesLineaSoloValor } from './variantesDinamicas';
 
 export const TIPOS_ENTREGA = {
   DOMICILIO: 'domicilio',
@@ -650,11 +654,61 @@ export function formatearMoneda(valor) {
   return `$${formatearImporte(valor)}`;
 }
 
+function lineaTieneVariantesEstructuradas(linea) {
+  const variantes = linea?.variantes;
+  if (!variantes || typeof variantes !== 'object') return false;
+  return Object.values(variantes).some(
+    (ids) => Array.isArray(ids) && ids.length > 0
+  );
+}
+
+function formatearDescripcionLineaCocinaSoloValor(linea, variantesCtx) {
+  if (!lineaTieneVariantesEstructuradas(linea)) {
+    return linea.descripcion;
+  }
+
+  const detalles = formatearDetalleVariantesLineaSoloValor(linea, variantesCtx);
+  if (!detalles.length) {
+    return linea.descripcion;
+  }
+
+  const nombre = obtenerNombreBaseLinea(linea);
+  return `${nombre} (${detalles.join('; ')})`;
+}
+
+function formatearLineaDetalleCocinaSoloValor(linea, variantesCtx) {
+  if (!esProductoPorPeso(linea)) {
+    return null;
+  }
+
+  if (!lineaTieneVariantesEstructuradas(linea)) {
+    return formatearLineaDetalleCocina(linea);
+  }
+
+  const detalles = formatearDetalleVariantesLineaSoloValor(linea, variantesCtx);
+  if (!detalles.length) {
+    return formatearLineaDetalleCocina(linea);
+  }
+
+  const nombre = obtenerNombreBaseLinea(linea);
+  const gramos = parseGramosLinea(linea?.cantidad);
+  const variantesTexto = detalles.join('; ');
+
+  if (gramos <= 0) {
+    return variantesTexto ? `${nombre} (${variantesTexto})` : nombre;
+  }
+
+  return variantesTexto
+    ? `${nombre} — ${gramos}g (${variantesTexto})`
+    : `${nombre} — ${gramos}g`;
+}
+
 export function DesgloseProductosPedido({
   pedido,
   mostrarTotal = true,
   filtrarCocina = null,
   sinPrecio = false,
+  variantesCtx = null,
 }) {
   if (pedido?.lineas_detalle?.length) {
     const lineas = filtrarCocina
@@ -671,8 +725,14 @@ export function DesgloseProductosPedido({
       <div className="pedido-desglose">
         {lineas.map((linea, index) => {
           const textoPeso = sinPrecio
-            ? formatearLineaDetalleCocina(linea)
+            ? variantesCtx != null
+              ? formatearLineaDetalleCocinaSoloValor(linea, variantesCtx)
+              : formatearLineaDetalleCocina(linea)
             : formatearLineaDetalleGuardada(linea);
+          const descripcionLinea =
+            variantesCtx != null
+              ? formatearDescripcionLineaCocinaSoloValor(linea, variantesCtx)
+              : linea.descripcion;
 
           if (textoPeso) {
             return (
@@ -691,7 +751,7 @@ export function DesgloseProductosPedido({
                 {linea.cantidad}
               </span>
               <div className="pedido-desglose-detalle">
-                <span className="pedido-desglose-nombre">{linea.descripcion}</span>
+                <span className="pedido-desglose-nombre">{descripcionLinea}</span>
               </div>
             </div>
           );

@@ -268,6 +268,32 @@ export function formatearDetalleVariantesLinea(linea, ctx, idsPermitidosPorCateg
   return detalles;
 }
 
+export function formatearDetalleVariantesLineaSoloValor(
+  linea,
+  ctx,
+  idsPermitidosPorCategoria = null
+) {
+  const detalles = [];
+
+  categoriasVariantesActivas(ctx.categorias).forEach((categoria) => {
+    const categoriaId = String(categoria.id);
+    const idsPermitidos = idsPermitidosPorCategoria?.[categoriaId]
+      ? new Set(idsPermitidosPorCategoria[categoriaId].map(String))
+      : null;
+    const nombres = nombresVariantesLinea(linea, categoriaId, ctx, idsPermitidos);
+    if (!nombres.length) return;
+
+    const formato = formatoResumenCategoria(categoria);
+    if (formato.tipo === 'plus') {
+      detalles.push(`+${nombres.join(', ')}`);
+    } else {
+      detalles.push(nombres.join(', '));
+    }
+  });
+
+  return detalles;
+}
+
 export function formatearLineaResumen(linea, producto, ctx) {
   const mapa = parsearVariantesActivasProducto(producto, ctx);
   const detalles = categoriasVariantesActivas(ctx.categorias).flatMap((categoria) => {

@@ -3,6 +3,7 @@ import './App.css';
 import './VistaCocinaMostrador.css';
 import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
+import useVariantesCtx from './useVariantesCtx';
 import {
   DesgloseProductosPedido,
   ETIQUETA_CANAL_MOSTRADOR,
@@ -39,6 +40,7 @@ function TarjetaPedidoCocina({
   cocina,
   mostradorFlujoCocina,
   actualizandoId,
+  variantesCtx,
   onMarcarEnPreparacion,
   onMarcarListo,
   onMarcarEntregado,
@@ -87,6 +89,7 @@ function TarjetaPedidoCocina({
         mostrarTotal={false}
         filtrarCocina={cocina}
         sinPrecio
+        variantesCtx={variantesCtx}
       />
 
       <div className="vista-operativa-acciones">
@@ -181,6 +184,7 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     channelName: `${channelName}-productos`,
     negocioId,
   });
+  const { variantesCtx } = useVariantesCtx(negocioId, productos);
   const [nombresCapturaPorId, setNombresCapturaPorId] = useState({});
   const [mostradorFlujoCocina, setMostradorFlujoCocina] = useState(0);
 
@@ -339,6 +343,7 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     mostradorFlujoCocina,
     actualizandoId,
     nombresCapturaPorId,
+    variantesCtx,
     onMarcarEnPreparacion: marcarEnPreparacion,
     onMarcarListo: marcarListo,
     onMarcarEntregado: marcarEntregado,
