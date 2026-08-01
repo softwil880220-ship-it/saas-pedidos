@@ -78,12 +78,6 @@ function TarjetaPedidoCocina({
         </div>
       </div>
 
-      {nombreCaptura ? (
-        <p className="vista-operativa-captura">
-          Capturado por: <span>{nombreCaptura}</span>
-        </p>
-      ) : null}
-
       <DesgloseProductosPedido
         pedido={pedidoEnriquecido}
         mostrarTotal={false}
@@ -137,6 +131,12 @@ function TarjetaPedidoCocina({
           </button>
         )}
       </div>
+
+      {nombreCaptura ? (
+        <p className="vista-cocina-captura">
+          Capturado por: {nombreCaptura}
+        </p>
+      ) : null}
     </article>
   );
 }

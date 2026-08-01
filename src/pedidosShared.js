@@ -662,6 +662,39 @@ function lineaTieneVariantesEstructuradas(linea) {
   );
 }
 
+function descripcionLineaCocinaEstructurada(linea, variantesCtx) {
+  if (!lineaTieneVariantesEstructuradas(linea)) {
+    return null;
+  }
+
+  const detalles = formatearDetalleVariantesLineaSoloValor(linea, variantesCtx);
+  if (!detalles.length) {
+    return null;
+  }
+
+  return {
+    nombre: obtenerNombreBaseLinea(linea),
+    detalles: detalles.join('; '),
+  };
+}
+
+function lineaDetalleCocinaPesoEstructurada(linea, variantesCtx) {
+  if (!esProductoPorPeso(linea) || !lineaTieneVariantesEstructuradas(linea)) {
+    return null;
+  }
+
+  const detalles = formatearDetalleVariantesLineaSoloValor(linea, variantesCtx);
+  if (!detalles.length) {
+    return null;
+  }
+
+  return {
+    nombre: obtenerNombreBaseLinea(linea),
+    gramos: parseGramosLinea(linea?.cantidad),
+    detalles: detalles.join('; '),
+  };
+}
+
 function formatearDescripcionLineaCocinaSoloValor(linea, variantesCtx) {
   if (!lineaTieneVariantesEstructuradas(linea)) {
     return linea.descripcion;
@@ -724,15 +757,36 @@ export function DesgloseProductosPedido({
     return (
       <div className="pedido-desglose">
         {lineas.map((linea, index) => {
+          const lineaPesoEstructurada =
+            variantesCtx != null && sinPrecio
+              ? lineaDetalleCocinaPesoEstructurada(linea, variantesCtx)
+              : null;
           const textoPeso = sinPrecio
             ? variantesCtx != null
               ? formatearLineaDetalleCocinaSoloValor(linea, variantesCtx)
               : formatearLineaDetalleCocina(linea)
             : formatearLineaDetalleGuardada(linea);
+          const descripcionEstructurada =
+            variantesCtx != null
+              ? descripcionLineaCocinaEstructurada(linea, variantesCtx)
+              : null;
           const descripcionLinea =
             variantesCtx != null
               ? formatearDescripcionLineaCocinaSoloValor(linea, variantesCtx)
               : linea.descripcion;
+
+          if (lineaPesoEstructurada) {
+            const { nombre, gramos, detalles } = lineaPesoEstructurada;
+            return (
+              <div key={index} className="pedido-desglose-linea pedido-desglose-linea-peso">
+                <span className="pedido-desglose-nombre">
+                  <strong>{nombre}</strong>
+                  {gramos > 0 ? ` — ${gramos}g` : ''}
+                  {` (${detalles})`}
+                </span>
+              </div>
+            );
+          }
 
           if (textoPeso) {
             return (
@@ -751,7 +805,16 @@ export function DesgloseProductosPedido({
                 {linea.cantidad}
               </span>
               <div className="pedido-desglose-detalle">
-                <span className="pedido-desglose-nombre">{descripcionLinea}</span>
+                <span className="pedido-desglose-nombre">
+                  {descripcionEstructurada ? (
+                    <>
+                      <strong>{descripcionEstructurada.nombre}</strong>
+                      {` (${descripcionEstructurada.detalles})`}
+                    </>
+                  ) : (
+                    descripcionLinea
+                  )}
+                </span>
               </div>
             </div>
           );

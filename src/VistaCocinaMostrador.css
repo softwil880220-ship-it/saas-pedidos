@@ -57,6 +57,15 @@
   background: #f59e0b;
 }
 
+.vista-cocina-captura {
+  margin: 0;
+  padding-top: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #64748b;
+  text-align: right;
+}
+
 @media (max-width: 900px) {
   .vista-cocina-dos-columnas {
     grid-template-columns: 1fr;
