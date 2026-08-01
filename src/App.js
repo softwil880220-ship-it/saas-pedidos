@@ -46,14 +46,12 @@ import {
   formatearHoraPedidoLista,
 } from './reportesHelpers';
 import {
-  cargarCarritoPedido,
   cargarCarritoMostradorDisponible,
   cargarCarritoPresencialDisponible,
   cargarCarritoWhatsappDisponible,
   crearFormularioPedidoDefault,
   cargarEstadoInicialCapturaPedidoWeb,
   cargarSeccionActiva,
-  limpiarCarritoPedido,
   persistirCarritoPedido,
   persistirModoCaptura,
   persistirSeccionActiva,
@@ -81,19 +79,16 @@ import useVariantesCtx from './useVariantesCtx';
 import useCarritoPedido from './useCarritoPedido';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
 import {
-  aplicarConsolidacionCarrito,
   buscarProductoPorId,
   calcularDetalleLineaPedido,
   calcularDetalleLineasPedido,
   calcularSubtotal,
   calcularTotalLineas,
-  consolidarLineasPorProducto,
   formatearDescripcionLinea,
   redondearMoneda,
 } from './pedidoCarritoCalculos';
 import {
   OPCIONES_UNIDAD_VENTA,
-  cantidadInicialLinea,
   esProductoPorPeso,
   etiquetaCampoPrecioCatalogo,
   etiquetaPrecioProducto,
@@ -1119,10 +1114,6 @@ function Dashboard() {
     () => crearCatalogoTabs(categoriasVariantes),
     [categoriasVariantes]
   );
-  const ctxConsolidacion = useMemo(
-    () => ({ ...variantesCtx, productos }),
-    [variantesCtx, productos]
-  );
   const catalogosVariantesOrdenados = useMemo(
     () => catalogosVariantesOrdenadosDesde(catalogosVariantes, categoriasVariantes, negocioId),
     [catalogosVariantes, categoriasVariantes, negocioId]
@@ -1135,18 +1126,17 @@ function Dashboard() {
     persistir: true,
     snapshotInicial: snapshotInicialCajaRef.current,
   });
+  const snapshotInicialWhatsappRef = useRef(cargarCarritoWhatsappDisponible() ?? undefined);
+  const carritoWhatsapp = useCarritoPedido({
+    variantesCtx,
+    productos,
+    modoCaptura: 'whatsapp',
+    persistir: true,
+    snapshotInicial: snapshotInicialWhatsappRef.current,
+  });
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
-  const nextLineaId = useRef(
-    estadoInicialCaptura.modo === 'whatsapp' ? estadoInicialCaptura.nextLineaId : 2
-  );
   const nextEditLineaId = useRef(2);
-  const persistenciaCarritoPausadaRef = useRef(false);
-  const [form, setForm] = useState(() =>
-    estadoInicialCaptura.modo === 'whatsapp'
-      ? estadoInicialCaptura.form
-      : crearFormularioPedidoDefault('whatsapp')
-  );
   const [productoForm, setProductoForm] = useState({
     nombre: '',
     precio: '',
@@ -1167,11 +1157,7 @@ function Dashboard() {
   const [guardandoVariante, setGuardandoVariante] = useState(false);
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
   const [errorGuardarPedido, setErrorGuardarPedido] = useState(null);
-  const [pagoRecibido, setPagoRecibido] = useState(() =>
-    estadoInicialCaptura.modo === 'whatsapp' ? estadoInicialCaptura.pagoRecibido : ''
-  );
   const [fechaActual, setFechaActual] = useState(() => Date.now());
-  const [categoriaPedidoActiva, setCategoriaPedidoActiva] = useState(null);
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
   const [modalRetiroBloqueadoAbierto, setModalRetiroBloqueadoAbierto] = useState(false);
   const [mensajeRetiroBloqueado, setMensajeRetiroBloqueado] = useState(null);
@@ -1391,18 +1377,6 @@ function Dashboard() {
   }, [esMobileDashboard, seccion, modo, tabEntregaWhatsAppMovil]);
 
   useEffect(() => {
-    if (seccion !== 'pedidos' || persistenciaCarritoPausadaRef.current) return;
-    if (modo !== 'whatsapp') return;
-
-    persistirCarritoPedido({
-      modo,
-      form,
-      pagoRecibido,
-      nextLineaId: nextLineaId.current,
-    });
-  }, [seccion, modo, form, pagoRecibido]);
-
-  useEffect(() => {
     if (!negocioId) return;
 
     const pendientes = obtenerPedidosPendientesSync(negocioId);
@@ -1459,12 +1433,6 @@ function Dashboard() {
     };
   }, []);
 
-  const aplicarEstadoCarrito = ({ form: formRestaurado, pagoRecibido: pagoRestaurado, nextLineaId: nextId }) => {
-    setForm(formRestaurado);
-    setPagoRecibido(pagoRestaurado);
-    nextLineaId.current = nextId;
-  };
-
   const handleFormChange = (e) => {
     setErrorGuardarPedido(null);
     const { name, value } = e.target;
@@ -1474,188 +1442,7 @@ function Dashboard() {
       return;
     }
 
-    if (name === 'tipoEntrega' && modo === 'whatsapp') {
-      persistirCarritoPedido({
-        modo,
-        form,
-        pagoRecibido,
-        nextLineaId: nextLineaId.current,
-      });
-
-      if (!value) {
-        setForm((prev) => ({
-          ...prev,
-          tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-          direccion: '',
-        }));
-        return;
-      }
-
-      const restaurado = cargarCarritoPedido('whatsapp', value);
-      if (restaurado) {
-        aplicarEstadoCarrito({
-          ...restaurado,
-          form: {
-            ...restaurado.form,
-            tipoEntrega: value,
-          },
-        });
-        return;
-      }
-
-      const flujo = obtenerFlujoStatus(value);
-      setForm((prev) => {
-        const status = flujo.includes(prev.status)
-          ? prev.status
-          : STATUS_DEFAULT_WHATSAPP_FORM;
-        const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
-        return {
-          ...prev,
-          tipoEntrega: value,
-          status,
-          direccion: esDomicilio ? prev.direccion : '',
-        };
-      });
-      return;
-    }
-
-    setForm((prev) => {
-      if (name === 'tipoEntrega') {
-        if (!value) {
-          return {
-            ...prev,
-            tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-            direccion: '',
-          };
-        }
-
-        const flujo = obtenerFlujoStatus(value);
-        const status = flujo.includes(prev.status)
-          ? prev.status
-          : STATUS_DEFAULT_WHATSAPP_FORM;
-        const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
-        return {
-          ...prev,
-          tipoEntrega: value,
-          status,
-          direccion: esDomicilio ? prev.direccion : '',
-        };
-      }
-      return { ...prev, [name]: value };
-    });
-  };
-
-  const actualizarLinea = (lineaId, campo, valor) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        prev.lineas.map((linea) => {
-          if (linea.id !== lineaId) return linea;
-          if (campo === 'productoId') {
-            const producto = buscarProductoPorId(productos, valor);
-            return {
-              ...linea,
-              productoId: String(valor),
-              cantidad: cantidadInicialLinea(producto),
-              variantes: crearVariantesLineaVacias(variantesCtx.categorias),
-            };
-          }
-          return { ...linea, [campo]: valor };
-        }),
-        ctxConsolidacion
-      ),
-    }));
-  };
-
-  const actualizarCantidadLinea = (lineaId, valor) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        prev.lineas.map((linea) =>
-          linea.id === lineaId ? { ...linea, cantidad: valor } : linea
-        ),
-        ctxConsolidacion
-      ),
-    }));
-  };
-
-  const ajustarCantidadLinea = (lineaId, delta) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        prev.lineas.map((linea) => {
-          if (linea.id !== lineaId) return linea;
-
-          const producto = buscarProductoPorId(productos, linea.productoId);
-          if (esProductoPorPeso(producto)) {
-            return linea;
-          }
-
-          const cantidadActual = parseCantidadPieza(linea.cantidad);
-          const cantidadNueva = Math.max(1, cantidadActual + delta);
-
-          return { ...linea, cantidad: String(cantidadNueva) };
-        }),
-        ctxConsolidacion
-      ),
-    }));
-  };
-
-  const cambiarVarianteLinea = (lineaId, categoria, itemId) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        prev.lineas.map((linea) =>
-          linea.id === lineaId
-            ? {
-                ...linea,
-                variantes: {
-                  ...linea.variantes,
-                  [categoria]: toggleIdEnLinea(linea.variantes?.[categoria], itemId),
-                },
-              }
-            : linea
-        ),
-        ctxConsolidacion
-      ),
-    }));
-  };
-
-  const agregarLinea = () => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: [...prev.lineas, crearLineaPedido(nextLineaId.current++, variantesCtx)],
-    }));
-  };
-
-  const agregarProductoAlPedido = (productoId) => {
-    const idStr = String(productoId);
-    const producto = buscarProductoPorId(productos, productoId);
-
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        [
-          ...prev.lineas,
-          {
-            ...crearLineaPedido(nextLineaId.current++, variantesCtx),
-            productoId: idStr,
-            cantidad: cantidadInicialLinea(producto),
-          },
-        ],
-        ctxConsolidacion
-      ),
-    }));
-  };
-
-  const eliminarLinea = (lineaId) => {
-    setForm((prev) => ({
-      ...prev,
-      lineas: aplicarConsolidacionCarrito(
-        prev.lineas.filter((linea) => linea.id !== lineaId),
-        ctxConsolidacion
-      ),
-    }));
+    carritoWhatsapp.setCampoCaptura(name, value);
   };
 
   const resetFormPedido = (modoActual = modo, { limpiarStorage = true } = {}) => {
@@ -1664,33 +1451,8 @@ function Dashboard() {
       return;
     }
 
-    if (limpiarStorage) {
-      limpiarCarritoPedido(modoActual, form.tipoEntrega);
-    }
-
-    const formVacio = {
-      cliente: '',
-      telefono: '',
-      tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-      direccion: '',
-      formaPago: '',
-      referencia: '',
-      lineas: [crearLineaPedido(1, variantesCtx)],
-      status: statusDefaultFormularioPedido(modoActual),
-    };
-
-    nextLineaId.current = 2;
-    setPagoRecibido('');
-    setCategoriaPedidoActiva(null);
-    setForm(formVacio);
-
-    if (limpiarStorage && modoActual === 'whatsapp') {
-      persistirCarritoPedido({
-        modo: modoActual,
-        form: formVacio,
-        pagoRecibido: '',
-        nextLineaId: nextLineaId.current,
-      });
+    if (modoActual === 'whatsapp') {
+      carritoWhatsapp.resetCarrito({ limpiarStorage });
     }
   };
 
@@ -1709,10 +1471,10 @@ function Dashboard() {
       });
     } else if (modo === 'whatsapp') {
       persistirCarritoPedido({
-        modo,
-        form,
-        pagoRecibido,
-        nextLineaId: nextLineaId.current,
+        modo: 'whatsapp',
+        form: carritoWhatsapp.form,
+        pagoRecibido: carritoWhatsapp.pagoRecibido,
+        nextLineaId: carritoWhatsapp.snapshot.nextLineaId,
       });
     }
     persistirModoCaptura(
@@ -1736,67 +1498,27 @@ function Dashboard() {
       const restaurado = cargarCarritoPresencialDisponible();
       if (restaurado) {
         carrito.aplicarSnapshot(restaurado);
-        setCategoriaPedidoActiva(null);
         return;
       }
 
       carrito.resetCarrito({ limpiarStorage: false });
       return;
-    } else {
-      const restaurado = cargarCarritoWhatsappDisponible();
-      if (restaurado) {
-        aplicarEstadoCarrito(restaurado);
-        return;
-      }
+    }
+
+    const restaurado = cargarCarritoWhatsappDisponible();
+    if (restaurado) {
+      carritoWhatsapp.aplicarSnapshot(restaurado);
+      return;
     }
 
     resetFormPedido(nuevoModo, { limpiarStorage: false });
   };
 
-  const lineasPedidoActivas = useMemo(
-    () => (form.lineas || []).filter((linea) => linea?.productoId),
-    [form.lineas]
-  );
-  const lineasPedidoConProductoWhatsapp = useMemo(
-    () => consolidarLineasPorProducto(lineasPedidoActivas, ctxConsolidacion),
-    [lineasPedidoActivas, ctxConsolidacion]
-  );
-  const totalPedidoWhatsapp = useMemo(
-    () => calcularTotalLineas(lineasPedidoConProductoWhatsapp, productos, variantesCtx),
-    [lineasPedidoConProductoWhatsapp, productos, variantesCtx]
-  );
-
-  const formCaptura = modo === 'presencial' ? carrito.form : form;
-  const lineasPedidoConProducto =
-    modo === 'presencial' ? carrito.lineasPedidoConProducto : lineasPedidoConProductoWhatsapp;
-  const totalPedido = modo === 'presencial' ? carrito.totalPedido : totalPedidoWhatsapp;
+  const carritoCaptura = modo === 'presencial' ? carrito : carritoWhatsapp;
+  const formCaptura = carritoCaptura.form;
   const pagoValido = modo === 'presencial' ? carrito.pagoValido : false;
   const cambio = modo === 'presencial' ? carrito.cambio : null;
   const pagoInsuficiente = modo === 'presencial' ? carrito.pagoInsuficiente : false;
-
-  const ajustarCantidadLineaCaptura = (lineaId, delta) => {
-    if (modo === 'presencial') {
-      carrito.ajustarCantidadLinea(lineaId, delta);
-      return;
-    }
-    ajustarCantidadLinea(lineaId, delta);
-  };
-
-  const actualizarCantidadLineaCaptura = (lineaId, valor) => {
-    if (modo === 'presencial') {
-      carrito.actualizarCantidadLinea(lineaId, valor);
-      return;
-    }
-    actualizarCantidadLinea(lineaId, valor);
-  };
-
-  const eliminarLineaCaptura = (lineaId) => {
-    if (modo === 'presencial') {
-      carrito.eliminarLinea(lineaId);
-      return;
-    }
-    eliminarLinea(lineaId);
-  };
 
   const handleProductoFormChange = (e) => {
     const { name, value } = e.target;
@@ -1839,15 +1561,14 @@ function Dashboard() {
     setErrorGuardarPedido(null);
 
     const esPresencial = modo === 'presencial';
-    const detallePedido = esPresencial
-      ? carrito.obtenerDetallePedido()
-      : calcularDetalleLineasPedido(lineasPedidoConProductoWhatsapp, productos, variantesCtx);
+    const carritoActivo = esPresencial ? carrito : carritoWhatsapp;
+    const detallePedido = carritoActivo.obtenerDetallePedido();
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
       return;
     }
 
-    if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(form.tipoEntrega)) {
+    if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(carritoWhatsapp.form.tipoEntrega)) {
       return;
     }
 
@@ -2156,10 +1877,13 @@ function Dashboard() {
       }
 
       if (!nuevoActivo) {
-        setForm((prev) => ({
-          ...prev,
-          lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, prev.lineas),
-        }));
+        carritoWhatsapp.aplicarSnapshot({
+          ...carritoWhatsapp.snapshot,
+          form: {
+            ...carritoWhatsapp.form,
+            lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, carritoWhatsapp.form.lineas),
+          },
+        });
 
         setPedidoEditForm((prev) =>
           prev
@@ -2184,14 +1908,17 @@ function Dashboard() {
       if (editandoProductoId === id) {
         resetProductoForm();
       }
-      setForm((prev) => ({
-        ...prev,
-        lineas: prev.lineas.map((linea) =>
-          String(linea.productoId) === String(id)
-            ? { ...linea, productoId: '' }
-            : linea
-        ),
-      }));
+      carritoWhatsapp.aplicarSnapshot({
+        ...carritoWhatsapp.snapshot,
+        form: {
+          ...carritoWhatsapp.form,
+          lineas: carritoWhatsapp.form.lineas.map((linea) =>
+            String(linea.productoId) === String(id)
+              ? { ...linea, productoId: '' }
+              : linea
+          ),
+        },
+      });
     }
   };
 
@@ -3315,26 +3042,27 @@ function Dashboard() {
 
     const resumen = esPresencial
       ? carrito.obtenerResumenProductos()
-      : resumenProductos(form.lineas, productos, variantesCtx);
+      : carritoWhatsapp.obtenerResumenProductos();
     const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
+    const formWhatsapp = carritoWhatsapp.form;
 
     const payload = {
-      cliente: esPresencial ? CLIENTE_PUBLICO : form.cliente.trim(),
-      telefono: esPresencial ? null : form.telefono.trim() || null,
+      cliente: esPresencial ? CLIENTE_PUBLICO : formWhatsapp.cliente.trim(),
+      telefono: esPresencial ? null : formWhatsapp.telefono.trim() || null,
       producto: resumen,
       lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
-      status: esPresencial ? statusPresencial.status : form.status,
+      status: esPresencial ? statusPresencial.status : formWhatsapp.status,
       tipo: esPresencial ? 'presencial' : 'whatsapp',
       tipo_entrega: esPresencial
         ? TIPOS_ENTREGA.DOMICILIO
-        : normalizarTipoEntrega(form.tipoEntrega),
+        : normalizarTipoEntrega(formWhatsapp.tipoEntrega),
       direccion:
-        esPresencial || form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
+        esPresencial || formWhatsapp.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
           ? null
-          : form.direccion.trim() || null,
+          : formWhatsapp.direccion.trim() || null,
       forma_pago: normalizarFormaPagoPayload(
-        esPresencial ? carrito.form.formaPago : form.formaPago
+        esPresencial ? carrito.form.formaPago : formWhatsapp.formaPago
       ),
       referencia: esPresencial ? carrito.form.referencia.trim() || null : null,
       created_by: usuario?.id ?? null,
@@ -3377,7 +3105,7 @@ function Dashboard() {
     if (esPresencial) {
       carrito.pausarPersistencia();
     } else {
-      persistenciaCarritoPausadaRef.current = true;
+      carritoWhatsapp.pausarPersistencia();
     }
     resetFormPedido(modo);
 
@@ -3394,7 +3122,7 @@ function Dashboard() {
       if (esPresencial) {
         carrito.reanudarPersistencia();
       } else {
-        persistenciaCarritoPausadaRef.current = false;
+        carritoWhatsapp.reanudarPersistencia();
       }
       return;
     }
@@ -3404,7 +3132,7 @@ function Dashboard() {
     if (esPresencial) {
       carrito.reanudarPersistencia();
     } else {
-      persistenciaCarritoPausadaRef.current = false;
+      carritoWhatsapp.reanudarPersistencia();
     }
 
     setPedidos((prev) => {
@@ -4818,7 +4546,7 @@ function Dashboard() {
                       id="cliente"
                       name="cliente"
                       type="text"
-                      value={esModoPresencial ? CLIENTE_PUBLICO : form.cliente}
+                      value={esModoPresencial ? CLIENTE_PUBLICO : formCaptura.cliente}
                       onChange={handleFormChange}
                       readOnly={esModoPresencial}
                       required
@@ -4834,7 +4562,7 @@ function Dashboard() {
                         inputMode="tel"
                         autoComplete="tel"
                         placeholder="10 dígitos o con lada"
-                        value={form.telefono}
+                        value={formCaptura.telefono}
                         onChange={handleFormChange}
                       />
                     </div>
@@ -4845,7 +4573,7 @@ function Dashboard() {
                       <select
                         id="tipoEntrega"
                         name="tipoEntrega"
-                        value={form.tipoEntrega}
+                        value={formCaptura.tipoEntrega}
                         onChange={handleFormChange}
                         required
                       >
@@ -4859,7 +4587,7 @@ function Dashboard() {
                     </div>
                   )}
                   {!esModoPresencial &&
-                    form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO && (
+                    formCaptura.tipoEntrega === TIPOS_ENTREGA.DOMICILIO && (
                       <div className="formulario-campo formulario-campo-direccion">
                         <label htmlFor="direccion">Dirección de entrega</label>
                         <input
@@ -4867,21 +4595,21 @@ function Dashboard() {
                           name="direccion"
                           type="text"
                           placeholder="Calle, número, colonia, referencias..."
-                          value={form.direccion}
+                          value={formCaptura.direccion}
                           onChange={handleFormChange}
                         />
                       </div>
                     )}
-                  {!esModoPresencial && tipoEntregaWhatsAppSeleccionado(form.tipoEntrega) && (
+                  {!esModoPresencial && tipoEntregaWhatsAppSeleccionado(formCaptura.tipoEntrega) && (
                     <div className="formulario-campo">
                       <label htmlFor="status">Estatus del pedido</label>
                       <select
                         id="status"
                         name="status"
-                        value={form.status}
+                        value={formCaptura.status}
                         onChange={handleFormChange}
                       >
-                        {obtenerFlujoStatus(form.tipoEntrega).map((status) => (
+                        {obtenerFlujoStatus(formCaptura.tipoEntrega).map((status) => (
                           <option key={status} value={status}>
                             {STATUS_LABELS[status]}
                           </option>
@@ -4937,9 +4665,9 @@ function Dashboard() {
                       productos={productosOrdenados}
                       frecuenciaCategorias={frecuenciaCategoriasPedidos}
                       frecuenciaLista={frecuenciaLista}
-                      categoriaActiva={categoriaPedidoActiva}
-                      onCategoriaChange={setCategoriaPedidoActiva}
-                      onAgregarProducto={agregarProductoAlPedido}
+                      categoriaActiva={carritoWhatsapp.categoriaPedidoActiva}
+                      onCategoriaChange={carritoWhatsapp.setCategoriaPedidoActiva}
+                      onAgregarProducto={carritoWhatsapp.agregarProductoAlPedido}
                     />
                   )
                 )}
@@ -4986,14 +4714,14 @@ function Dashboard() {
                   </PedidoLineasCarrito>
                 ) : (
                   <PedidoLineasCarrito
-                    lineas={lineasPedidoConProducto}
+                    lineas={carritoWhatsapp.lineasPedidoConProducto}
                     productos={productos}
                     variantesCtx={variantesCtx}
-                    totalPedido={totalPedido}
-                    onAjustarCantidad={ajustarCantidadLineaCaptura}
-                    onActualizarCantidad={actualizarCantidadLineaCaptura}
-                    onEliminarLinea={eliminarLineaCaptura}
-                    onCambiarVariante={cambiarVarianteLinea}
+                    totalPedido={carritoWhatsapp.totalPedido}
+                    onAjustarCantidad={carritoWhatsapp.ajustarCantidadLinea}
+                    onActualizarCantidad={carritoWhatsapp.actualizarCantidadLinea}
+                    onEliminarLinea={carritoWhatsapp.eliminarLinea}
+                    onCambiarVariante={carritoWhatsapp.cambiarVarianteLinea}
                   >
                     <div className="pedido-acciones-principales">
                       <button
@@ -5006,7 +4734,7 @@ function Dashboard() {
                       <button
                         type="submit"
                         className="guardar-btn"
-                        disabled={productos.length === 0 || totalPedido <= 0}
+                        disabled={productos.length === 0 || carritoWhatsapp.totalPedido <= 0}
                       >
                         Guardar pedido
                       </button>
