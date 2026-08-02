@@ -14,6 +14,7 @@ import {
   parseGramosLinea,
 } from './productoUnidadVenta';
 import {
+  clonarVariantesLinea,
   combinarVariantesLinea,
   crearVariantesLineaVacias,
   formatearLineaResumen,
@@ -80,9 +81,24 @@ function parsearLineaPedidoDesdeTexto(parte, listaProductos, variantesCtx, id = 
   };
 }
 
+function lineaTieneVariantesEstructuradas(linea) {
+  const variantes = linea?.variantes;
+  if (!variantes || typeof variantes !== 'object') return false;
+
+  return Object.values(variantes).some(
+    (ids) => Array.isArray(ids) && ids.length > 0
+  );
+}
+
 function variantesFormularioDesdeLineaDetalle(linea, listaProductos, variantesCtx) {
+  const categorias = variantesCtx?.categorias;
+
+  if (lineaTieneVariantesEstructuradas(linea)) {
+    return clonarVariantesLinea(linea.variantes, categorias);
+  }
+
   if (!linea?.descripcion?.trim()) {
-    return crearVariantesLineaVacias(variantesCtx.categorias);
+    return crearVariantesLineaVacias(categorias);
   }
 
   const parsed = parsearLineaPedidoDesdeTexto(
@@ -91,7 +107,7 @@ function variantesFormularioDesdeLineaDetalle(linea, listaProductos, variantesCt
     variantesCtx
   );
 
-  return parsed?.variantes || crearVariantesLineaVacias(variantesCtx.categorias);
+  return parsed?.variantes || crearVariantesLineaVacias(categorias);
 }
 
 function cantidadFormularioDesdeLineaDetalle(linea, productoId, listaProductos) {
