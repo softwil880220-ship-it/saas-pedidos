@@ -24,6 +24,7 @@ import {
   construirPayloadRetrocesoPedido,
   construirUrlWhatsApp,
   determinarStatusInicialPresencial,
+  DesgloseProductosPedido,
   enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
   formatearMoneda,
@@ -722,20 +723,7 @@ function limpiarTextoDesgloseFallback(texto) {
     .trim();
 }
 
-function obtenerDesglosePedido(pedido, listaProductos, variantesCtx) {
-  if (pedido?.lineas_detalle?.length) {
-    const lineas = pedido.lineas_detalle.map((linea) => ({
-      cantidad: linea.cantidad,
-      descripcion: linea.descripcion,
-      precioUnitario: linea.precioUnitario,
-    }));
-    const total = redondearMoneda(
-      pedido.lineas_detalle.reduce((suma, linea) => suma + Number(linea.subtotal || 0), 0)
-    );
-
-    return { lineas, total };
-  }
-
+function obtenerDesglosePedidoLegacy(pedido, listaProductos, variantesCtx) {
   const total = redondearMoneda(Number(pedido.total) || 0);
 
   if (!pedido?.producto?.trim()) {
@@ -776,7 +764,17 @@ function obtenerDesglosePedido(pedido, listaProductos, variantesCtx) {
 }
 
 function DesglosePedido({ pedido, productos, variantesCtx }) {
-  const desglose = obtenerDesglosePedido(pedido, productos, variantesCtx);
+  if (pedido?.lineas_detalle?.length) {
+    return (
+      <DesgloseProductosPedido
+        pedido={pedido}
+        mostrarTotal
+        variantesCtx={variantesCtx}
+      />
+    );
+  }
+
+  const desglose = obtenerDesglosePedidoLegacy(pedido, productos, variantesCtx);
 
   if (desglose.lineas.length === 0) return null;
 

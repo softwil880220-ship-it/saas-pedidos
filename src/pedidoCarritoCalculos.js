@@ -132,7 +132,6 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
   const unidadVenta = normalizarUnidadVenta(producto.unidad_venta);
   const precioBase = parsePrecioCatalogo(producto.precio);
   const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
-  const precioUnitario = redondearMoneda(precioBase + extras);
   const descripcion = formatearDescripcionLinea(linea, producto, variantesCtx);
   const variantes = clonarVariantesLinea(linea.variantes, variantesCtx?.categorias);
 
@@ -140,11 +139,12 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
     const cantidad = parseGramosLinea(linea.cantidad);
     if (cantidad <= 0) return null;
 
-    const subtotal = calcularSubtotalPorUnidadVenta({
+    const subtotalBase = calcularSubtotalPorUnidadVenta({
       unidadVenta,
       cantidad,
-      precioUnitario,
+      precioUnitario: precioBase,
     });
+    const subtotal = redondearMoneda(subtotalBase + extras);
 
     return {
       productoId: String(producto.id),
@@ -153,8 +153,8 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
       unidad_venta: unidadVenta,
       precioBase,
       extras,
-      precioUnitario,
-      precio_unitario: precioUnitario,
+      precioUnitario: precioBase,
+      precio_unitario: precioBase,
       subtotal,
       descripcion,
       variantes,
@@ -162,6 +162,7 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
     };
   }
 
+  const precioUnitario = redondearMoneda(precioBase + extras);
   const cantidad = parseCantidadPieza(linea.cantidad);
   const subtotal = calcularSubtotalPorUnidadVenta({
     unidadVenta,

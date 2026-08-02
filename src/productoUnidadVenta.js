@@ -57,10 +57,22 @@ export function calcularSubtotalPorUnidadVenta({ unidadVenta, cantidad, precioUn
 export function calcularSubtotalLineaDesdeProducto(linea, producto, variantesCtx) {
   const precioBase = Number(producto?.precio) || 0;
   const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
+  const unidadVenta = producto?.unidad_venta;
+
+  if (normalizarUnidadVenta(unidadVenta) === UNIDAD_VENTA_PESO) {
+    const subtotalBase = calcularSubtotalPorUnidadVenta({
+      unidadVenta,
+      cantidad: linea?.cantidad,
+      precioUnitario: precioBase,
+    });
+
+    return redondearMoneda(subtotalBase + extras);
+  }
+
   const precioUnitario = redondearMoneda(precioBase + extras);
 
   return calcularSubtotalPorUnidadVenta({
-    unidadVenta: producto?.unidad_venta,
+    unidadVenta,
     cantidad: linea?.cantidad,
     precioUnitario,
   });
