@@ -1,0 +1,82 @@
+import { obtenerDesgloseLineasPedido } from './pedidoDesglose';
+
+const productos = [
+  {
+    id: '1',
+    nombre: 'Elote (por Kg)',
+    precio: 250,
+    unidad_venta: 'peso',
+  },
+];
+
+const variantesCtx = {
+  categorias: [{ id: '10', nombre: 'Quesos', activa: true }],
+  catalogos: {
+    '10': [{ id: '100', nombre: 'Parmesano', precio: 5, activo: true }],
+  },
+  productoItems: {},
+};
+
+describe('obtenerDesgloseLineasPedido', () => {
+  test('desglosa peso con extra fijo en línea base y fila de ingrediente extra', () => {
+    const pedido = {
+      total: 30,
+      lineas_detalle: [
+        {
+          productoId: '1',
+          nombre: 'Elote (por Kg)',
+          cantidad: 100,
+          unidad_venta: 'peso',
+          precioBase: 250,
+          extras: 5,
+          subtotal: 30,
+          descripcion: 'Elote (por Kg) (queso: Parmesano)',
+          variantes: { '10': ['100'] },
+        },
+      ],
+    };
+
+    const { lineas, total } = obtenerDesgloseLineasPedido(pedido, productos, variantesCtx);
+
+    expect(lineas).toHaveLength(2);
+    expect(lineas[0]).toEqual({
+      cantidad: '100g',
+      nombre: 'Elote (por Kg)',
+      precioLinea: 25,
+    });
+    expect(lineas[1]).toEqual({
+      cantidad: 1,
+      nombre: 'Ingrediente extra (queso: Parmesano)',
+      precioLinea: 5,
+    });
+    expect(total).toBe(30);
+  });
+
+  test('peso sin variantes conserva una sola línea con subtotal base', () => {
+    const pedido = {
+      total: 25,
+      lineas_detalle: [
+        {
+          productoId: '1',
+          nombre: 'Elote (por Kg)',
+          cantidad: 100,
+          unidad_venta: 'peso',
+          precioBase: 250,
+          extras: 0,
+          subtotal: 25,
+          descripcion: 'Elote (por Kg)',
+        },
+      ],
+    };
+
+    const { lineas, total } = obtenerDesgloseLineasPedido(pedido, productos, variantesCtx);
+
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0]).toEqual({
+      cantidad: '100g',
+      nombre: 'Elote (por Kg)',
+      precioLinea: 25,
+    });
+    expect(total).toBe(25);
+  });
+});

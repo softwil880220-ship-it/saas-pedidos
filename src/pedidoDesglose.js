@@ -4,13 +4,13 @@ import {
   UNIDAD_VENTA_PESO,
   calcularSubtotalPorUnidadVenta,
   esProductoPorPeso,
-  formatearLineaProductoVenta,
   normalizarUnidadVenta,
   parseCantidadPieza,
   parseGramosLinea,
 } from './productoUnidadVenta';
 import {
   categoriasVariantesActivas,
+  clonarVariantesLinea,
   combinarVariantesLinea,
   crearVariantesLineaVacias,
   formatoResumenCategoria,
@@ -157,55 +157,76 @@ function etiquetaIngredienteExtra(categoria, item) {
   return `Ingrediente extra (${formato.clave}: ${item.nombre})`;
 }
 
-function filaIngredienteExtraCombinado(normalizada) {
+function filaIngredienteExtraCombinado(normalizada, cantidad = normalizada.cantidad) {
   return {
-    cantidad: normalizada.cantidad,
+    cantidad,
     nombre: `Ingrediente extra (${normalizada.etiquetaVariantes || 'Extra'})`,
     precioLinea: normalizada.subtotalExtras,
   };
 }
 
-function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
-  const normalizada = normalizarLineaDetalleRecibo(lineaCruda);
+function lineaTieneVariantesEstructuradas(linea) {
+  const variantes = linea?.variantes;
+  if (!variantes || typeof variantes !== 'object') return false;
 
+  return Object.values(variantes).some(
+    (ids) => Array.isArray(ids) && ids.length > 0
+  );
+}
+
+function variantesDesdeLineaCruda(lineaCruda, normalizada, variantesCtx) {
+  if (lineaTieneVariantesEstructuradas(lineaCruda)) {
+    return clonarVariantesLinea(lineaCruda.variantes, variantesCtx?.categorias);
+  }
+
+  return reconstruirVariantesDesdeDescripcion(normalizada.descripcion, variantesCtx);
+}
+
+function etiquetaCantidadReciboPeso(gramos) {
+  const valor = parseGramosLinea(gramos);
+  return valor > 0 ? `${valor}g` : '—';
+}
+
+function crearFilasBaseRecibo(normalizada) {
   if (esProductoPorPeso(normalizada)) {
     return [
       {
-        textoLinea: formatearLineaProductoVenta({
-          nombre: normalizada.nombre,
-          cantidad: normalizada.cantidad,
-          unidadVenta: normalizada.unidad_venta,
-          subtotal: normalizada.subtotal,
-        }),
-        precioLinea: normalizada.subtotal,
+        cantidad: etiquetaCantidadReciboPeso(normalizada.cantidad),
+        nombre: normalizada.nombre,
+        precioLinea: normalizada.subtotalBase,
       },
     ];
   }
 
-  const filas = [
+  return [
     {
       cantidad: normalizada.cantidad,
       nombre: normalizada.nombre,
       precioLinea: normalizada.subtotalBase,
     },
   ];
+}
+
+function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
+  const normalizada = normalizarLineaDetalleRecibo(lineaCruda);
+  const esPorPeso = esProductoPorPeso(normalizada);
+  const filas = crearFilasBaseRecibo(normalizada);
 
   if (!normalizada.tieneVariantes || normalizada.subtotalExtras <= 0) {
     return filas;
   }
 
+  const cantidadExtra = esPorPeso ? 1 : normalizada.cantidad;
+
   if (!variantesCtx?.categorias?.length) {
-    filas.push(filaIngredienteExtraCombinado(normalizada));
+    filas.push(filaIngredienteExtraCombinado(normalizada, cantidadExtra));
     return filas;
   }
 
   const lineaForm = {
     productoId: normalizada.productoId,
     cantidad: String(normalizada.cantidad),
-    variantes: reconstruirVariantesDesdeDescripcion(
-      normalizada.descripcion,
-      variantesCtx
-    ),
+    variantes: variantesDesdeLineaCruda(lineaCruda, normalizada, variantesCtx),
   };
 
   const extrasItems = [];
@@ -222,15 +243,17 @@ function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
       }
 
       extrasItems.push({
-        cantidad: normalizada.cantidad,
+        cantidad: cantidadExtra,
         nombre: etiquetaIngredienteExtra(categoria, item),
-        precioLinea: redondearMoneda(precioUnitario * normalizada.cantidad),
+        precioLinea: esPorPeso
+          ? redondearMoneda(precioUnitario)
+          : redondearMoneda(precioUnitario * normalizada.cantidad),
       });
     });
   });
 
   if (extrasItems.length === 0) {
-    filas.push(filaIngredienteExtraCombinado(normalizada));
+    filas.push(filaIngredienteExtraCombinado(normalizada, cantidadExtra));
     return filas;
   }
 
@@ -239,7 +262,7 @@ function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
   );
 
   if (Math.abs(sumaExtras - normalizada.subtotalExtras) > 0.01) {
-    filas.push(filaIngredienteExtraCombinado(normalizada));
+    filas.push(filaIngredienteExtraCombinado(normalizada, cantidadExtra));
     return filas;
   }
 
