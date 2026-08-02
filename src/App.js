@@ -70,6 +70,7 @@ import {
   tituloAutorizacionPinPedido,
 } from './pedidoEdicionHelpers';
 import SelectorProductosPedido from './SelectorProductosPedido.jsx';
+import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import VistaMesas from './VistaMesas.jsx';
@@ -4661,13 +4662,15 @@ function Dashboard() {
                       onAgregarProducto={carrito.agregarProductoAlPedido}
                     />
                   ) : (
-                    <SelectorProductosPedido
+                    <SelectorProductosPedidoConModal
                       productos={productosOrdenados}
+                      variantesCtx={variantesCtx}
                       frecuenciaCategorias={frecuenciaCategoriasPedidos}
                       frecuenciaLista={frecuenciaLista}
                       categoriaActiva={carritoWhatsapp.categoriaPedidoActiva}
                       onCategoriaChange={carritoWhatsapp.setCategoriaPedidoActiva}
-                      onAgregarProducto={carritoWhatsapp.agregarProductoAlPedido}
+                      onAgregarDirecto={carritoWhatsapp.agregarProductoAlPedido}
+                      onConfirmarLinea={carritoWhatsapp.agregarLineaConVariantes}
                     />
                   )
                 )}
@@ -4718,6 +4721,7 @@ function Dashboard() {
                     productos={productos}
                     variantesCtx={variantesCtx}
                     totalPedido={carritoWhatsapp.totalPedido}
+                    colapsablePorDefecto
                     onAjustarCantidad={carritoWhatsapp.ajustarCantidadLinea}
                     onActualizarCantidad={carritoWhatsapp.actualizarCantidadLinea}
                     onEliminarLinea={carritoWhatsapp.eliminarLinea}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
-import SelectorProductosPedido from './SelectorProductosPedido.jsx';
+import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import MesaRondasEnviadas from './MesaRondasEnviadas.jsx';
 import MesaCobroModal from './MesaCobroModal.jsx';
@@ -701,19 +701,22 @@ export default function MesaCarritoPanel({
             folioId={folioId}
             onRondasCambiadas={handleRondasCambiadas}
           />
-          <SelectorProductosPedido
+          <SelectorProductosPedidoConModal
             productos={productosOrdenados}
+            variantesCtx={variantesCtx}
             frecuenciaCategorias={frecuenciaCategorias}
             frecuenciaLista={frecuenciaLista}
             categoriaActiva={carrito.categoriaPedidoActiva}
             onCategoriaChange={carrito.setCategoriaPedidoActiva}
-            onAgregarProducto={carrito.agregarProductoAlPedido}
+            onAgregarDirecto={carrito.agregarProductoAlPedido}
+            onConfirmarLinea={carrito.agregarLineaConVariantes}
           />
           <PedidoLineasCarrito
             lineas={carrito.lineasPedidoConProducto}
             productos={productos}
             variantesCtx={variantesCtx}
             totalPedido={carrito.totalPedido}
+            colapsablePorDefecto
             onAjustarCantidad={carrito.ajustarCantidadLinea}
             onActualizarCantidad={carrito.actualizarCantidadLinea}
             onEliminarLinea={carrito.eliminarLinea}

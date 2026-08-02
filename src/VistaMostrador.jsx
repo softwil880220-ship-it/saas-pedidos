@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './VistaMostrador.css';
-import SelectorProductosPedido from './SelectorProductosPedido.jsx';
+import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
 import MostradorPendienteRecibo from './MostradorPendienteRecibo.jsx';
@@ -567,13 +567,15 @@ export default function VistaMostrador({
             </div>
 
             {productos.length > 0 ? (
-              <SelectorProductosPedido
+              <SelectorProductosPedidoConModal
                 productos={productosOrdenados}
+                variantesCtx={variantesCtx}
                 frecuenciaCategorias={frecuenciaCategorias}
                 frecuenciaLista={frecuenciaLista}
                 categoriaActiva={carrito.categoriaPedidoActiva}
                 onCategoriaChange={carrito.setCategoriaPedidoActiva}
-                onAgregarProducto={carrito.agregarProductoAlPedido}
+                onAgregarDirecto={carrito.agregarProductoAlPedido}
+                onConfirmarLinea={carrito.agregarLineaConVariantes}
               />
             ) : null}
 
@@ -582,6 +584,7 @@ export default function VistaMostrador({
               productos={productos}
               variantesCtx={variantesCtx}
               totalPedido={carrito.totalPedido}
+              colapsablePorDefecto
               onAjustarCantidad={carrito.ajustarCantidadLinea}
               onActualizarCantidad={carrito.actualizarCantidadLinea}
               onEliminarLinea={carrito.eliminarLinea}

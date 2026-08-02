@@ -27,6 +27,7 @@ import {
   cargarCarritosMesasAbiertos,
 } from './pedidoCarritoStorage';
 import {
+  clonarVariantesLinea,
   crearVariantesLineaVacias,
   formatearLineaResumen,
 } from './variantesDinamicas';
@@ -540,6 +541,34 @@ export default function useCarritoPedido({
     [ctxConsolidacion, variantesCtx, productos]
   );
 
+  const agregarLineaConVariantes = useCallback(
+    ({ productoId, cantidad, variantes }) => {
+      const idStr = String(productoId);
+      const producto = buscarProductoPorId(productos, productoId);
+      const cantidadFinal =
+        cantidad != null && String(cantidad).trim() !== ''
+          ? String(cantidad)
+          : cantidadInicialLinea(producto);
+
+      setForm((prev) => ({
+        ...prev,
+        lineas: aplicarConsolidacionCarrito(
+          [
+            ...(prev.lineas || []),
+            {
+              ...crearLineaPedido(nextLineaId.current++, variantesCtx),
+              productoId: idStr,
+              cantidad: cantidadFinal,
+              variantes: clonarVariantesLinea(variantes, variantesCtx.categorias),
+            },
+          ],
+          ctxConsolidacion
+        ),
+      }));
+    },
+    [ctxConsolidacion, variantesCtx, productos]
+  );
+
   const eliminarLinea = useCallback(
     (lineaId) => {
       setForm((prev) => ({
@@ -576,6 +605,7 @@ export default function useCarritoPedido({
     estaVacio,
     snapshot,
     agregarProductoAlPedido,
+    agregarLineaConVariantes,
     ajustarCantidadLinea,
     actualizarCantidadLinea,
     eliminarLinea,

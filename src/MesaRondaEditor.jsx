@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import SelectorProductosPedido from './SelectorProductosPedido.jsx';
+import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import {
@@ -68,13 +68,15 @@ export default function MesaRondaEditor({
 
   return (
     <div className="mesa-ronda-editor">
-      <SelectorProductosPedido
+      <SelectorProductosPedidoConModal
         productos={productosOrdenados}
+        variantesCtx={variantesCtx}
         frecuenciaCategorias={frecuenciaCategorias}
         frecuenciaLista={frecuenciaLista}
         categoriaActiva={carrito.categoriaPedidoActiva}
         onCategoriaChange={carrito.setCategoriaPedidoActiva}
-        onAgregarProducto={carrito.agregarProductoAlPedido}
+        onAgregarDirecto={carrito.agregarProductoAlPedido}
+        onConfirmarLinea={carrito.agregarLineaConVariantes}
       />
 
       <PedidoLineasCarrito
@@ -82,6 +84,7 @@ export default function MesaRondaEditor({
         productos={productos}
         variantesCtx={variantesCtx}
         totalPedido={carrito.totalPedido}
+        colapsablePorDefecto
         onAjustarCantidad={carrito.ajustarCantidadLinea}
         onActualizarCantidad={carrito.actualizarCantidadLinea}
         onEliminarLinea={carrito.eliminarLinea}
