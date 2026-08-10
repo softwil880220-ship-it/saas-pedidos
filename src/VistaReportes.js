@@ -34,6 +34,10 @@ import { formatearMoneda } from './pedidosShared';
 import { supabase } from './supabase';
 import { useAuth } from './AuthContext';
 import { queryConNegocio } from './tenantHelpers';
+import {
+  cargarFiltrosReportes,
+  persistirFiltrosReportes,
+} from './reportesFiltrosStorage';
 
 const REPORTES_TABS = [
   { value: 'ventas', label: 'Ventas' },
@@ -138,10 +142,18 @@ function agruparRetirosPorDia(retiros) {
 export default function VistaReportes() {
   const { negocioId, rol } = useAuth();
   const [tabReportes, setTabReportes] = useState(() => cargarTabReportes());
-  const [periodo, setPeriodo] = useState(PERIODOS_REPORTE.SEMANA);
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
-  const [filtroVenta, setFiltroVenta] = useState('todos');
+  const [periodo, setPeriodo] = useState(
+    () => cargarFiltrosReportes(negocioId).periodo
+  );
+  const [fechaDesde, setFechaDesde] = useState(
+    () => cargarFiltrosReportes(negocioId).fechaDesde
+  );
+  const [fechaHasta, setFechaHasta] = useState(
+    () => cargarFiltrosReportes(negocioId).fechaHasta
+  );
+  const [filtroVenta, setFiltroVenta] = useState(
+    () => cargarFiltrosReportes(negocioId).filtroVenta
+  );
   const [pedidos, setPedidos] = useState([]);
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -175,6 +187,17 @@ export default function VistaReportes() {
   useEffect(() => {
     persistirTabReportes(tabReportes);
   }, [tabReportes]);
+
+  useEffect(() => {
+    if (!negocioId) return;
+
+    persistirFiltrosReportes(negocioId, {
+      periodo,
+      fechaDesde,
+      fechaHasta,
+      filtroVenta,
+    });
+  }, [negocioId, periodo, fechaDesde, fechaHasta, filtroVenta]);
 
   useEffect(() => {
     let activo = true;
