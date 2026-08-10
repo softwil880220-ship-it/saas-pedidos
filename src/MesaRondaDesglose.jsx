@@ -4,6 +4,8 @@ import {
 } from './pedidoDesglose';
 import { formatearMoneda } from './pedidosShared';
 import {
+  ETIQUETAS_ESTADO_LINEA_MESA,
+  ESTADO_LINEA_MESA,
   etiquetaEstadoLineaRondaMesa,
   obtenerLineasRondaMesaConEstado,
 } from './mesaRondaEstado';
@@ -64,17 +66,28 @@ function obtenerFilasDesgloseRondaMesa(pedido, productos, variantesCtx) {
   }));
 }
 
-function renderEstadoLinea(estado) {
-  if (!estado) {
+function renderCeldaEstadoLinea(estado, mostrarEstado) {
+  if (!mostrarEstado) {
     return null;
+  }
+
+  if (estado) {
+    return (
+      <span
+        className={`mesa-rondas-enviadas-estado status-${estado}`}
+        aria-label={`Estado: ${etiquetaEstadoLineaRondaMesa(estado)}`}
+      >
+        {etiquetaEstadoLineaRondaMesa(estado)}
+      </span>
+    );
   }
 
   return (
     <span
-      className={`mesa-rondas-enviadas-estado status-${estado}`}
-      aria-label={`Estado: ${etiquetaEstadoLineaRondaMesa(estado)}`}
+      className="mesa-rondas-enviadas-estado mesa-rondas-enviadas-estado-reservado"
+      aria-hidden="true"
     >
-      {etiquetaEstadoLineaRondaMesa(estado)}
+      {ETIQUETAS_ESTADO_LINEA_MESA[ESTADO_LINEA_MESA.EN_COCINA]}
     </span>
   );
 }
@@ -107,7 +120,7 @@ export default function MesaRondaDesglose({
               <span className="mesa-rondas-enviadas-precio">
                 {formatearPrecioLineaRecibo(fila.precioLinea)}
               </span>
-              {mostrarEstado ? renderEstadoLinea(fila.estado) : null}
+              {renderCeldaEstadoLinea(fila.estado, mostrarEstado)}
             </>
           ) : (
             <>
@@ -117,7 +130,7 @@ export default function MesaRondaDesglose({
               <span className="mesa-rondas-enviadas-precio">
                 {formatearPrecioLineaRecibo(fila.precioLinea)}
               </span>
-              {mostrarEstado ? renderEstadoLinea(fila.estado) : null}
+              {renderCeldaEstadoLinea(fila.estado, mostrarEstado)}
             </>
           )}
         </div>
