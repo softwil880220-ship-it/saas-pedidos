@@ -1,5 +1,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  crearIndicesProductosCatalogo,
+  normalizarNombreCategoria,
+  resolverProductoDeLinea,
+} from './categoriaFrecuenciaPedidos';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
 import {
   esProductoPorPeso,
@@ -265,6 +270,58 @@ function obtenerSubtotalLineaReporte(linea) {
     cantidad: linea?.cantidad,
     precioUnitario,
   });
+}
+
+export function calcularReportePorCategoria(pedidos, productos) {
+  const indices = crearIndicesProductosCatalogo(productos);
+  const mapa = new Map();
+
+  const agregar = (categoria, cantidad, subtotal) => {
+    const previo = mapa.get(categoria);
+    if (previo) {
+      mapa.set(categoria, {
+        nombre: previo.nombre,
+        cantidadVendida: previo.cantidadVendida + cantidad,
+        totalFacturado: previo.totalFacturado + subtotal,
+      });
+      return;
+    }
+
+    mapa.set(categoria, {
+      nombre: categoria,
+      cantidadVendida: cantidad,
+      totalFacturado: subtotal,
+    });
+  };
+
+  (pedidos || []).forEach((pedido) => {
+    const lineas = Array.isArray(pedido.lineas_detalle) ? pedido.lineas_detalle : [];
+    if (lineas.length === 0) {
+      return;
+    }
+
+    lineas.forEach((linea) => {
+      const producto = resolverProductoDeLinea(linea, indices.porId, indices.porNombre);
+      const categoria = normalizarNombreCategoria(producto?.categoria);
+      agregar(
+        categoria,
+        obtenerCantidadLineaReporte(linea),
+        obtenerSubtotalLineaReporte(linea)
+      );
+    });
+  });
+
+  return Array.from(mapa.values())
+    .map(({ nombre, cantidadVendida, totalFacturado }) => ({
+      nombre,
+      cantidadVendida,
+      totalFacturado:
+        Math.round((totalFacturado + Number.EPSILON) * 100) / 100,
+    }))
+    .sort(
+      (a, b) =>
+        b.totalFacturado - a.totalFacturado || b.cantidadVendida - a.cantidadVendida
+    );
 }
 
 export function calcularReportePorProducto(pedidos) {

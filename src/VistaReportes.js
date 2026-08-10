@@ -4,6 +4,7 @@ import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import {
   agruparPedidosPorDia,
+  calcularReportePorCategoria,
   calcularReportePorProducto,
   calcularResumenReporte,
   claveFechaDesdeDate,
@@ -142,6 +143,7 @@ export default function VistaReportes() {
   const [fechaHasta, setFechaHasta] = useState('');
   const [filtroVenta, setFiltroVenta] = useState('todos');
   const [pedidos, setPedidos] = useState([]);
+  const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [arqueos, setArqueos] = useState([]);
@@ -223,6 +225,36 @@ export default function VistaReportes() {
       activo = false;
     };
   }, [configPeriodo, rangoInvalido, negocioId]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (!negocioId) {
+      setProductos([]);
+      return undefined;
+    }
+
+    const cargarProductos = async () => {
+      const { data, error: errorConsulta } = await queryConNegocio(
+        supabase.from('productos').select('id, nombre, categoria'),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (errorConsulta) {
+        setProductos([]);
+      } else {
+        setProductos(data || []);
+      }
+    };
+
+    cargarProductos();
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId]);
 
   useEffect(() => {
     let activo = true;
@@ -391,6 +423,11 @@ export default function VistaReportes() {
   const reportePorProducto = useMemo(
     () => calcularReportePorProducto(pedidosFiltrados),
     [pedidosFiltrados]
+  );
+
+  const reportePorCategoria = useMemo(
+    () => calcularReportePorCategoria(pedidosFiltrados, productos),
+    [pedidosFiltrados, productos]
   );
 
   const multiplesDias = periodoMultiplesDias(configPeriodo);
@@ -848,6 +885,42 @@ export default function VistaReportes() {
               </span>
             </article>
           </div>
+
+          {!reporteDeshabilitado && !cargando && !error ? (
+            <section
+              className="reportes-por-categoria"
+              aria-labelledby="reportes-por-categoria-titulo"
+            >
+              <h3 id="reportes-por-categoria-titulo" className="reportes-por-categoria-titulo">
+                Reporte por categoría
+              </h3>
+              {reportePorCategoria.length === 0 ? (
+                <p className="dashboard-vacio reportes-por-categoria-vacio">
+                  No hay categorías para el período y tipo de venta seleccionados.
+                </p>
+              ) : (
+                <div className="reportes-tabla reportes-por-categoria-tabla">
+                  <div className="reportes-tabla-header reportes-por-categoria-header">
+                    <span>Categoría</span>
+                    <span>Cantidad vendida</span>
+                    <span>Total facturado</span>
+                  </div>
+                  {reportePorCategoria.map((fila, indice) => (
+                    <div
+                      key={`${fila.nombre}-${indice}`}
+                      className="reportes-tabla-fila reportes-por-categoria-fila"
+                    >
+                      <span className="reporte-categoria-nombre">{fila.nombre}</span>
+                      <span className="reporte-categoria-cantidad">{fila.cantidadVendida}</span>
+                      <span className="reporte-categoria-total">
+                        {formatearMoneda(fila.totalFacturado)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {!reporteDeshabilitado && !cargando && !error ? (
             <section

@@ -22,7 +22,14 @@ function indiceProductoPorNombre(productos) {
   return mapa;
 }
 
-function resolverProductoDeLinea(linea, porId, porNombre) {
+export function crearIndicesProductosCatalogo(productos) {
+  return {
+    porId: indiceProductoPorId(productos || []),
+    porNombre: indiceProductoPorNombre(productos || []),
+  };
+}
+
+export function resolverProductoDeLinea(linea, porId, porNombre) {
   if (linea?.productoId != null && linea.productoId !== '') {
     return porId.get(String(linea.productoId)) || null;
   }
@@ -39,8 +46,7 @@ function resolverProductoDeLinea(linea, porId, porNombre) {
 
 export function calcularFrecuenciaCategoriasDesdePedidos(pedidos, productos) {
   const frecuencia = new Map();
-  const porId = indiceProductoPorId(productos);
-  const porNombre = indiceProductoPorNombre(productos);
+  const { porId, porNombre } = crearIndicesProductosCatalogo(productos);
 
   (pedidos || []).forEach((pedido) => {
     const lineas = pedido?.lineas_detalle;
