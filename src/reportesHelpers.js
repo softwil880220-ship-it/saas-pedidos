@@ -318,10 +318,7 @@ export function calcularReportePorCategoria(pedidos, productos) {
       totalFacturado:
         Math.round((totalFacturado + Number.EPSILON) * 100) / 100,
     }))
-    .sort(
-      (a, b) =>
-        b.totalFacturado - a.totalFacturado || b.cantidadVendida - a.cantidadVendida
-    );
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }
 
 export function calcularReportePorProducto(pedidos) {
@@ -373,10 +370,7 @@ export function calcularReportePorProducto(pedidos) {
       totalFacturado:
         Math.round((totalFacturado + Number.EPSILON) * 100) / 100,
     }))
-    .sort(
-      (a, b) =>
-        b.totalFacturado - a.totalFacturado || b.cantidadVendida - a.cantidadVendida
-    );
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }
 
 export function formatearClienteReporte(pedido) {
