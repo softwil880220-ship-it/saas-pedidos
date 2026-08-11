@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   buscarProductoPorId,
   calcularSubtotal,
+  redondearMoneda,
 } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
 import {
@@ -10,7 +11,9 @@ import {
   formatearLineaProductoVenta,
   parseCantidadPieza,
 } from './productoUnidadVenta';
+import { calcularExtrasLinea } from './variantesDinamicas';
 import VariantesPedido from './VariantesPedido.jsx';
+import EntradaPesoMonto from './EntradaPesoMonto.jsx';
 
 function contarUnidadesFisicasCarrito(lineas, productos) {
   return lineas.reduce((total, linea) => {
@@ -74,6 +77,7 @@ export default function PedidoLineasCarrito({
           lineas.map((linea, indice) => {
             const productoSeleccionado = buscarProductoPorId(productos, linea.productoId);
             const subtotal = calcularSubtotal(linea, productos, variantesCtx);
+            const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
             const esPorPeso = esProductoPorPeso(productoSeleccionado);
             const textoLinea =
               esPorPeso && subtotal > 0
@@ -87,8 +91,18 @@ export default function PedidoLineasCarrito({
 
             return (
               <div key={linea.id} className="pedido-linea-contenedor">
-                <div className="pedido-linea">
+                <div className="pedido-linea-cabecera">
                   <div className="pedido-linea-numero">#{indice + 1}</div>
+                  <button
+                    type="button"
+                    className="eliminar-linea-btn"
+                    onClick={() => onEliminarLinea(linea.id)}
+                    aria-label={`Eliminar producto ${indice + 1}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="pedido-linea">
                   <div className="formulario-campo pedido-linea-producto">
                     <span className="pedido-linea-producto-label">Producto</span>
                     <span className="pedido-linea-producto-nombre">
@@ -100,26 +114,23 @@ export default function PedidoLineasCarrito({
                       <span className="pedido-linea-producto-resumen">{textoLinea}</span>
                     ) : null}
                   </div>
+                  {esPorPeso ? (
+                    <EntradaPesoMonto
+                      cantidad={linea.cantidad}
+                      precioUnitario={productoSeleccionado.precio}
+                      extras={extras}
+                      onChangeCantidad={(valor) =>
+                        onActualizarCantidad?.(linea.id, valor)
+                      }
+                      productoNombre={productoSeleccionado.nombre}
+                      idBase={`cantidad-${linea.id}`}
+                    />
+                  ) : (
+                    <>
                   <div className="formulario-campo pedido-linea-cantidad">
                     <span className="pedido-linea-cantidad-label">
-                      {esPorPeso ? 'Peso' : 'Cantidad'}
+                      Cantidad
                     </span>
-                    {esPorPeso ? (
-                      <div className="pedido-linea-gramos">
-                        <input
-                          id={`cantidad-${linea.id}`}
-                          type="number"
-                          min="1"
-                          step="1"
-                          inputMode="numeric"
-                          className="pedido-linea-gramos-input"
-                          value={linea.cantidad}
-                          onChange={(e) => onActualizarCantidad?.(linea.id, e.target.value)}
-                          aria-label={`Gramos producto ${indice + 1}`}
-                        />
-                        <span className="pedido-linea-gramos-sufijo">gramos</span>
-                      </div>
-                    ) : (
                       <div
                         className="cantidad-stepper"
                         role="group"
@@ -146,7 +157,6 @@ export default function PedidoLineasCarrito({
                           +
                         </button>
                       </div>
-                    )}
                   </div>
                   <div className="formulario-campo pedido-linea-subtotal">
                     <label htmlFor={`subtotal-${linea.id}`}>Subtotal</label>
@@ -157,14 +167,8 @@ export default function PedidoLineasCarrito({
                       readOnly
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="eliminar-linea-btn"
-                    onClick={() => onEliminarLinea(linea.id)}
-                    aria-label={`Eliminar producto ${indice + 1}`}
-                  >
-                    ✕
-                  </button>
+                    </>
+                  )}
                 </div>
                 {onCambiarVariante && productoSeleccionado ? (
                   <VariantesPedido

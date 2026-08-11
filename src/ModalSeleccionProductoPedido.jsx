@@ -9,8 +9,10 @@ import {
   parseGramosLinea,
 } from './productoUnidadVenta';
 import { toggleVarianteEnLinea } from './productoVariantesHelpers';
-import { crearVariantesLineaVacias } from './variantesDinamicas';
+import { calcularExtrasLinea, crearVariantesLineaVacias } from './variantesDinamicas';
 import VariantesPedido from './VariantesPedido.jsx';
+import EntradaPesoMonto from './EntradaPesoMonto.jsx';
+import { redondearMoneda } from './pedidoCarritoCalculos';
 
 const LINEA_DRAFT_ID = 'modal-seleccion-draft';
 
@@ -35,6 +37,7 @@ export default function ModalSeleccionProductoPedido({
   );
 
   const esPorPeso = esProductoPorPeso(producto);
+  const extras = redondearMoneda(calcularExtrasLinea(lineaDraft, variantesCtx));
   const subtotal = calcularSubtotal(lineaDraft, productos, variantesCtx);
   const confirmarDeshabilitado =
     esPorPeso && parseGramosLinea(lineaDraft.cantidad) <= 0;
@@ -86,25 +89,20 @@ export default function ModalSeleccionProductoPedido({
         />
 
         <div className="modal-seleccion-producto-cantidad">
-          <span className="modal-seleccion-producto-cantidad-label">
-            {esPorPeso ? 'Peso (gramos)' : 'Cantidad'}
-          </span>
+          {!esPorPeso ? (
+            <span className="modal-seleccion-producto-cantidad-label">Cantidad</span>
+          ) : null}
           {esPorPeso ? (
-            <div className="pedido-linea-gramos">
-              <input
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                className="pedido-linea-gramos-input"
-                value={lineaDraft.cantidad}
-                onChange={(event) =>
-                  setLineaDraft((prev) => ({ ...prev, cantidad: event.target.value }))
-                }
-                aria-label={`Gramos de ${producto.nombre}`}
-              />
-              <span className="pedido-linea-gramos-sufijo">gramos</span>
-            </div>
+            <EntradaPesoMonto
+              cantidad={lineaDraft.cantidad}
+              precioUnitario={producto.precio}
+              extras={extras}
+              onChangeCantidad={(valor) =>
+                setLineaDraft((prev) => ({ ...prev, cantidad: valor }))
+              }
+              productoNombre={producto.nombre}
+              idBase="modal-seleccion-peso"
+            />
           ) : (
             <div
               className="cantidad-stepper"

@@ -54,6 +54,16 @@ export function calcularSubtotalPorUnidadVenta({ unidadVenta, cantidad, precioUn
   return redondearMoneda(precio * piezas);
 }
 
+export function calcularGramosDesdeMonto({ montoObjetivo, precioUnitario, extras = 0 }) {
+  const monto = Number(montoObjetivo) || 0;
+  const precio = Number(precioUnitario) || 0;
+  if (precio <= 0) return 0;
+  const montoBase = monto - extras;
+  if (montoBase <= 0) return 0;
+  const gramos = Math.round((montoBase / precio) * 1000);
+  return gramos > 0 ? gramos : 0;
+}
+
 export function calcularSubtotalLineaDesdeProducto(linea, producto, variantesCtx) {
   const precioBase = Number(producto?.precio) || 0;
   const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
