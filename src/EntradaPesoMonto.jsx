@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { redondearMoneda } from './pedidoCarritoCalculos';
 import {
   UNIDAD_VENTA_PESO,
@@ -29,6 +29,14 @@ export default function EntradaPesoMonto({
   const valorMonto =
     subtotalMostrado > 0 ? String(subtotalMostrado) : '';
 
+  const [montoTexto, setMontoTexto] = useState(valorMonto);
+
+  useEffect(() => {
+    if (campoActivo !== 'monto') {
+      setMontoTexto(valorMonto);
+    }
+  }, [valorMonto, campoActivo]);
+
   const handleGramosChange = (event) => {
     setCampoActivo('gramos');
     onChangeCantidad(event.target.value);
@@ -36,6 +44,7 @@ export default function EntradaPesoMonto({
 
   const handleMontoChange = (event) => {
     setCampoActivo('monto');
+    setMontoTexto(event.target.value);
     const montoObjetivo = Number(event.target.value);
     const gramos = calcularGramosDesdeMonto({
       montoObjetivo: Number.isFinite(montoObjetivo) ? montoObjetivo : 0,
@@ -78,7 +87,7 @@ export default function EntradaPesoMonto({
           min="0"
           step="0.01"
           inputMode="decimal"
-          value={valorMonto}
+          value={montoTexto}
           onFocus={() => setCampoActivo('monto')}
           onChange={handleMontoChange}
           aria-label={`Monto de ${productoNombre}`}
