@@ -79,6 +79,16 @@ import VistaMostrador from './VistaMostrador.jsx';
 import { useFrecuenciaCategoriasPedidos } from './useFrecuenciaCategoriasPedidos';
 import useVariantesCtx from './useVariantesCtx';
 import useCarritoPedido from './useCarritoPedido';
+import {
+  abrirJornada,
+  cargarJornadaAbierta,
+  cargarMesasAbiertasJornada,
+  cerrarJornada,
+  esErrorJornadaDuplicada,
+  formatearHoraJornada,
+  MENSAJE_JORNADA_YA_ABIERTA,
+  puedeGestionarJornada,
+} from './jornadaHelpers';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
 import {
   buscarProductoPorId,
@@ -1066,6 +1076,7 @@ function Dashboard() {
   const location = useLocation();
   const { negocioId, session, rol, usuario } = useAuth();
   const puedeVerVentasTotalesDashboard = ROLES_VENTAS_TOTALES_DASHBOARD.includes(rol);
+  const puedeGestionarJornadaDashboard = puedeGestionarJornada(rol);
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
   const estadoInicialCaptura = esMobileDashboardInicial()
@@ -1135,6 +1146,15 @@ function Dashboard() {
   });
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
+  const [jornadaAbierta, setJornadaAbierta] = useState(null);
+  const [cargandoJornada, setCargandoJornada] = useState(false);
+  const [accionJornadaEnProgreso, setAccionJornadaEnProgreso] = useState(false);
+  const [errorJornada, setErrorJornada] = useState(null);
+  const [modalConfirmarCerrarJornadaAbierto, setModalConfirmarCerrarJornadaAbierto] =
+    useState(false);
+  const [modalMesasAbiertasJornadaAbierto, setModalMesasAbiertasJornadaAbierto] =
+    useState(false);
+  const [mesasAbiertasBloqueoJornada, setMesasAbiertasBloqueoJornada] = useState([]);
   const nextEditLineaId = useRef(2);
   const [productoForm, setProductoForm] = useState({
     nombre: '',
@@ -1310,6 +1330,121 @@ function Dashboard() {
       activo = false;
     };
   }, [negocioId]);
+
+  const recargarJornadaAbierta = useCallback(async () => {
+    if (!negocioId) {
+      setJornadaAbierta(null);
+      setCargandoJornada(false);
+      return;
+    }
+
+    setCargandoJornada(true);
+    setErrorJornada(null);
+
+    const { data, error } = await cargarJornadaAbierta(supabase, negocioId);
+
+    if (error) {
+      setErrorJornada(error.message || 'No se pudo cargar el estado de la jornada.');
+      setJornadaAbierta(null);
+    } else {
+      setJornadaAbierta(data);
+    }
+
+    setCargandoJornada(false);
+  }, [negocioId]);
+
+  useEffect(() => {
+    void recargarJornadaAbierta();
+  }, [recargarJornadaAbierta]);
+
+  const handleAbrirJornada = async () => {
+    if (!negocioId || !usuario?.id || accionJornadaEnProgreso) return;
+
+    setAccionJornadaEnProgreso(true);
+    setErrorJornada(null);
+
+    const { data, error } = await abrirJornada(supabase, negocioId, usuario.id);
+
+    if (error) {
+      if (esErrorJornadaDuplicada(error)) {
+        setErrorJornada(MENSAJE_JORNADA_YA_ABIERTA);
+        await recargarJornadaAbierta();
+      } else {
+        setErrorJornada(error.message || 'No se pudo abrir la jornada.');
+      }
+    } else {
+      setJornadaAbierta(data);
+    }
+
+    setAccionJornadaEnProgreso(false);
+  };
+
+  const solicitarCerrarJornada = () => {
+    if (!jornadaAbierta || accionJornadaEnProgreso) return;
+    setErrorJornada(null);
+    setModalConfirmarCerrarJornadaAbierto(true);
+  };
+
+  const cerrarModalConfirmarCerrarJornada = () => {
+    if (accionJornadaEnProgreso) return;
+    setModalConfirmarCerrarJornadaAbierto(false);
+  };
+
+  const cerrarModalMesasAbiertasJornada = () => {
+    setModalMesasAbiertasJornadaAbierto(false);
+    setMesasAbiertasBloqueoJornada([]);
+  };
+
+  const confirmarCerrarJornada = async () => {
+    if (!negocioId || !usuario?.id || !jornadaAbierta?.id || accionJornadaEnProgreso) return;
+
+    setAccionJornadaEnProgreso(true);
+    setErrorJornada(null);
+
+    const { data: mesasAbiertas, error: errorMesas } = await cargarMesasAbiertasJornada(
+      supabase,
+      negocioId
+    );
+
+    if (errorMesas) {
+      setErrorJornada(errorMesas.message || 'No se pudieron verificar las mesas abiertas.');
+      setAccionJornadaEnProgreso(false);
+      return;
+    }
+
+    if (mesasAbiertas.length > 0) {
+      setModalConfirmarCerrarJornadaAbierto(false);
+      setMesasAbiertasBloqueoJornada(mesasAbiertas);
+      setModalMesasAbiertasJornadaAbierto(true);
+      setAccionJornadaEnProgreso(false);
+      return;
+    }
+
+    const { data, error } = await cerrarJornada(
+      supabase,
+      negocioId,
+      jornadaAbierta.id,
+      usuario.id
+    );
+
+    if (error) {
+      setErrorJornada(error.message || 'No se pudo cerrar la jornada.');
+      setAccionJornadaEnProgreso(false);
+      return;
+    }
+
+    if (!data) {
+      setErrorJornada('La jornada ya no está abierta.');
+      await recargarJornadaAbierta();
+      setModalConfirmarCerrarJornadaAbierto(false);
+      setAccionJornadaEnProgreso(false);
+      return;
+    }
+
+    setJornadaAbierta(null);
+    setModalConfirmarCerrarJornadaAbierto(false);
+    setAccionJornadaEnProgreso(false);
+  };
 
   useEffect(() => {
     if (seccion === 'pedidos' || seccion === 'catalogo') {
@@ -3938,7 +4073,55 @@ function Dashboard() {
               </h1>
             </div>
           </div>
+          <div className="header-jornada-estado" aria-live="polite">
+            {cargandoJornada ? (
+              <p className="header-jornada-texto">Cargando estado de jornada...</p>
+            ) : (
+              <>
+                <div className="header-jornada-info">
+                  <span
+                    className={`header-jornada-indicador${
+                      jornadaAbierta ? ' header-jornada-indicador-abierta' : ''
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <p className="header-jornada-texto">
+                    {jornadaAbierta
+                      ? `Jornada abierta desde ${formatearHoraJornada(jornadaAbierta.abierta_en)}`
+                      : 'Jornada cerrada'}
+                  </p>
+                </div>
+                {puedeGestionarJornadaDashboard ? (
+                  jornadaAbierta ? (
+                    <button
+                      type="button"
+                      className="header-jornada-btn"
+                      onClick={solicitarCerrarJornada}
+                      disabled={accionJornadaEnProgreso}
+                    >
+                      {accionJornadaEnProgreso ? 'Cerrando...' : 'Cerrar jornada'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="header-jornada-btn"
+                      onClick={handleAbrirJornada}
+                      disabled={accionJornadaEnProgreso}
+                    >
+                      {accionJornadaEnProgreso ? 'Abriendo...' : 'Abrir jornada'}
+                    </button>
+                  )
+                ) : null}
+              </>
+            )}
+            {errorJornada ? (
+              <p className="header-jornada-error" role="alert">
+                {errorJornada}
+              </p>
+            ) : null}
+          </div>
           {puedeVerVentasTotalesDashboard ? (
+            jornadaAbierta ? (
           <div className="header-stats">
             <div className="header-stat header-stat-principal">
               <span className="header-stat-label">Ventas totales hoy</span>
@@ -3981,11 +4164,100 @@ function Dashboard() {
               </div>
             </div>
           </div>
+            ) : (
+              <p className="header-jornada-cerrada-mensaje" role="status">
+                Abre una jornada para empezar a vender
+              </p>
+            )
           ) : null}
         </div>
         <BotonCerrarSesion />
       </header>
       )}
+
+      {modalConfirmarCerrarJornadaAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalConfirmarCerrarJornada}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cerrar-jornada-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="cerrar-jornada-modal-titulo" className="retiro-modal-titulo">
+              ¿Cerrar la jornada?
+            </h2>
+            <p className="arqueo-modal-descripcion">
+              Esto bloqueará nuevas ventas hasta que se abra una jornada nueva. No se puede
+              deshacer.
+            </p>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-cancelar"
+                onClick={cerrarModalConfirmarCerrarJornada}
+                disabled={accionJornadaEnProgreso}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="retiro-modal-guardar"
+                onClick={confirmarCerrarJornada}
+                disabled={accionJornadaEnProgreso}
+              >
+                {accionJornadaEnProgreso ? 'Cerrando...' : 'Sí, cerrar jornada'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {modalMesasAbiertasJornadaAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalMesasAbiertasJornada}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal jornada-mesas-abiertas-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mesas-abiertas-jornada-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="mesas-abiertas-jornada-modal-titulo" className="retiro-modal-titulo">
+              No se puede cerrar la jornada
+            </h2>
+            <p className="arqueo-modal-descripcion">
+              {mesasAbiertasBloqueoJornada.length === 1
+                ? 'Hay 1 mesa abierta que debe cobrarse o cerrarse primero:'
+                : `Hay ${mesasAbiertasBloqueoJornada.length} mesas abiertas que deben cobrarse o cerrarse primero:`}
+            </p>
+            <ul className="jornada-mesas-abiertas-lista">
+              {mesasAbiertasBloqueoJornada.map((mesa) => (
+                <li key={mesa.id}>
+                  Mesa {mesa.numero_mesa} (abierta desde{' '}
+                  {formatearHoraJornada(mesa.abierta_en)})
+                </li>
+              ))}
+            </ul>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-guardar"
+                onClick={cerrarModalMesasAbiertasJornada}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {modalRetiroBloqueadoAbierto ? (
         <div

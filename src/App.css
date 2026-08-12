@@ -41,6 +41,91 @@
   margin-bottom: 1.25rem;
 }
 
+.header-jornada-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.header-jornada-info {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.header-jornada-indicador {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25);
+  flex-shrink: 0;
+}
+
+.header-jornada-indicador-abierta {
+  background: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.25);
+}
+
+.header-jornada-texto {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ecfdf5;
+}
+
+.header-jornada-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.header-jornada-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.header-jornada-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.header-jornada-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #fecaca;
+}
+
+.header-jornada-cerrada-mensaje {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fb923c;
+}
+
+.jornada-mesas-abiertas-modal .arqueo-modal-descripcion {
+  text-align: left;
+}
+
+.jornada-mesas-abiertas-lista {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.jornada-mesas-abiertas-lista li + li {
+  margin-top: 0.25rem;
+}
+
 .header-logout-btn {
   position: absolute;
   top: 1.5rem;
