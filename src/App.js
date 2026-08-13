@@ -1215,7 +1215,6 @@ function Dashboard() {
   const [pedidoPendienteAutorizacion, setPedidoPendienteAutorizacion] = useState(null);
   const [accionPendienteAutorizacionPedido, setAccionPendienteAutorizacionPedido] =
     useState(null);
-  const [jornadaAbiertaActiva, setJornadaAbiertaActiva] = useState(null);
   const [foliosMesasCerradosHoy, setFoliosMesasCerradosHoy] = useState([]);
 
   const sincronizarProductoCategoriasVariantes = async (productoId, formActivas) => {
@@ -1332,27 +1331,98 @@ function Dashboard() {
     };
   }, [negocioId]);
 
-  const recargarJornadaAbierta = useCallback(async () => {
-    if (!negocioId) {
-      setJornadaAbierta(null);
-      setCargandoJornada(false);
+  const cargarRetirosJornadaAbierta = async (jornadaId) => {
+    const { total, error } = await cargarRetirosJornada(supabase, negocioId, jornadaId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return total;
+  };
+
+  const cargarFondoFijoJornadaAbierta = async (jornadaId) => {
+    const resultado = await cargarFondoFijoJornada(supabase, negocioId, jornadaId);
+
+    if (resultado.error) {
+      throw new Error(resultado.error.message);
+    }
+
+    return resultado;
+  };
+
+  const sincronizarTotalesJornadaAbierta = useCallback(async (jornadaId) => {
+    if (!jornadaId) {
+      setRetirosDelDia(0);
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
       return;
     }
 
-    setCargandoJornada(true);
-    setErrorJornada(null);
+    const [retirosResult, fondoResult] = await Promise.allSettled([
+      cargarRetirosJornadaAbierta(jornadaId),
+      cargarFondoFijoJornadaAbierta(jornadaId),
+    ]);
 
-    const { data, error } = await cargarJornadaAbierta(supabase, negocioId);
-
-    if (error) {
-      setErrorJornada(error.message || 'No se pudo cargar el estado de la jornada.');
-      setJornadaAbierta(null);
+    if (retirosResult.status === 'fulfilled') {
+      setRetirosDelDia(retirosResult.value);
     } else {
-      setJornadaAbierta(data);
+      setRetirosDelDia(0);
     }
 
-    setCargandoJornada(false);
+    if (fondoResult.status === 'fulfilled') {
+      setFondoFijoDelDia(fondoResult.value.monto);
+      setFondoFijoHoyId(fondoResult.value.id);
+      setFondoFijoJornadaId(fondoResult.value.jornada_id);
+    } else {
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
+    }
   }, [negocioId]);
+
+  const recargarJornadaAbierta = useCallback(
+    async (opciones = {}) => {
+      const { mostrarCarga = true, sincronizarTotales = true } = opciones;
+
+      if (!negocioId) {
+        setJornadaAbierta(null);
+        if (mostrarCarga) {
+          setCargandoJornada(false);
+        }
+        if (sincronizarTotales) {
+          await sincronizarTotalesJornadaAbierta(null);
+        }
+        return;
+      }
+
+      if (mostrarCarga) {
+        setCargandoJornada(true);
+      }
+      setErrorJornada(null);
+
+      const { data, error } = await cargarJornadaAbierta(supabase, negocioId);
+
+      if (error) {
+        setErrorJornada(error.message || 'No se pudo cargar el estado de la jornada.');
+        setJornadaAbierta(null);
+        if (sincronizarTotales) {
+          await sincronizarTotalesJornadaAbierta(null);
+        }
+      } else {
+        setJornadaAbierta(data);
+        if (sincronizarTotales) {
+          await sincronizarTotalesJornadaAbierta(data?.id ?? null);
+        }
+      }
+
+      if (mostrarCarga) {
+        setCargandoJornada(false);
+      }
+    },
+    [negocioId, sincronizarTotalesJornadaAbierta]
+  );
 
   useEffect(() => {
     void recargarJornadaAbierta();
@@ -1375,6 +1445,7 @@ function Dashboard() {
       }
     } else {
       setJornadaAbierta(data);
+      await sincronizarTotalesJornadaAbierta(data.id);
     }
 
     setAccionJornadaEnProgreso(false);
@@ -1443,6 +1514,7 @@ function Dashboard() {
     }
 
     setJornadaAbierta(null);
+    await sincronizarTotalesJornadaAbierta(null);
     setModalConfirmarCerrarJornadaAbierto(false);
     setAccionJornadaEnProgreso(false);
   };
@@ -2918,7 +2990,7 @@ function Dashboard() {
         return;
       }
 
-      if (jornadaAbiertaActiva?.id === jornada.id) {
+      if (jornadaAbierta?.id === jornada.id) {
         await sincronizarTotalesJornadaAbierta(jornada.id);
       }
 
@@ -2972,57 +3044,6 @@ function Dashboard() {
     }
 
     return data || [];
-  };
-
-  const cargarRetirosJornadaAbierta = async (jornadaId) => {
-    const { total, error } = await cargarRetirosJornada(supabase, negocioId, jornadaId);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return total;
-  };
-
-  const cargarFondoFijoJornadaAbierta = async (jornadaId) => {
-    const resultado = await cargarFondoFijoJornada(supabase, negocioId, jornadaId);
-
-    if (resultado.error) {
-      throw new Error(resultado.error.message);
-    }
-
-    return resultado;
-  };
-
-  const sincronizarTotalesJornadaAbierta = async (jornadaId) => {
-    if (!jornadaId) {
-      setRetirosDelDia(0);
-      setFondoFijoDelDia(0);
-      setFondoFijoHoyId(null);
-      setFondoFijoJornadaId(null);
-      return;
-    }
-
-    const [retirosResult, fondoResult] = await Promise.allSettled([
-      cargarRetirosJornadaAbierta(jornadaId),
-      cargarFondoFijoJornadaAbierta(jornadaId),
-    ]);
-
-    if (retirosResult.status === 'fulfilled') {
-      setRetirosDelDia(retirosResult.value);
-    } else {
-      setRetirosDelDia(0);
-    }
-
-    if (fondoResult.status === 'fulfilled') {
-      setFondoFijoDelDia(fondoResult.value.monto);
-      setFondoFijoHoyId(fondoResult.value.id);
-      setFondoFijoJornadaId(fondoResult.value.jornada_id);
-    } else {
-      setFondoFijoDelDia(0);
-      setFondoFijoHoyId(null);
-      setFondoFijoJornadaId(null);
-    }
   };
 
   const cargarArqueoDelDia = async () => {
@@ -3340,48 +3361,6 @@ function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (!negocioId) {
-      setFondoFijoDelDia(0);
-      setFondoFijoHoyId(null);
-      setFondoFijoJornadaId(null);
-      setRetirosDelDia(0);
-      setJornadaAbiertaActiva(null);
-      return undefined;
-    }
-
-    let activo = true;
-
-    cargarJornadaAbierta(supabase, negocioId)
-      .then(async ({ data: jornada, error }) => {
-        if (!activo) return;
-
-        if (error || !jornada) {
-          setJornadaAbiertaActiva(null);
-          setFondoFijoDelDia(0);
-          setFondoFijoHoyId(null);
-          setFondoFijoJornadaId(null);
-          setRetirosDelDia(0);
-          return;
-        }
-
-        setJornadaAbiertaActiva(jornada);
-        await sincronizarTotalesJornadaAbierta(jornada.id);
-      })
-      .catch(() => {
-        if (!activo) return;
-        setJornadaAbiertaActiva(null);
-        setFondoFijoDelDia(0);
-        setFondoFijoHoyId(null);
-        setFondoFijoJornadaId(null);
-        setRetirosDelDia(0);
-      });
-
-    return () => {
-      activo = false;
-    };
-  }, [negocioId]);
-
   const abrirModalFondoFijo = async () => {
     setModalFondoFijoAbierto(true);
     setFondoFijoForm({ monto: '' });
@@ -3390,20 +3369,7 @@ function Dashboard() {
     setCargandoFondoFijoDatos(true);
 
     try {
-      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
-        supabase,
-        negocioId
-      );
-
-      if (errorJornadaConsulta) {
-        setErrorFondoFijo(errorJornadaConsulta.message || 'No se pudo verificar la jornada.');
-        setFondoFijoDelDia(0);
-        setFondoFijoHoyId(null);
-        setFondoFijoJornadaId(null);
-        return;
-      }
-
-      if (!jornada) {
+      if (!jornadaAbierta?.id) {
         setFondoFijoDelDia(0);
         setFondoFijoHoyId(null);
         setFondoFijoJornadaId(null);
@@ -3411,8 +3377,7 @@ function Dashboard() {
         return;
       }
 
-      setJornadaAbiertaActiva(jornada);
-      const fondoFijo = await cargarFondoFijoJornadaAbierta(jornada.id);
+      const fondoFijo = await cargarFondoFijoJornadaAbierta(jornadaAbierta.id);
       setFondoFijoDelDia(fondoFijo.monto);
       setFondoFijoHoyId(fondoFijo.id);
       setFondoFijoJornadaId(fondoFijo.jornada_id);
@@ -3496,7 +3461,7 @@ function Dashboard() {
         return;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('fondos_fijos')
         .insert(
           payloadConNegocio(
@@ -3508,7 +3473,7 @@ function Dashboard() {
             negocioId
           )
         )
-        .select('id, monto, jornada_id')
+        .select('id')
         .single();
 
       if (error) {
@@ -3516,10 +3481,7 @@ function Dashboard() {
         return;
       }
 
-      setJornadaAbiertaActiva(jornada);
-      setFondoFijoDelDia(redondearMoneda(Number(data?.monto) || 0));
-      setFondoFijoHoyId(data?.id ?? null);
-      setFondoFijoJornadaId(data?.jornada_id ?? jornada.id);
+      await sincronizarTotalesJornadaAbierta(jornada.id);
       setFondoFijoForm({ monto: '' });
     } finally {
       setGuardandoFondoFijo(false);
@@ -3590,37 +3552,23 @@ function Dashboard() {
   const abrirModalArqueo = async () => {
     setMensajeArqueoBloqueado(null);
 
+    if (!jornadaAbierta?.id) {
+      setMensajeArqueoBloqueado(MENSAJE_ARQUEO_SIN_JORNADA_ABIERTA);
+      setModalArqueoBloqueadoAbierto(true);
+      return;
+    }
+
+    setModalArqueoAbierto(true);
+    setArqueoContado(crearArqueoContadoVacio());
+    setArqueoContadoCampoEnfocado(null);
+    setErrorArqueo(null);
+    setCargandoArqueoDatos(true);
+
     try {
-      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
-        supabase,
-        negocioId
-      );
-
-      if (errorJornadaConsulta) {
-        setMensajeArqueoBloqueado(
-          errorJornadaConsulta.message || 'No se pudo verificar la jornada.'
-        );
-        setModalArqueoBloqueadoAbierto(true);
-        return;
-      }
-
-      if (!jornada) {
-        setMensajeArqueoBloqueado(MENSAJE_ARQUEO_SIN_JORNADA_ABIERTA);
-        setModalArqueoBloqueadoAbierto(true);
-        return;
-      }
-
-      setJornadaAbiertaActiva(jornada);
-      setModalArqueoAbierto(true);
-      setArqueoContado(crearArqueoContadoVacio());
-      setArqueoContadoCampoEnfocado(null);
-      setErrorArqueo(null);
-      setCargandoArqueoDatos(true);
-
       const errores = [];
       const [retirosResult, fondoResult, foliosMesasResult] = await Promise.allSettled([
-        cargarRetirosJornadaAbierta(jornada.id),
-        cargarFondoFijoJornadaAbierta(jornada.id),
+        cargarRetirosJornadaAbierta(jornadaAbierta.id),
+        cargarFondoFijoJornadaAbierta(jornadaAbierta.id),
         cargarFoliosMesasCerradosDelDia(),
       ]);
 
@@ -3659,11 +3607,10 @@ function Dashboard() {
       if (errores.length > 0) {
         setErrorArqueo(errores.join(' '));
       }
-
-      setCargandoArqueoDatos(false);
     } catch (err) {
-      setMensajeArqueoBloqueado(err.message || 'No se pudo verificar la jornada.');
-      setModalArqueoBloqueadoAbierto(true);
+      setErrorArqueo(err.message || 'No se pudieron cargar los datos del arqueo.');
+    } finally {
+      setCargandoArqueoDatos(false);
     }
   };
 
@@ -3709,7 +3656,7 @@ function Dashboard() {
     if (
       !arqueoContadoValido ||
       !negocioId ||
-      !jornadaAbiertaActiva?.id ||
+      !jornadaAbierta?.id ||
       guardandoArqueo ||
       cargandoArqueoDatos
     ) {
@@ -3724,54 +3671,64 @@ function Dashboard() {
 
   const handleGuardarArqueo = async (e) => {
     e.preventDefault();
-    if (
-      !arqueoContadoValido ||
-      !negocioId ||
-      !jornadaAbiertaActiva?.id ||
-      guardandoArqueo ||
-      cargandoArqueoDatos
-    )
-      return;
+    if (!arqueoContadoValido || !negocioId || guardandoArqueo || cargandoArqueoDatos) return;
 
     setGuardandoArqueo(true);
     setErrorArqueo(null);
 
-    const efectivoContado = Number.parseFloat(arqueoContado.efectivo);
-    const tarjetaContado = Number.parseFloat(arqueoContado.tarjeta);
-    const transferenciaContado = Number.parseFloat(arqueoContado.transferencia);
-    const linkContado = Number.parseFloat(arqueoContado.link_pago);
-
-    const { error } = await supabase.from('arqueos').insert(
-      payloadConNegocio(
-        {
-          usuario: usuarioSesionActual(session),
-          efectivo_sistema: arqueoSistema.efectivo,
-          efectivo_contado: efectivoContado,
-          tarjeta_sistema: arqueoSistema.tarjeta,
-          tarjeta_contado: tarjetaContado,
-          transferencia_sistema: arqueoSistema.transferencia,
-          transferencia_contado: transferenciaContado,
-          link_sistema: arqueoSistema.link_pago,
-          link_contado: linkContado,
-          total_sistema: arqueoSistema.total,
-          total_contado: totalArqueoContado,
-          diferencia: diferenciaArqueoTotal,
-          retiros_del_dia: retirosDelDia,
-          fondo_fijo_del_dia: fondoFijoDelDia,
-          jornada_id: jornadaAbiertaActiva.id,
-        },
+    try {
+      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
+        supabase,
         negocioId
-      )
-    );
+      );
 
-    setGuardandoArqueo(false);
+      if (errorJornadaConsulta) {
+        setErrorArqueo(errorJornadaConsulta.message);
+        return;
+      }
 
-    if (error) {
-      setErrorArqueo(error.message);
-      return;
+      if (!jornada) {
+        setErrorArqueo(MENSAJE_ARQUEO_SIN_JORNADA_ABIERTA);
+        return;
+      }
+
+      const efectivoContado = Number.parseFloat(arqueoContado.efectivo);
+      const tarjetaContado = Number.parseFloat(arqueoContado.tarjeta);
+      const transferenciaContado = Number.parseFloat(arqueoContado.transferencia);
+      const linkContado = Number.parseFloat(arqueoContado.link_pago);
+
+      const { error } = await supabase.from('arqueos').insert(
+        payloadConNegocio(
+          {
+            usuario: usuarioSesionActual(session),
+            efectivo_sistema: arqueoSistema.efectivo,
+            efectivo_contado: efectivoContado,
+            tarjeta_sistema: arqueoSistema.tarjeta,
+            tarjeta_contado: tarjetaContado,
+            transferencia_sistema: arqueoSistema.transferencia,
+            transferencia_contado: transferenciaContado,
+            link_sistema: arqueoSistema.link_pago,
+            link_contado: linkContado,
+            total_sistema: arqueoSistema.total,
+            total_contado: totalArqueoContado,
+            diferencia: diferenciaArqueoTotal,
+            retiros_del_dia: retirosDelDia,
+            fondo_fijo_del_dia: fondoFijoDelDia,
+            jornada_id: jornada.id,
+          },
+          negocioId
+        )
+      );
+
+      if (error) {
+        setErrorArqueo(error.message);
+        return;
+      }
+
+      cerrarModalArqueo();
+    } finally {
+      setGuardandoArqueo(false);
     }
-
-    cerrarModalArqueo();
   };
 
   const renderPedidosLista = (pedidosAgrupados, filtroActivo, totalPedidosTipo) => {
@@ -4783,7 +4740,7 @@ function Dashboard() {
                     guardandoArqueo ||
                     cargandoArqueoDatos ||
                     !negocioId ||
-                    !jornadaAbiertaActiva?.id ||
+                    !jornadaAbierta?.id ||
                     diferenciaArqueoTotal !== 0 ||
                     totalArqueoContado <= 0
                   }
