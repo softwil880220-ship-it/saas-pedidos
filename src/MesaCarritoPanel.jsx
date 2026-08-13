@@ -28,6 +28,8 @@ import {
 } from './pedidoCarritoStorage';
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
+const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
+
 function carritoTieneProductos(snapshot) {
   const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
   return lineas.some((linea) => linea?.productoId);
@@ -74,6 +76,7 @@ export default function MesaCarritoPanel({
   negocioId,
   usuarioId,
   rol,
+  jornadaAbierta,
   onCerrar,
   onFolioCreado,
   onFolioEliminado,
@@ -147,11 +150,13 @@ export default function MesaCarritoPanel({
   const [enviandoCocina, setEnviandoCocina] = useState(false);
   const [errorEnvioCocina, setErrorEnvioCocina] = useState(null);
   const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
+  const [errorJornadaCerradaMesa, setErrorJornadaCerradaMesa] = useState(null);
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
   const [estadoCobroPersistido, setEstadoCobroPersistido] = useState(null);
   const [revisionModalCobro, setRevisionModalCobro] = useState(0);
   const [errorCobroMesa, setErrorCobroMesa] = useState(null);
   const modalCobroAbiertoRef = useRef(modalCobroAbierto);
+  const mesaBloqueadaPorJornadaCerrada = !jornadaAbierta?.id;
 
   useEffect(() => {
     modalCobroAbiertoRef.current = modalCobroAbierto;
@@ -396,6 +401,21 @@ export default function MesaCarritoPanel({
   useEffect(() => {
     if (folioId) return;
 
+    if (mesaBloqueadaPorJornadaCerrada) {
+      folioCreacionIniciadaRef.current = false;
+      creacionFolioEnCursoRef.current = false;
+
+      if (carritoTieneProductos(carrito.snapshot)) {
+        setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+      } else {
+        setErrorJornadaCerradaMesa(null);
+      }
+
+      return undefined;
+    }
+
+    setErrorJornadaCerradaMesa(null);
+
     if (carrito.lineasPedidoActivas.length === 0) {
       folioCreacionIniciadaRef.current = false;
       creacionFolioEnCursoRef.current = false;
@@ -417,6 +437,12 @@ export default function MesaCarritoPanel({
 
     const crearFolio = async () => {
       setErrorCreacionFolio(null);
+
+      if (!jornadaAbierta?.id) {
+        setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+        folioCreacionIniciadaRef.current = false;
+        return;
+      }
 
       try {
         const nuevoFolioId = await abrirFolioMesa({
@@ -463,7 +489,9 @@ export default function MesaCarritoPanel({
     negocioId,
     numeroMesa,
     usuarioId,
+    jornadaAbierta,
     onFolioCreado,
+    mesaBloqueadaPorJornadaCerrada,
   ]);
 
   useEffect(() => {
@@ -575,6 +603,11 @@ export default function MesaCarritoPanel({
   const handleEnviarCocina = async () => {
     if (!folioId) return;
 
+    if (!jornadaAbierta?.id) {
+      setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+      return;
+    }
+
     const detallePedido = carrito.obtenerDetallePedido();
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
       return;
@@ -627,10 +660,29 @@ export default function MesaCarritoPanel({
   };
 
   const puedeEnviarCocina =
+    Boolean(jornadaAbierta?.id) &&
     Boolean(folioId) &&
     carrito.lineasPedidoActivas.length > 0 &&
     carrito.totalPedido > 0 &&
     !enviandoCocina;
+
+  const agregarProductoAlPedidoMesa = (productoId) => {
+    if (mesaBloqueadaPorJornadaCerrada) {
+      setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+      return;
+    }
+
+    carrito.agregarProductoAlPedido(productoId);
+  };
+
+  const agregarLineaConVariantesMesa = (lineaDraft) => {
+    if (mesaBloqueadaPorJornadaCerrada) {
+      setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+      return;
+    }
+
+    carrito.agregarLineaConVariantes(lineaDraft);
+  };
 
   const rondasEnviadas = metadatosFolio.rondasEnviadas ?? 0;
   const carritoActivoVacio = !carritoTieneProductos(carrito.snapshot);
@@ -681,6 +733,16 @@ export default function MesaCarritoPanel({
         </p>
       ) : null}
 
+      {errorJornadaCerradaMesa ? (
+        <p className="header-jornada-cerrada-mensaje" role="status">
+          {errorJornadaCerradaMesa}
+        </p>
+      ) : mesaBloqueadaPorJornadaCerrada ? (
+        <p className="header-jornada-cerrada-mensaje" role="status">
+          {MENSAJE_JORNADA_CERRADA_OPERAR_MESAS}
+        </p>
+      ) : null}
+
       {folioAjenoEnmascarado ? (
         <p className="formulario-aviso" role="status">
           Mesa ocupada por otro usuario. No puedes ver ni modificar este pedido.
@@ -701,26 +763,48 @@ export default function MesaCarritoPanel({
             folioId={folioId}
             onRondasCambiadas={handleRondasCambiadas}
           />
-          <SelectorProductosPedidoConModal
-            productos={productosOrdenados}
-            variantesCtx={variantesCtx}
-            frecuenciaCategorias={frecuenciaCategorias}
-            frecuenciaLista={frecuenciaLista}
-            categoriaActiva={carrito.categoriaPedidoActiva}
-            onCategoriaChange={carrito.setCategoriaPedidoActiva}
-            onAgregarDirecto={carrito.agregarProductoAlPedido}
-            onConfirmarLinea={carrito.agregarLineaConVariantes}
-          />
+          <div
+            className={
+              mesaBloqueadaPorJornadaCerrada ? 'mesa-selector-jornada-cerrada' : undefined
+            }
+          >
+            <SelectorProductosPedidoConModal
+              productos={productosOrdenados}
+              variantesCtx={variantesCtx}
+              frecuenciaCategorias={frecuenciaCategorias}
+              frecuenciaLista={frecuenciaLista}
+              categoriaActiva={carrito.categoriaPedidoActiva}
+              onCategoriaChange={carrito.setCategoriaPedidoActiva}
+              onAgregarDirecto={agregarProductoAlPedidoMesa}
+              onConfirmarLinea={agregarLineaConVariantesMesa}
+            />
+          </div>
           <PedidoLineasCarrito
             lineas={carrito.lineasPedidoConProducto}
             productos={productos}
             variantesCtx={variantesCtx}
             totalPedido={carrito.totalPedido}
             colapsablePorDefecto
-            onAjustarCantidad={carrito.ajustarCantidadLinea}
-            onActualizarCantidad={carrito.actualizarCantidadLinea}
-            onEliminarLinea={carrito.eliminarLinea}
-            onCambiarVariante={carrito.cambiarVarianteLinea}
+            onAjustarCantidad={
+              mesaBloqueadaPorJornadaCerrada
+                ? () => setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS)
+                : carrito.ajustarCantidadLinea
+            }
+            onActualizarCantidad={
+              mesaBloqueadaPorJornadaCerrada
+                ? () => setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS)
+                : carrito.actualizarCantidadLinea
+            }
+            onEliminarLinea={
+              mesaBloqueadaPorJornadaCerrada
+                ? () => setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS)
+                : carrito.eliminarLinea
+            }
+            onCambiarVariante={
+              mesaBloqueadaPorJornadaCerrada
+                ? () => setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS)
+                : carrito.cambiarVarianteLinea
+            }
           >
             <div className="mesa-carrito-acciones">
               <div className="mesa-carrito-acciones-botones">

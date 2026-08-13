@@ -779,6 +779,22 @@
   box-shadow: 0 0 0 2px rgba(20, 83, 45, 0.15);
 }
 
+.mesa-tarjeta-jornada-cerrada {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: #f1f5f9;
+}
+
+.mesa-tarjeta-jornada-cerrada:hover {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+}
+
+.mesa-selector-jornada-cerrada {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .mesa-tarjeta-numero {
   font-size: 1rem;
   font-weight: 700;

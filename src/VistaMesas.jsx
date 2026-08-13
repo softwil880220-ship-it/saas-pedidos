@@ -27,6 +27,8 @@ const TABS_MESAS = [
 
 export const CANTIDAD_MESAS = 10;
 
+const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
+
 export default function VistaMesas({
   productos,
   productosOrdenados,
@@ -36,6 +38,7 @@ export default function VistaMesas({
   negocioId,
   usuarioId,
   rol,
+  jornadaAbierta,
 }) {
   const [hidrato, setHidrato] = useState(false);
   const [errorHidratacion, setErrorHidratacion] = useState(null);
@@ -245,7 +248,7 @@ export default function VistaMesas({
   );
 
   const abrirMesa = (numero) => {
-    if (!hidrato) return;
+    if (!hidrato || !jornadaAbierta?.id) return;
 
     const folioExistente = obtenerFolioAbiertoPorMesa(numero);
     setPanelMesa({ numero, folioId: folioExistente });
@@ -282,6 +285,8 @@ export default function VistaMesas({
     },
     [sincronizarOcupacion]
   );
+
+  const mesaBloqueadaPorJornadaCerrada = !jornadaAbierta?.id;
 
   if (!hidrato && !errorHidratacion) {
     return (
@@ -322,6 +327,11 @@ export default function VistaMesas({
 
       {tabActivo === 'activas' ? (
         <>
+          {mesaBloqueadaPorJornadaCerrada ? (
+            <p className="header-jornada-cerrada-mensaje" role="status">
+              {MENSAJE_JORNADA_CERRADA_OPERAR_MESAS}
+            </p>
+          ) : null}
           <div className="vista-mesas-grilla" role="list" aria-label="Mesas del local">
             {mesas.map(({ numero, ocupada }) => {
               const activa = panelMesa?.numero === numero;
@@ -333,9 +343,10 @@ export default function VistaMesas({
                   role="listitem"
                   className={`mesa-tarjeta${ocupada ? ' mesa-tarjeta-ocupada' : ' mesa-tarjeta-disponible'}${
                     activa ? ' mesa-tarjeta-activa' : ''
-                  }`}
+                  }${mesaBloqueadaPorJornadaCerrada ? ' mesa-tarjeta-jornada-cerrada' : ''}`}
                   onClick={() => abrirMesa(numero)}
                   aria-pressed={activa}
+                  aria-disabled={mesaBloqueadaPorJornadaCerrada}
                 >
                   <span className="mesa-tarjeta-numero">Mesa {numero}</span>
                   <span className="mesa-tarjeta-estado">{ocupada ? 'Ocupada' : 'Disponible'}</span>
@@ -358,6 +369,7 @@ export default function VistaMesas({
               negocioId={negocioId}
               usuarioId={usuarioId}
               rol={rol}
+              jornadaAbierta={jornadaAbierta}
               onCerrar={cerrarPanel}
               onFolioCreado={handleFolioCreado}
               onFolioEliminado={handleFolioEliminado}

@@ -4993,6 +4993,7 @@ function Dashboard() {
                   negocioId={negocioId}
                   usuarioId={usuario?.id}
                   rol={rol}
+                  jornadaAbierta={jornadaAbierta}
                 />
               ) : esModoMostrador ? (
                 <VistaMostrador
