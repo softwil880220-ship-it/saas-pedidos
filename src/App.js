@@ -4923,6 +4923,7 @@ function Dashboard() {
                   variantesCtx={variantesCtx}
                   negocioId={negocioId}
                   usuarioId={usuario?.id}
+                  jornadaAbierta={jornadaAbierta}
                 />
               ) : (
                 <>

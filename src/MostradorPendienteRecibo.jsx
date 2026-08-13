@@ -19,6 +19,7 @@ export default function MostradorPendienteRecibo({
   actualizando,
   editando,
   eliminando,
+  claseBotonJornadaCerrada = '',
   onEntregado,
   onEditar,
   onEliminar,
@@ -77,7 +78,7 @@ export default function MostradorPendienteRecibo({
       <div className="mostrador-recibo-acciones">
         <button
           type="button"
-          className="editar-btn mostrador-recibo-editar"
+          className={`editar-btn mostrador-recibo-editar${claseBotonJornadaCerrada}`}
           disabled={editando || eliminando || actualizando}
           onClick={() => onEditar?.(pedido)}
         >
@@ -85,7 +86,7 @@ export default function MostradorPendienteRecibo({
         </button>
         <button
           type="button"
-          className="eliminar-btn mostrador-recibo-eliminar"
+          className={`eliminar-btn mostrador-recibo-eliminar${claseBotonJornadaCerrada}`}
           disabled={editando || eliminando || actualizando}
           onClick={() => onEliminar?.(pedido)}
         >

@@ -45,42 +45,18 @@ const FORMAS_PAGO = [
 
 const DURACION_MENSAJE_EXITO_MS = 4500;
 
-function obtenerFechaHoy() {
-  const hoy = new Date();
-  const year = hoy.getFullYear();
-  const month = String(hoy.getMonth() + 1).padStart(2, '0');
-  const day = String(hoy.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+const MENSAJE_REGISTRAR_VENTA_SIN_JORNADA_MOSTRADOR =
+  'Debes abrir una jornada antes de registrar pedidos en mostrador.';
 
-function obtenerRangoFechaClave(claveFecha) {
-  const [year, month, day] = claveFecha.split('-').map(Number);
-  return {
-    inicio: new Date(year, month - 1, day, 0, 0, 0, 0),
-    fin: new Date(year, month - 1, day, 23, 59, 59, 999),
-  };
-}
+const MENSAJE_EDITAR_VENTA_SIN_JORNADA_MOSTRADOR =
+  'Debes abrir una jornada antes de editar pedidos en mostrador.';
 
-async function cargarArqueoDelDia(negocioId) {
-  const hoyClave = obtenerFechaHoy();
-  const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
-  const { data, error } = await queryConNegocio(
-    supabase
-      .from('arqueos')
-      .select('id')
-      .gte('created_at', inicio.toISOString())
-      .lte('created_at', fin.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1),
-    negocioId
-  );
+const MENSAJE_ELIMINAR_VENTA_SIN_JORNADA_MOSTRADOR =
+  'Debes abrir una jornada antes de eliminar pedidos en mostrador.';
 
-  if (error) {
-    throw new Error(error.message);
-  }
+const MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS = 'Abre una jornada para registrar ventas';
 
-  return (data || [])[0] ?? null;
-}
+const TITULO_MODAL_MOSTRADOR_SIN_JORNADA = 'Pedidos de mostrador';
 
 function etiquetaFormaPago(valor) {
   return FORMAS_PAGO.find((forma) => forma.value === valor)?.label || null;
@@ -94,6 +70,7 @@ export default function VistaMostrador({
   variantesCtx,
   negocioId,
   usuarioId,
+  jornadaAbierta,
 }) {
   const [tabActivo, setTabActivo] = useState(() => cargarTabMostrador());
   const [mostradorFlujoCocina, setMostradorFlujoCocina] = useState(0);
@@ -106,6 +83,11 @@ export default function VistaMostrador({
   const [modalPinAbierto, setModalPinAbierto] = useState(false);
   const [pedidoPendienteAutorizacion, setPedidoPendienteAutorizacion] = useState(null);
   const [accionPendientePin, setAccionPendientePin] = useState(null);
+  const [modalJornadaCerradaAbierto, setModalJornadaCerradaAbierto] = useState(false);
+  const [mensajeModalJornadaCerrada, setMensajeModalJornadaCerrada] = useState(null);
+  const [tituloModalJornadaCerrada, setTituloModalJornadaCerrada] = useState(
+    TITULO_MODAL_MOSTRADOR_SIN_JORNADA
+  );
   const snapshotInicialRef = useRef(cargarCarritoMostradorDisponible() ?? undefined);
   const mensajeExitoTimerRef = useRef(null);
   const snapshotEdicionRef = useRef(null);
@@ -228,22 +210,44 @@ export default function VistaMostrador({
     setMensajeExito(null);
   };
 
+  const abrirModalJornadaCerrada = (
+    mensaje,
+    titulo = TITULO_MODAL_MOSTRADOR_SIN_JORNADA
+  ) => {
+    setMensajeModalJornadaCerrada(mensaje);
+    setTituloModalJornadaCerrada(titulo);
+    setModalJornadaCerradaAbierto(true);
+  };
+
+  const cerrarModalJornadaCerrada = () => {
+    setModalJornadaCerradaAbierto(false);
+    setMensajeModalJornadaCerrada(null);
+    setTituloModalJornadaCerrada(TITULO_MODAL_MOSTRADOR_SIN_JORNADA);
+  };
+
+  const verificarJornadaBloqueaAccion = (mensaje) => {
+    if (!jornadaAbierta?.id) {
+      abrirModalJornadaCerrada(mensaje);
+      return true;
+    }
+    return false;
+  };
+
+  const mostradorBloqueadoPorJornadaCerrada = !jornadaAbierta?.id;
+
+  const claseBotonJornadaCerrada = mostradorBloqueadoPorJornadaCerrada
+    ? ' btn-accion-jornada-cerrada'
+    : '';
+
   const registrarVenta = async (event) => {
     event.preventDefault();
     setErrorGuardar(null);
 
     if (carrito.totalPedido <= 0) return;
 
-    try {
-      const arqueo = await cargarArqueoDelDia(negocioId);
-      if (arqueo) {
-        setErrorGuardar(
-          'No se puede registrar la venta: el arqueo del día ya fue realizado.'
-        );
-        return;
-      }
-    } catch (err) {
-      setErrorGuardar(err.message || 'No se pudo verificar el arqueo del día.');
+    if (
+      verificarJornadaBloqueaAccion(MENSAJE_REGISTRAR_VENTA_SIN_JORNADA_MOSTRADOR)
+    ) {
       return;
     }
 
@@ -306,36 +310,43 @@ export default function VistaMostrador({
     setActualizandoEntregaId(null);
   };
 
-  const verificarArqueoBloqueaAccion = async () => {
-    const arqueo = await cargarArqueoDelDia(negocioId);
-    if (arqueo) {
-      setErrorGuardar(
-        'No se puede modificar el pedido: el arqueo del día ya fue realizado.'
-      );
-      return true;
-    }
-    return false;
-  };
-
   const cerrarPin = () => {
     setModalPinAbierto(false);
     setPedidoPendienteAutorizacion(null);
     setAccionPendientePin(null);
   };
 
-  const solicitarAutorizacion = async (pedido, accion) => {
+  const solicitarAutorizacion = (pedido, accion) => {
     setErrorGuardar(null);
 
-    try {
-      if (await verificarArqueoBloqueaAccion()) return;
-    } catch (err) {
-      setErrorGuardar(err.message || 'No se pudo verificar el arqueo del día.');
-      return;
-    }
+    const mensajeBloqueo =
+      accion === 'eliminar'
+        ? MENSAJE_ELIMINAR_VENTA_SIN_JORNADA_MOSTRADOR
+        : MENSAJE_EDITAR_VENTA_SIN_JORNADA_MOSTRADOR;
+
+    if (verificarJornadaBloqueaAccion(mensajeBloqueo)) return;
 
     setPedidoPendienteAutorizacion(pedido);
     setAccionPendientePin(accion);
     setModalPinAbierto(true);
+  };
+
+  const intentarEditarMostrador = (pedido) => {
+    if (mostradorBloqueadoPorJornadaCerrada) {
+      abrirModalJornadaCerrada(MENSAJE_EDITAR_VENTA_SIN_JORNADA_MOSTRADOR);
+      return;
+    }
+
+    solicitarAutorizacion(pedido, 'editar');
+  };
+
+  const intentarEliminarMostrador = (pedido) => {
+    if (mostradorBloqueadoPorJornadaCerrada) {
+      abrirModalJornadaCerrada(MENSAJE_ELIMINAR_VENTA_SIN_JORNADA_MOSTRADOR);
+      return;
+    }
+
+    solicitarAutorizacion(pedido, 'eliminar');
   };
 
   const iniciarEdicionPedido = (pedido) => {
@@ -405,10 +416,7 @@ export default function VistaMostrador({
 
     setErrorGuardar(null);
 
-    try {
-      if (await verificarArqueoBloqueaAccion()) return;
-    } catch (err) {
-      setErrorGuardar(err.message || 'No se pudo verificar el arqueo del día.');
+    if (verificarJornadaBloqueaAccion(MENSAJE_EDITAR_VENTA_SIN_JORNADA_MOSTRADOR)) {
       return;
     }
 
@@ -629,7 +637,8 @@ export default function VistaMostrador({
                   disabled={
                     productos.length === 0 ||
                     carrito.totalPedido <= 0 ||
-                    guardandoEdicion
+                    guardandoEdicion ||
+                    !jornadaAbierta
                   }
                 >
                   {enModoEdicion
@@ -639,6 +648,11 @@ export default function VistaMostrador({
                     : 'Registrar y cobrar'}
                 </button>
               </div>
+              {!jornadaAbierta ? (
+                <p className="header-jornada-cerrada-mensaje" role="status">
+                  {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
+                </p>
+              ) : null}
               {errorGuardar ? (
                 <p className="formulario-error-guardar" role="alert">
                   {errorGuardar}
@@ -680,9 +694,10 @@ export default function VistaMostrador({
                   actualizando={actualizandoEntregaId === pedido.id}
                   editando={editandoPedidoId === pedido.id}
                   eliminando={eliminandoPedidoId === pedido.id}
+                  claseBotonJornadaCerrada={claseBotonJornadaCerrada}
                   onEntregado={marcarEntregado}
-                  onEditar={(item) => void solicitarAutorizacion(item, 'editar')}
-                  onEliminar={(item) => void solicitarAutorizacion(item, 'eliminar')}
+                  onEditar={intentarEditarMostrador}
+                  onEliminar={intentarEliminarMostrador}
                 />
               ))}
             </div>
@@ -724,6 +739,38 @@ export default function VistaMostrador({
         onClose={cerrarPin}
         onAutorizado={onAutorizadoPin}
       />
+
+      {modalJornadaCerradaAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalJornadaCerrada}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mostrador-jornada-cerrada-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="mostrador-jornada-cerrada-modal-titulo" className="retiro-modal-titulo">
+              {tituloModalJornadaCerrada}
+            </h2>
+            <p className="retiro-modal-error" role="alert">
+              {mensajeModalJornadaCerrada}
+            </p>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-cancelar"
+                onClick={cerrarModalJornadaCerrada}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
