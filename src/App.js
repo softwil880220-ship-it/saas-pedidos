@@ -446,6 +446,23 @@ const MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS = 'Abre una jornada para registra
 const TITULO_MODAL_PEDIDO_BLOQUEADO_ARQUEO = 'Arqueo de caja';
 const TITULO_MODAL_VENTA_SIN_JORNADA = 'Ventas en caja';
 
+const MENSAJE_GUARDAR_PEDIDO_SIN_JORNADA =
+  'Debes abrir una jornada antes de guardar pedidos para recoger o domicilio.';
+
+const MENSAJE_EDITAR_PEDIDO_SIN_JORNADA =
+  'Debes abrir una jornada antes de editar pedidos para recoger o domicilio.';
+
+const MENSAJE_ELIMINAR_PEDIDO_SIN_JORNADA =
+  'Debes abrir una jornada antes de eliminar pedidos para recoger o domicilio.';
+
+const MENSAJE_AVANZAR_PEDIDO_SIN_JORNADA =
+  'Debes abrir una jornada antes de avanzar el estado de este pedido.';
+
+const MENSAJE_RETROCEDER_PEDIDO_SIN_JORNADA =
+  'Debes abrir una jornada antes de retroceder el estado de este pedido.';
+
+const TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA = 'Pedidos para recoger/domicilio';
+
 const MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO =
   'No puedes eliminar esta venta porque existe un arqueo de caja registrado para este día.';
 
@@ -3119,9 +3136,11 @@ function Dashboard() {
       return false;
     }
 
-    const arqueo = await cargarArqueoDelDia();
-    if (arqueo) {
-      abrirModalPedidoBloqueadoArqueo(mensajeBloqueo);
+    if (!jornadaAbierta?.id) {
+      abrirModalPedidoBloqueadoArqueo(
+        mensajeBloqueo,
+        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+      );
       return true;
     }
 
@@ -3134,7 +3153,7 @@ function Dashboard() {
         pedido,
         pedido.tipo === 'presencial'
           ? MENSAJE_ELIMINAR_VENTA_SIN_JORNADA
-          : MENSAJE_ELIMINAR_PEDIDO_BLOQUEADO_ARQUEO
+          : MENSAJE_ELIMINAR_PEDIDO_SIN_JORNADA
       );
       if (bloqueado) return;
     } catch (err) {
@@ -3182,7 +3201,7 @@ function Dashboard() {
         pedido,
         pedido.tipo === 'presencial'
           ? MENSAJE_EDITAR_VENTA_SIN_JORNADA
-          : MENSAJE_EDITAR_PEDIDO_BLOQUEADO_ARQUEO
+          : MENSAJE_EDITAR_PEDIDO_SIN_JORNADA
       );
       if (bloqueado) return;
     } catch (err) {
@@ -3227,6 +3246,36 @@ function Dashboard() {
     void intentarEliminarPedido(pedido);
   };
 
+  const pedidoWhatsappBloqueadoPorJornadaCerrada = !esModoPresencial && !jornadaAbierta?.id;
+
+  const claseBotonPedidoWhatsappJornadaCerrada = pedidoWhatsappBloqueadoPorJornadaCerrada
+    ? ' btn-accion-jornada-cerrada'
+    : '';
+
+  const intentarEditarPedidoWhatsapp = (pedido) => {
+    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_EDITAR_PEDIDO_SIN_JORNADA,
+        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+      );
+      return;
+    }
+
+    void intentarEditarPedido(pedido);
+  };
+
+  const intentarEliminarPedidoWhatsapp = (pedido) => {
+    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_ELIMINAR_PEDIDO_SIN_JORNADA,
+        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+      );
+      return;
+    }
+
+    void intentarEliminarPedido(pedido);
+  };
+
   const intentarAvanzarPedido = async (id) => {
     const pedido = pedidos.find((item) => item.id === id);
     if (!pedido) return;
@@ -3234,7 +3283,7 @@ function Dashboard() {
     try {
       const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
         pedido,
-        MENSAJE_AVANZAR_PEDIDO_BLOQUEADO_ARQUEO
+        MENSAJE_AVANZAR_PEDIDO_SIN_JORNADA
       );
       if (bloqueado) return;
     } catch (err) {
@@ -3254,7 +3303,7 @@ function Dashboard() {
     try {
       const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
         pedido,
-        MENSAJE_RETROCEDER_PEDIDO_BLOQUEADO_ARQUEO
+        MENSAJE_RETROCEDER_PEDIDO_SIN_JORNADA
       );
       if (bloqueado) return;
     } catch (err) {
@@ -3267,6 +3316,35 @@ function Dashboard() {
     await retrocederPedido(id);
   };
 
+  const intentarAvanzarPedidoWhatsapp = (id) => {
+    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_AVANZAR_PEDIDO_SIN_JORNADA,
+        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+      );
+      return;
+    }
+
+    const pedido = pedidos.find((item) => item.id === id);
+    if (!pedido || esStatusFinal(pedido.status, pedido.tipo_entrega)) {
+      return;
+    }
+
+    void intentarAvanzarPedido(id);
+  };
+
+  const intentarRetrocederPedidoWhatsapp = (id) => {
+    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_RETROCEDER_PEDIDO_SIN_JORNADA,
+        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+      );
+      return;
+    }
+
+    void intentarRetrocederPedido(id);
+  };
+
   const ejecutarGuardadoPedido = async (detallePedido, esPresencial) => {
     if (esPresencial) {
       if (!jornadaAbierta?.id) {
@@ -3277,15 +3355,10 @@ function Dashboard() {
         return;
       }
     } else {
-      try {
-        const arqueo = await cargarArqueoDelDia();
-        if (arqueo) {
-          abrirModalPedidoBloqueadoArqueo(MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO);
-          return;
-        }
-      } catch (err) {
+      if (!jornadaAbierta?.id) {
         abrirModalPedidoBloqueadoArqueo(
-          err.message || 'No se pudo verificar el arqueo del día.'
+          MENSAJE_GUARDAR_PEDIDO_SIN_JORNADA,
+          TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
         );
         return;
       }
@@ -4080,18 +4153,25 @@ function Dashboard() {
                                         {muestraRetroceder && (
                                           <button
                                             type="button"
-                                            className="retroceder-btn"
+                                            className={`retroceder-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
                                             disabled={otroEditando}
-                                            onClick={() => intentarRetrocederPedido(pedido.id)}
+                                            onClick={() =>
+                                              intentarRetrocederPedidoWhatsapp(pedido.id)
+                                            }
                                           >
                                             Retroceder
                                           </button>
                                         )}
                                         <button
                                           type="button"
-                                          className="avanzar-btn"
-                                          disabled={esFinal || otroEditando}
-                                          onClick={() => intentarAvanzarPedido(pedido.id)}
+                                          className={`avanzar-btn${
+                                            claseBotonPedidoWhatsappJornadaCerrada ||
+                                            (esFinal && !pedidoWhatsappBloqueadoPorJornadaCerrada)
+                                              ? ' btn-accion-jornada-cerrada'
+                                              : ''
+                                          }`}
+                                          disabled={otroEditando}
+                                          onClick={() => intentarAvanzarPedidoWhatsapp(pedido.id)}
                                         >
                                           Avanzar
                                         </button>
@@ -4140,17 +4220,17 @@ function Dashboard() {
                                   <div className="tarjeta-acciones-fila">
                                     <button
                                       type="button"
-                                      className="editar-btn"
+                                      className={`editar-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
                                       disabled={otroEditando}
-                                      onClick={() => intentarEditarPedido(pedido)}
+                                      onClick={() => intentarEditarPedidoWhatsapp(pedido)}
                                     >
                                       Editar
                                     </button>
                                     <button
                                       type="button"
-                                      className="eliminar-btn"
+                                      className={`eliminar-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
                                       disabled={otroEditando}
-                                      onClick={() => intentarEliminarPedido(pedido)}
+                                      onClick={() => intentarEliminarPedidoWhatsapp(pedido)}
                                     >
                                       Eliminar
                                     </button>
@@ -5138,11 +5218,20 @@ function Dashboard() {
                       <button
                         type="submit"
                         className="guardar-btn"
-                        disabled={productos.length === 0 || carritoWhatsapp.totalPedido <= 0}
+                        disabled={
+                          productos.length === 0 ||
+                          carritoWhatsapp.totalPedido <= 0 ||
+                          !jornadaAbierta
+                        }
                       >
                         Guardar pedido
                       </button>
                     </div>
+                    {!jornadaAbierta ? (
+                      <p className="header-jornada-cerrada-mensaje" role="status">
+                        {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
+                      </p>
+                    ) : null}
                     {errorGuardarPedido ? (
                       <p className="formulario-error-guardar" role="alert">
                         {errorGuardarPedido}

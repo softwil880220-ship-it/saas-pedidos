@@ -2804,12 +2804,13 @@
   color: #fff;
 }
 
-.avanzar-btn:hover:not(:disabled) {
+.avanzar-btn:hover:not(:disabled):not(.btn-accion-jornada-cerrada) {
   background: #166534;
 }
 
-.avanzar-btn:disabled {
-  background: #cbd5e1;
+.avanzar-btn:disabled,
+.avanzar-btn.btn-accion-jornada-cerrada {
+  background: #94a3b8;
   cursor: not-allowed;
 }
 
@@ -2818,12 +2819,13 @@
   color: #fff;
 }
 
-.retroceder-btn:hover:not(:disabled) {
+.retroceder-btn:hover:not(:disabled):not(.btn-accion-jornada-cerrada) {
   background: #b45309;
 }
 
-.retroceder-btn:disabled {
-  background: #cbd5e1;
+.retroceder-btn:disabled,
+.retroceder-btn.btn-accion-jornada-cerrada {
+  background: #94a3b8;
   cursor: not-allowed;
 }
 
