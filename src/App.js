@@ -432,6 +432,20 @@ const MENSAJE_FONDO_FIJO_JORNADA_CERRADA =
 const MENSAJE_RETIRO_SIN_JORNADA_ABIERTA =
   'Debes abrir una jornada antes de agregar retiros de efectivo.';
 
+const MENSAJE_REGISTRAR_VENTA_SIN_JORNADA =
+  'Debes abrir una jornada antes de registrar ventas en caja.';
+
+const MENSAJE_EDITAR_VENTA_SIN_JORNADA =
+  'Debes abrir una jornada antes de editar ventas en caja.';
+
+const MENSAJE_ELIMINAR_VENTA_SIN_JORNADA =
+  'Debes abrir una jornada antes de eliminar ventas en caja.';
+
+const MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS = 'Abre una jornada para registrar ventas';
+
+const TITULO_MODAL_PEDIDO_BLOQUEADO_ARQUEO = 'Arqueo de caja';
+const TITULO_MODAL_VENTA_SIN_JORNADA = 'Ventas en caja';
+
 const MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO =
   'No puedes eliminar esta venta porque existe un arqueo de caja registrado para este día.';
 
@@ -1183,6 +1197,9 @@ function Dashboard() {
   const [modalPedidoBloqueadoArqueoAbierto, setModalPedidoBloqueadoArqueoAbierto] =
     useState(false);
   const [mensajePedidoBloqueadoArqueo, setMensajePedidoBloqueadoArqueo] = useState(null);
+  const [tituloPedidoBloqueadoArqueo, setTituloPedidoBloqueadoArqueo] = useState(
+    TITULO_MODAL_PEDIDO_BLOQUEADO_ARQUEO
+  );
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '' });
   const [guardandoRetiro, setGuardandoRetiro] = useState(false);
   const [errorRetiro, setErrorRetiro] = useState(null);
@@ -3071,14 +3088,19 @@ function Dashboard() {
   const pedidoEsDelDiaHoy = (pedido) =>
     formatearClaveFecha(new Date(pedido.created_at || 0)) === hoyClave;
 
-  const abrirModalPedidoBloqueadoArqueo = (mensaje) => {
+  const abrirModalPedidoBloqueadoArqueo = (
+    mensaje,
+    titulo = TITULO_MODAL_PEDIDO_BLOQUEADO_ARQUEO
+  ) => {
     setMensajePedidoBloqueadoArqueo(mensaje);
+    setTituloPedidoBloqueadoArqueo(titulo);
     setModalPedidoBloqueadoArqueoAbierto(true);
   };
 
   const cerrarModalPedidoBloqueadoArqueo = () => {
     setModalPedidoBloqueadoArqueoAbierto(false);
     setMensajePedidoBloqueadoArqueo(null);
+    setTituloPedidoBloqueadoArqueo(TITULO_MODAL_PEDIDO_BLOQUEADO_ARQUEO);
   };
 
   const verificarArqueoDelDiaBloqueaPedido = async (pedido, mensajeBloqueo) => {
@@ -3086,6 +3108,14 @@ function Dashboard() {
       pedido.tipo === 'presencial' ? filtroFecha === hoyClave : pedidoEsDelDiaHoy(pedido);
 
     if (!debeVerificar) {
+      return false;
+    }
+
+    if (pedido.tipo === 'presencial') {
+      if (!jornadaAbierta?.id) {
+        abrirModalPedidoBloqueadoArqueo(mensajeBloqueo, TITULO_MODAL_VENTA_SIN_JORNADA);
+        return true;
+      }
       return false;
     }
 
@@ -3103,7 +3133,7 @@ function Dashboard() {
       const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
         pedido,
         pedido.tipo === 'presencial'
-          ? MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO
+          ? MENSAJE_ELIMINAR_VENTA_SIN_JORNADA
           : MENSAJE_ELIMINAR_PEDIDO_BLOQUEADO_ARQUEO
       );
       if (bloqueado) return;
@@ -3151,7 +3181,7 @@ function Dashboard() {
       const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
         pedido,
         pedido.tipo === 'presencial'
-          ? MENSAJE_EDITAR_VENTA_BLOQUEADA_ARQUEO
+          ? MENSAJE_EDITAR_VENTA_SIN_JORNADA
           : MENSAJE_EDITAR_PEDIDO_BLOQUEADO_ARQUEO
       );
       if (bloqueado) return;
@@ -3165,6 +3195,36 @@ function Dashboard() {
     setPedidoPendienteAutorizacion(pedido);
     setAccionPendienteAutorizacionPedido('editar');
     setModalAutorizacionPinPedidoAbierto(true);
+  };
+
+  const ventaCajaBloqueadaPorJornadaCerrada = esModoPresencial && !jornadaAbierta;
+
+  const claseBotonVentaJornadaCerrada = ventaCajaBloqueadaPorJornadaCerrada
+    ? ' btn-accion-jornada-cerrada'
+    : '';
+
+  const intentarEditarVentaCaja = (pedido) => {
+    if (ventaCajaBloqueadaPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_EDITAR_VENTA_SIN_JORNADA,
+        TITULO_MODAL_VENTA_SIN_JORNADA
+      );
+      return;
+    }
+
+    void intentarEditarPedido(pedido);
+  };
+
+  const intentarEliminarVentaCaja = (pedido) => {
+    if (ventaCajaBloqueadaPorJornadaCerrada) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_ELIMINAR_VENTA_SIN_JORNADA,
+        TITULO_MODAL_VENTA_SIN_JORNADA
+      );
+      return;
+    }
+
+    void intentarEliminarPedido(pedido);
   };
 
   const intentarAvanzarPedido = async (id) => {
@@ -3208,21 +3268,27 @@ function Dashboard() {
   };
 
   const ejecutarGuardadoPedido = async (detallePedido, esPresencial) => {
-    try {
-      const arqueo = await cargarArqueoDelDia();
-      if (arqueo) {
+    if (esPresencial) {
+      if (!jornadaAbierta?.id) {
         abrirModalPedidoBloqueadoArqueo(
-          esPresencial
-            ? MENSAJE_REGISTRAR_VENTA_BLOQUEADA_ARQUEO
-            : MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO
+          MENSAJE_REGISTRAR_VENTA_SIN_JORNADA,
+          TITULO_MODAL_VENTA_SIN_JORNADA
         );
         return;
       }
-    } catch (err) {
-      abrirModalPedidoBloqueadoArqueo(
-        err.message || 'No se pudo verificar el arqueo del día.'
-      );
-      return;
+    } else {
+      try {
+        const arqueo = await cargarArqueoDelDia();
+        if (arqueo) {
+          abrirModalPedidoBloqueadoArqueo(MENSAJE_GUARDAR_PEDIDO_BLOQUEADO_ARQUEO);
+          return;
+        }
+      } catch (err) {
+        abrirModalPedidoBloqueadoArqueo(
+          err.message || 'No se pudo verificar el arqueo del día.'
+        );
+        return;
+      }
     }
 
     const resumen = esPresencial
@@ -3862,17 +3928,17 @@ function Dashboard() {
                       <span className="reporte-acciones">
                         <button
                           type="button"
-                          className="editar-btn"
+                          className={`editar-btn${claseBotonVentaJornadaCerrada}`}
                           disabled={otroEditando}
-                          onClick={() => intentarEditarPedido(pedido)}
+                          onClick={() => intentarEditarVentaCaja(pedido)}
                         >
                           Editar
                         </button>
                         <button
                           type="button"
-                          className="eliminar-btn"
+                          className={`eliminar-btn${claseBotonVentaJornadaCerrada}`}
                           disabled={otroEditando}
-                          onClick={() => intentarEliminarPedido(pedido)}
+                          onClick={() => intentarEliminarVentaCaja(pedido)}
                         >
                           Eliminar
                         </button>
@@ -3963,17 +4029,17 @@ function Dashboard() {
                                 <div className="tarjeta-acciones">
                                   <button
                                     type="button"
-                                    className="editar-btn"
+                                    className={`editar-btn${claseBotonVentaJornadaCerrada}`}
                                     disabled={otroEditando}
-                                    onClick={() => intentarEditarPedido(pedido)}
+                                    onClick={() => intentarEditarVentaCaja(pedido)}
                                   >
                                     Editar
                                   </button>
                                   <button
                                     type="button"
-                                    className="eliminar-btn"
+                                    className={`eliminar-btn${claseBotonVentaJornadaCerrada}`}
                                     disabled={otroEditando}
-                                    onClick={() => intentarEliminarPedido(pedido)}
+                                    onClick={() => intentarEliminarVentaCaja(pedido)}
                                   >
                                     Eliminar
                                   </button>
@@ -4406,7 +4472,7 @@ function Dashboard() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="pedido-bloqueado-arqueo-modal-titulo" className="retiro-modal-titulo">
-              Arqueo de caja
+              {tituloPedidoBloqueadoArqueo}
             </h2>
             <p className="retiro-modal-error" role="alert">
               {mensajePedidoBloqueadoArqueo}
@@ -5028,11 +5094,20 @@ function Dashboard() {
                       <button
                         type="submit"
                         className="guardar-btn"
-                        disabled={productos.length === 0 || carrito.totalPedido <= 0}
+                        disabled={
+                          productos.length === 0 ||
+                          carrito.totalPedido <= 0 ||
+                          !jornadaAbierta
+                        }
                       >
                         Registrar venta
                       </button>
                     </div>
+                    {esModoPresencial && !jornadaAbierta ? (
+                      <p className="header-jornada-cerrada-mensaje" role="status">
+                        {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
+                      </p>
+                    ) : null}
                     {errorGuardarPedido ? (
                       <p className="formulario-error-guardar" role="alert">
                         {errorGuardarPedido}

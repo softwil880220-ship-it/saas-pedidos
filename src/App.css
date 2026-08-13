@@ -2260,8 +2260,14 @@
   color: #fff;
 }
 
-.editar-btn:hover {
+.editar-btn:hover:not(:disabled):not(.btn-accion-jornada-cerrada) {
   background: #1d4ed8;
+}
+
+.editar-btn:disabled,
+.editar-btn.btn-accion-jornada-cerrada {
+  background: #94a3b8;
+  cursor: not-allowed;
 }
 
 .eliminar-btn {
@@ -2269,8 +2275,14 @@
   color: #fff;
 }
 
-.eliminar-btn:hover {
+.eliminar-btn:hover:not(:disabled):not(.btn-accion-jornada-cerrada) {
   background: #b91c1c;
+}
+
+.eliminar-btn:disabled,
+.eliminar-btn.btn-accion-jornada-cerrada {
+  background: #94a3b8;
+  cursor: not-allowed;
 }
 
 .cancelar-btn {
