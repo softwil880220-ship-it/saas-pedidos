@@ -1,4 +1,5 @@
 import { queryConNegocio, payloadConNegocio } from './tenantHelpers';
+import { redondearMoneda } from './pedidoCarritoCalculos';
 
 export const JORNADA_ESTADO_ABIERTA = 'abierta';
 export const JORNADA_ESTADO_CERRADA = 'cerrada';
@@ -106,4 +107,67 @@ export async function cerrarJornada(supabase, negocioId, jornadaId, usuarioNegoc
   );
 
   return { data: data ?? null, error };
+}
+
+export async function cargarRetirosJornada(supabase, negocioId, jornadaId) {
+  if (!negocioId || !jornadaId) return { total: 0, error: null };
+
+  const { data, error } = await queryConNegocio(
+    supabase.from('retiros').select('monto').eq('jornada_id', jornadaId),
+    negocioId
+  );
+
+  if (error) {
+    return { total: 0, error };
+  }
+
+  const total = redondearMoneda(
+    (data || []).reduce((suma, retiro) => suma + (Number(retiro.monto) || 0), 0)
+  );
+
+  return { total, error: null };
+}
+
+export async function cargarFondoFijoJornada(supabase, negocioId, jornadaId) {
+  if (!negocioId || !jornadaId) {
+    return { monto: 0, id: null, jornada_id: null, error: null };
+  }
+
+  const { data, error } = await queryConNegocio(
+    supabase
+      .from('fondos_fijos')
+      .select('id, monto, jornada_id')
+      .eq('jornada_id', jornadaId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    negocioId
+  );
+
+  if (error) {
+    return { monto: 0, id: null, jornada_id: null, error };
+  }
+
+  return {
+    monto: data ? redondearMoneda(Number(data.monto) || 0) : 0,
+    id: data?.id ?? null,
+    jornada_id: data?.jornada_id ?? null,
+    error: null,
+  };
+}
+
+export async function jornadaEstaCerrada(supabase, jornadaId) {
+  if (!jornadaId) return false;
+
+  const { data, error } = await supabase
+    .from('jornadas')
+    .select('estado')
+    .eq('id', jornadaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data?.estado === JORNADA_ESTADO_CERRADA;
 }

@@ -81,11 +81,14 @@ import useVariantesCtx from './useVariantesCtx';
 import useCarritoPedido from './useCarritoPedido';
 import {
   abrirJornada,
+  cargarFondoFijoJornada,
   cargarJornadaAbierta,
   cargarMesasAbiertasJornada,
+  cargarRetirosJornada,
   cerrarJornada,
   esErrorJornadaDuplicada,
   formatearHoraJornada,
+  jornadaEstaCerrada,
   MENSAJE_JORNADA_YA_ABIERTA,
   puedeGestionarJornada,
 } from './jornadaHelpers';
@@ -417,14 +420,17 @@ function crearArqueoContadoVacio() {
   };
 }
 
-const MENSAJE_ARQUEO_DIA_EXISTENTE =
-  'Ya existe un arqueo de caja registrado para este día.';
+const MENSAJE_ARQUEO_SIN_JORNADA_ABIERTA =
+  'Debes abrir una jornada antes de hacer un arqueo de caja.';
 
-const MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO =
-  'No puedes eliminar este Fondo fijo del día porque existe un arqueo de caja registrado para este día.';
+const MENSAJE_FONDO_FIJO_SIN_JORNADA_ABIERTA =
+  'Debes abrir una jornada antes de registrar un fondo fijo.';
 
-const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
-  'No puedes agregar retiros de efectivo porque existe un arqueo de caja registrado para este día.';
+const MENSAJE_FONDO_FIJO_JORNADA_CERRADA =
+  'No puedes eliminar este fondo fijo porque la jornada a la que pertenece ya está cerrada.';
+
+const MENSAJE_RETIRO_SIN_JORNADA_ABIERTA =
+  'Debes abrir una jornada antes de agregar retiros de efectivo.';
 
 const MENSAJE_ELIMINAR_VENTA_BLOQUEADA_ARQUEO =
   'No puedes eliminar esta venta porque existe un arqueo de caja registrado para este día.';
@@ -458,14 +464,6 @@ function obtenerCampoSistemaArqueo(formaPago) {
 function obtenerCampoContadoArqueo(formaPago) {
   if (formaPago === 'link_pago') return 'link_contado';
   return `${formaPago}_contado`;
-}
-
-function crearArqueoContadoDesdeRegistro(arqueo) {
-  return FORMAS_PAGO.reduce((acc, { value }) => {
-    const monto = Number(arqueo?.[obtenerCampoContadoArqueo(value)]);
-    acc[value] = Number.isFinite(monto) ? String(monto) : '0';
-    return acc;
-  }, {});
 }
 
 function normalizarMontoContadoArqueo(valor) {
@@ -1180,6 +1178,8 @@ function Dashboard() {
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
   const [modalRetiroBloqueadoAbierto, setModalRetiroBloqueadoAbierto] = useState(false);
   const [mensajeRetiroBloqueado, setMensajeRetiroBloqueado] = useState(null);
+  const [modalArqueoBloqueadoAbierto, setModalArqueoBloqueadoAbierto] = useState(false);
+  const [mensajeArqueoBloqueado, setMensajeArqueoBloqueado] = useState(null);
   const [modalPedidoBloqueadoArqueoAbierto, setModalPedidoBloqueadoArqueoAbierto] =
     useState(false);
   const [mensajePedidoBloqueadoArqueo, setMensajePedidoBloqueadoArqueo] = useState(null);
@@ -1194,6 +1194,7 @@ function Dashboard() {
   const [retirosDelDia, setRetirosDelDia] = useState(0);
   const [fondoFijoDelDia, setFondoFijoDelDia] = useState(0);
   const [fondoFijoHoyId, setFondoFijoHoyId] = useState(null);
+  const [fondoFijoJornadaId, setFondoFijoJornadaId] = useState(null);
   const [modalFondoFijoAbierto, setModalFondoFijoAbierto] = useState(false);
   const [fondoFijoForm, setFondoFijoForm] = useState({ monto: '' });
   const [cargandoFondoFijoDatos, setCargandoFondoFijoDatos] = useState(false);
@@ -1214,7 +1215,7 @@ function Dashboard() {
   const [pedidoPendienteAutorizacion, setPedidoPendienteAutorizacion] = useState(null);
   const [accionPendienteAutorizacionPedido, setAccionPendienteAutorizacionPedido] =
     useState(null);
-  const [arqueoDelDiaGuardado, setArqueoDelDiaGuardado] = useState(null);
+  const [jornadaAbiertaActiva, setJornadaAbiertaActiva] = useState(null);
   const [foliosMesasCerradosHoy, setFoliosMesasCerradosHoy] = useState([]);
 
   const sincronizarProductoCategoriasVariantes = async (productoId, formActivas) => {
@@ -2849,6 +2850,11 @@ function Dashboard() {
     setMensajeRetiroBloqueado(null);
   };
 
+  const cerrarModalArqueoBloqueado = () => {
+    setModalArqueoBloqueadoAbierto(false);
+    setMensajeArqueoBloqueado(null);
+  };
+
   const handleRetiroFormChange = (e) => {
     const { name, value } = e.target;
     setRetiroForm((prev) => ({ ...prev, [name]: value }));
@@ -2875,29 +2881,51 @@ function Dashboard() {
     setGuardandoRetiro(true);
     setErrorRetiro(null);
 
-    const { error } = await supabase.from('retiros').insert(
-      payloadConNegocio(
-        {
-          monto: Number.parseFloat(retiroForm.monto),
-          motivo: retiroForm.motivo.trim(),
-          usuario:
-            session?.user?.email ||
-            session?.user?.user_metadata?.full_name ||
-            session?.user?.id ||
-            null,
-        },
+    try {
+      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
+        supabase,
         negocioId
-      )
-    );
+      );
 
-    setGuardandoRetiro(false);
+      if (errorJornadaConsulta) {
+        setErrorRetiro(errorJornadaConsulta.message);
+        return;
+      }
 
-    if (error) {
-      setErrorRetiro(error.message);
-      return;
+      if (!jornada) {
+        setErrorRetiro(MENSAJE_RETIRO_SIN_JORNADA_ABIERTA);
+        return;
+      }
+
+      const { error } = await supabase.from('retiros').insert(
+        payloadConNegocio(
+          {
+            monto: Number.parseFloat(retiroForm.monto),
+            motivo: retiroForm.motivo.trim(),
+            usuario:
+              session?.user?.email ||
+              session?.user?.user_metadata?.full_name ||
+              session?.user?.id ||
+              null,
+            jornada_id: jornada.id,
+          },
+          negocioId
+        )
+      );
+
+      if (error) {
+        setErrorRetiro(error.message);
+        return;
+      }
+
+      if (jornadaAbiertaActiva?.id === jornada.id) {
+        await sincronizarTotalesJornadaAbierta(jornada.id);
+      }
+
+      cerrarModalRetiro();
+    } finally {
+      setGuardandoRetiro(false);
     }
-
-    cerrarModalRetiro();
   };
 
   const arqueoContadoValido = FORMAS_PAGO.every(({ value }) => {
@@ -2946,53 +2974,55 @@ function Dashboard() {
     return data || [];
   };
 
-  const cargarRetirosDelDia = async () => {
-    if (!negocioId) return 0;
-
-    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
-    const { data, error } = await queryConNegocio(
-      supabase
-        .from('retiros')
-        .select('monto')
-        .gte('created_at', inicio.toISOString())
-        .lte('created_at', fin.toISOString()),
-      negocioId
-    );
+  const cargarRetirosJornadaAbierta = async (jornadaId) => {
+    const { total, error } = await cargarRetirosJornada(supabase, negocioId, jornadaId);
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return redondearMoneda(
-      (data || []).reduce((suma, retiro) => suma + (Number(retiro.monto) || 0), 0)
-    );
+    return total;
   };
 
-  const cargarFondoFijoDelDia = async () => {
-    if (!negocioId) return { monto: 0, id: null };
+  const cargarFondoFijoJornadaAbierta = async (jornadaId) => {
+    const resultado = await cargarFondoFijoJornada(supabase, negocioId, jornadaId);
 
-    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
-    const { data, error } = await queryConNegocio(
-      supabase
-        .from('fondos_fijos')
-        .select('id, monto')
-        .gte('created_at', inicio.toISOString())
-        .lte('created_at', fin.toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1),
-      negocioId
-    );
-
-    if (error) {
-      throw new Error(error.message);
+    if (resultado.error) {
+      throw new Error(resultado.error.message);
     }
 
-    const registro = (data || [])[0];
+    return resultado;
+  };
 
-    return {
-      monto: registro ? redondearMoneda(Number(registro.monto) || 0) : 0,
-      id: registro?.id ?? null,
-    };
+  const sincronizarTotalesJornadaAbierta = async (jornadaId) => {
+    if (!jornadaId) {
+      setRetirosDelDia(0);
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
+      return;
+    }
+
+    const [retirosResult, fondoResult] = await Promise.allSettled([
+      cargarRetirosJornadaAbierta(jornadaId),
+      cargarFondoFijoJornadaAbierta(jornadaId),
+    ]);
+
+    if (retirosResult.status === 'fulfilled') {
+      setRetirosDelDia(retirosResult.value);
+    } else {
+      setRetirosDelDia(0);
+    }
+
+    if (fondoResult.status === 'fulfilled') {
+      setFondoFijoDelDia(fondoResult.value.monto);
+      setFondoFijoHoyId(fondoResult.value.id);
+      setFondoFijoJornadaId(fondoResult.value.jornada_id);
+    } else {
+      setFondoFijoDelDia(0);
+      setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
+    }
   };
 
   const cargarArqueoDelDia = async () => {
@@ -3288,9 +3318,16 @@ function Dashboard() {
     setMensajeRetiroBloqueado(null);
 
     try {
-      const arqueo = await cargarArqueoDelDia();
-      if (arqueo) {
-        setMensajeRetiroBloqueado(MENSAJE_RETIRO_BLOQUEADO_ARQUEO);
+      const { data: jornada, error } = await cargarJornadaAbierta(supabase, negocioId);
+
+      if (error) {
+        setMensajeRetiroBloqueado(error.message || 'No se pudo verificar la jornada.');
+        setModalRetiroBloqueadoAbierto(true);
+        return;
+      }
+
+      if (!jornada) {
+        setMensajeRetiroBloqueado(MENSAJE_RETIRO_SIN_JORNADA_ABIERTA);
         setModalRetiroBloqueadoAbierto(true);
         return;
       }
@@ -3298,7 +3335,7 @@ function Dashboard() {
       setRetiroForm({ monto: '', motivo: '' });
       setModalRetiroAbierto(true);
     } catch (err) {
-      setMensajeRetiroBloqueado(err.message || 'No se pudo verificar el arqueo del día.');
+      setMensajeRetiroBloqueado(err.message || 'No se pudo verificar la jornada.');
       setModalRetiroBloqueadoAbierto(true);
     }
   };
@@ -3307,27 +3344,43 @@ function Dashboard() {
     if (!negocioId) {
       setFondoFijoDelDia(0);
       setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
+      setRetirosDelDia(0);
+      setJornadaAbiertaActiva(null);
       return undefined;
     }
 
     let activo = true;
 
-    cargarFondoFijoDelDia()
-      .then((fondoFijo) => {
+    cargarJornadaAbierta(supabase, negocioId)
+      .then(async ({ data: jornada, error }) => {
         if (!activo) return;
-        setFondoFijoDelDia(fondoFijo.monto);
-        setFondoFijoHoyId(fondoFijo.id);
+
+        if (error || !jornada) {
+          setJornadaAbiertaActiva(null);
+          setFondoFijoDelDia(0);
+          setFondoFijoHoyId(null);
+          setFondoFijoJornadaId(null);
+          setRetirosDelDia(0);
+          return;
+        }
+
+        setJornadaAbiertaActiva(jornada);
+        await sincronizarTotalesJornadaAbierta(jornada.id);
       })
       .catch(() => {
         if (!activo) return;
+        setJornadaAbiertaActiva(null);
         setFondoFijoDelDia(0);
         setFondoFijoHoyId(null);
+        setFondoFijoJornadaId(null);
+        setRetirosDelDia(0);
       });
 
     return () => {
       activo = false;
     };
-  }, [negocioId, hoyClave]);
+  }, [negocioId]);
 
   const abrirModalFondoFijo = async () => {
     setModalFondoFijoAbierto(true);
@@ -3337,13 +3390,37 @@ function Dashboard() {
     setCargandoFondoFijoDatos(true);
 
     try {
-      const fondoFijo = await cargarFondoFijoDelDia();
+      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
+        supabase,
+        negocioId
+      );
+
+      if (errorJornadaConsulta) {
+        setErrorFondoFijo(errorJornadaConsulta.message || 'No se pudo verificar la jornada.');
+        setFondoFijoDelDia(0);
+        setFondoFijoHoyId(null);
+        setFondoFijoJornadaId(null);
+        return;
+      }
+
+      if (!jornada) {
+        setFondoFijoDelDia(0);
+        setFondoFijoHoyId(null);
+        setFondoFijoJornadaId(null);
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_SIN_JORNADA_ABIERTA);
+        return;
+      }
+
+      setJornadaAbiertaActiva(jornada);
+      const fondoFijo = await cargarFondoFijoJornadaAbierta(jornada.id);
       setFondoFijoDelDia(fondoFijo.monto);
       setFondoFijoHoyId(fondoFijo.id);
+      setFondoFijoJornadaId(fondoFijo.jornada_id);
     } catch (err) {
-      setErrorFondoFijo(err.message || 'No se pudo cargar el fondo fijo del día.');
+      setErrorFondoFijo(err.message || 'No se pudo cargar el fondo fijo de la jornada.');
       setFondoFijoDelDia(0);
       setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
     } finally {
       setCargandoFondoFijoDatos(false);
     }
@@ -3403,30 +3480,55 @@ function Dashboard() {
     setGuardandoFondoFijo(true);
     setErrorFondoFijo(null);
 
-    const { data, error } = await supabase
-      .from('fondos_fijos')
-      .insert(
-        payloadConNegocio(
-          {
-            monto: Number.parseFloat(fondoFijoForm.monto),
-            usuario: usuarioSesionActual(session),
-          },
-          negocioId
+    try {
+      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
+        supabase,
+        negocioId
+      );
+
+      if (errorJornadaConsulta) {
+        setErrorFondoFijo(errorJornadaConsulta.message);
+        return;
+      }
+
+      if (!jornada) {
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_SIN_JORNADA_ABIERTA);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('fondos_fijos')
+        .insert(
+          payloadConNegocio(
+            {
+              monto: Number.parseFloat(fondoFijoForm.monto),
+              usuario: usuarioSesionActual(session),
+              jornada_id: jornada.id,
+            },
+            negocioId
+          )
         )
-      )
-      .select('id, monto')
-      .single();
+        .select('id, monto, jornada_id')
+        .single();
 
-    setGuardandoFondoFijo(false);
+      if (error) {
+        setErrorFondoFijo(error.message);
+        return;
+      }
 
-    if (error) {
-      setErrorFondoFijo(error.message);
-      return;
+      setJornadaAbiertaActiva(jornada);
+      setFondoFijoDelDia(redondearMoneda(Number(data?.monto) || 0));
+      setFondoFijoHoyId(data?.id ?? null);
+      setFondoFijoJornadaId(data?.jornada_id ?? jornada.id);
+      setFondoFijoForm({ monto: '' });
+    } finally {
+      setGuardandoFondoFijo(false);
     }
+  };
 
-    setFondoFijoDelDia(redondearMoneda(Number(data?.monto) || 0));
-    setFondoFijoHoyId(data?.id ?? null);
-    setFondoFijoForm({ monto: '' });
+  const fondoFijoBloqueadoPorJornadaCerrada = async () => {
+    if (!fondoFijoJornadaId) return false;
+    return jornadaEstaCerrada(supabase, fondoFijoJornadaId);
   };
 
   const handleEliminarFondoFijo = async () => {
@@ -3436,9 +3538,8 @@ function Dashboard() {
     setErrorFondoFijo(null);
 
     try {
-      const arqueo = await cargarArqueoDelDia();
-      if (arqueo) {
-        setErrorFondoFijo(MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO);
+      if (await fondoFijoBloqueadoPorJornadaCerrada()) {
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_JORNADA_CERRADA);
         setConfirmarEliminarFondoFijo(false);
         return;
       }
@@ -3455,9 +3556,10 @@ function Dashboard() {
 
       setFondoFijoDelDia(0);
       setFondoFijoHoyId(null);
+      setFondoFijoJornadaId(null);
       setConfirmarEliminarFondoFijo(false);
     } catch (err) {
-      setErrorFondoFijo(err.message || 'No se pudo verificar el arqueo del día.');
+      setErrorFondoFijo(err.message || 'No se pudo verificar la jornada del fondo fijo.');
       setConfirmarEliminarFondoFijo(false);
     } finally {
       setGuardandoFondoFijo(false);
@@ -3472,93 +3574,103 @@ function Dashboard() {
     setGuardandoFondoFijo(true);
 
     try {
-      const arqueo = await cargarArqueoDelDia();
-      if (arqueo) {
-        setErrorFondoFijo(MENSAJE_FONDO_FIJO_BLOQUEADO_ARQUEO);
+      if (await fondoFijoBloqueadoPorJornadaCerrada()) {
+        setErrorFondoFijo(MENSAJE_FONDO_FIJO_JORNADA_CERRADA);
         return;
       }
 
       setConfirmarEliminarFondoFijo(true);
     } catch (err) {
-      setErrorFondoFijo(err.message || 'No se pudo verificar el arqueo del día.');
+      setErrorFondoFijo(err.message || 'No se pudo verificar la jornada del fondo fijo.');
     } finally {
       setGuardandoFondoFijo(false);
     }
   };
 
   const abrirModalArqueo = async () => {
-    setModalArqueoAbierto(true);
-    setArqueoContado(crearArqueoContadoVacio());
-    setArqueoContadoCampoEnfocado(null);
-    setArqueoDelDiaGuardado(null);
-    setErrorArqueo(null);
-    setCargandoArqueoDatos(true);
+    setMensajeArqueoBloqueado(null);
 
-    const errores = [];
-    const [retirosResult, fondoResult, arqueoResult, foliosMesasResult] =
-      await Promise.allSettled([
-        cargarRetirosDelDia(),
-        cargarFondoFijoDelDia(),
-        cargarArqueoDelDia(),
+    try {
+      const { data: jornada, error: errorJornadaConsulta } = await cargarJornadaAbierta(
+        supabase,
+        negocioId
+      );
+
+      if (errorJornadaConsulta) {
+        setMensajeArqueoBloqueado(
+          errorJornadaConsulta.message || 'No se pudo verificar la jornada.'
+        );
+        setModalArqueoBloqueadoAbierto(true);
+        return;
+      }
+
+      if (!jornada) {
+        setMensajeArqueoBloqueado(MENSAJE_ARQUEO_SIN_JORNADA_ABIERTA);
+        setModalArqueoBloqueadoAbierto(true);
+        return;
+      }
+
+      setJornadaAbiertaActiva(jornada);
+      setModalArqueoAbierto(true);
+      setArqueoContado(crearArqueoContadoVacio());
+      setArqueoContadoCampoEnfocado(null);
+      setErrorArqueo(null);
+      setCargandoArqueoDatos(true);
+
+      const errores = [];
+      const [retirosResult, fondoResult, foliosMesasResult] = await Promise.allSettled([
+        cargarRetirosJornadaAbierta(jornada.id),
+        cargarFondoFijoJornadaAbierta(jornada.id),
         cargarFoliosMesasCerradosDelDia(),
       ]);
-
-    if (arqueoResult.status === 'fulfilled' && arqueoResult.value) {
-      const arqueo = arqueoResult.value;
-      setArqueoDelDiaGuardado(arqueo);
-      setArqueoContado(crearArqueoContadoDesdeRegistro(arqueo));
-      setRetirosDelDia(redondearMoneda(Number(arqueo.retiros_del_dia) || 0));
-      setFondoFijoDelDia(redondearMoneda(Number(arqueo.fondo_fijo_del_dia) || 0));
-    } else {
-      if (arqueoResult.status === 'rejected') {
-        errores.push(
-          arqueoResult.reason?.message || 'No se pudo verificar el arqueo del día.'
-        );
-      }
 
       if (retirosResult.status === 'fulfilled') {
         setRetirosDelDia(retirosResult.value);
       } else {
         setRetirosDelDia(0);
         errores.push(
-          retirosResult.reason?.message || 'No se pudieron cargar los retiros del día.'
+          retirosResult.reason?.message || 'No se pudieron cargar los retiros de la jornada.'
         );
       }
 
       if (fondoResult.status === 'fulfilled') {
         setFondoFijoDelDia(fondoResult.value.monto);
         setFondoFijoHoyId(fondoResult.value.id);
+        setFondoFijoJornadaId(fondoResult.value.jornada_id);
       } else {
         setFondoFijoDelDia(0);
         setFondoFijoHoyId(null);
+        setFondoFijoJornadaId(null);
         errores.push(
-          fondoResult.reason?.message || 'No se pudo cargar el fondo fijo del día.'
+          fondoResult.reason?.message || 'No se pudo cargar el fondo fijo de la jornada.'
         );
       }
-    }
 
-    if (foliosMesasResult.status === 'fulfilled') {
-      setFoliosMesasCerradosHoy(foliosMesasResult.value);
-    } else {
-      setFoliosMesasCerradosHoy([]);
-      errores.push(
-        foliosMesasResult.reason?.message ||
-          'No se pudieron cargar los cobros de mesas del día.'
-      );
-    }
+      if (foliosMesasResult.status === 'fulfilled') {
+        setFoliosMesasCerradosHoy(foliosMesasResult.value);
+      } else {
+        setFoliosMesasCerradosHoy([]);
+        errores.push(
+          foliosMesasResult.reason?.message ||
+            'No se pudieron cargar los cobros de mesas del día.'
+        );
+      }
 
-    if (errores.length > 0) {
-      setErrorArqueo(errores.join(' '));
-    }
+      if (errores.length > 0) {
+        setErrorArqueo(errores.join(' '));
+      }
 
-    setCargandoArqueoDatos(false);
+      setCargandoArqueoDatos(false);
+    } catch (err) {
+      setMensajeArqueoBloqueado(err.message || 'No se pudo verificar la jornada.');
+      setModalArqueoBloqueadoAbierto(true);
+    }
   };
 
   const cerrarModalArqueo = () => {
     setModalArqueoAbierto(false);
     setArqueoContado(crearArqueoContadoVacio());
     setArqueoContadoCampoEnfocado(null);
-    setArqueoDelDiaGuardado(null);
     setFoliosMesasCerradosHoy([]);
     setErrorArqueo(null);
   };
@@ -3597,9 +3709,9 @@ function Dashboard() {
     if (
       !arqueoContadoValido ||
       !negocioId ||
+      !jornadaAbiertaActiva?.id ||
       guardandoArqueo ||
-      cargandoArqueoDatos ||
-      arqueoDelDiaGuardado
+      cargandoArqueoDatos
     ) {
       return;
     }
@@ -3615,9 +3727,9 @@ function Dashboard() {
     if (
       !arqueoContadoValido ||
       !negocioId ||
+      !jornadaAbiertaActiva?.id ||
       guardandoArqueo ||
-      cargandoArqueoDatos ||
-      arqueoDelDiaGuardado
+      cargandoArqueoDatos
     )
       return;
 
@@ -3646,6 +3758,7 @@ function Dashboard() {
           diferencia: diferenciaArqueoTotal,
           retiros_del_dia: retirosDelDia,
           fondo_fijo_del_dia: fondoFijoDelDia,
+          jornada_id: jornadaAbiertaActiva.id,
         },
         negocioId
       )
@@ -4032,7 +4145,6 @@ function Dashboard() {
     });
   };
 
-  const arqueoModalSoloLectura = Boolean(arqueoDelDiaGuardado);
   const estiloSeccionesEntregaDobleWeb = {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -4253,6 +4365,38 @@ function Dashboard() {
                 onClick={cerrarModalMesasAbiertasJornada}
               >
                 Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {modalArqueoBloqueadoAbierto ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarModalArqueoBloqueado}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="arqueo-bloqueado-modal-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="arqueo-bloqueado-modal-titulo" className="retiro-modal-titulo">
+              Arqueo de caja
+            </h2>
+            <p className="retiro-modal-error" role="alert">
+              {mensajeArqueoBloqueado}
+            </p>
+            <div className="retiro-modal-acciones">
+              <button
+                type="button"
+                className="retiro-modal-cancelar"
+                onClick={cerrarModalArqueoBloqueado}
+              >
+                Cerrar
               </button>
             </div>
           </div>
@@ -4537,18 +4681,8 @@ function Dashboard() {
               Ventas totales del día: {formatearMoneda(totalVentasHoyTotal)}
             </p>
             <p className="arqueo-modal-descripcion">
-              Fondo fijo del día:{' '}
-              {formatearMoneda(
-                arqueoModalSoloLectura
-                  ? Number(arqueoDelDiaGuardado.fondo_fijo_del_dia) || 0
-                  : fondoFijoDelDia
-              )}{' '}
-              | Retiros del día:{' '}
-              {formatearMoneda(
-                arqueoModalSoloLectura
-                  ? Number(arqueoDelDiaGuardado.retiros_del_dia) || 0
-                  : retirosDelDia
-              )}
+              Fondo fijo del día: {formatearMoneda(fondoFijoDelDia)} | Retiros del día:{' '}
+              {formatearMoneda(retirosDelDia)}
             </p>
             <p className="arqueo-modal-descripcion">
               Propinas del día: {formatearMoneda(propinasDelDiaMesas)} | Descuentos del día:{' '}
@@ -4566,9 +4700,7 @@ function Dashboard() {
                   <span>Diferencia</span>
                 </div>
                 {FORMAS_PAGO.map(({ value, label }) => {
-                  const sistema = arqueoModalSoloLectura
-                    ? Number(arqueoDelDiaGuardado[obtenerCampoSistemaArqueo(value)]) || 0
-                    : arqueoSistema[value];
+                  const sistema = arqueoSistema[value];
                   const contado = Number.parseFloat(arqueoContado[value]);
                   const diferencia =
                     arqueoContado[value] === '' || !Number.isFinite(contado)
@@ -4587,17 +4719,15 @@ function Dashboard() {
                           type="text"
                           inputMode="decimal"
                           value={
-                            arqueoModalSoloLectura
-                              ? formatearContadoArqueoInput(arqueoContado[value])
-                              : arqueoContadoCampoEnfocado === value
-                                ? arqueoContado[value]
-                                : formatearContadoArqueoInput(arqueoContado[value])
+                            arqueoContadoCampoEnfocado === value
+                              ? arqueoContado[value]
+                              : formatearContadoArqueoInput(arqueoContado[value])
                           }
                           onFocus={() => handleArqueoContadoFocus(value)}
                           onBlur={() => handleArqueoContadoBlur(value)}
                           onChange={(e) => handleArqueoContadoChange(value, e.target.value)}
-                          disabled={arqueoModalSoloLectura || guardandoArqueo}
-                          required={!arqueoModalSoloLectura}
+                          disabled={guardandoArqueo}
+                          required
                         />
                       </div>
                       <span className={diferenciaFmt?.clase || 'arqueo-modal-diferencia'}>
@@ -4610,59 +4740,27 @@ function Dashboard() {
               <div className="arqueo-modal-totales">
                 <div className="arqueo-modal-total-fila">
                   <span>Total sistema</span>
-                  <strong>
-                    {formatearMoneda(
-                      arqueoModalSoloLectura
-                        ? Number(arqueoDelDiaGuardado.total_sistema) || 0
-                        : arqueoSistema.total
-                    )}
-                  </strong>
+                  <strong>{formatearMoneda(arqueoSistema.total)}</strong>
                 </div>
                 <div className="arqueo-modal-total-fila">
                   <span>Total contado</span>
                   <strong>
-                    {arqueoModalSoloLectura || arqueoContadoValido
-                      ? formatearMoneda(
-                          arqueoModalSoloLectura
-                            ? Number(arqueoDelDiaGuardado.total_contado) || 0
-                            : totalArqueoContado
-                        )
+                    {arqueoContadoValido
+                      ? formatearMoneda(totalArqueoContado)
                       : '—'}
                   </strong>
                 </div>
                 <div className="arqueo-modal-total-fila">
                   <span>Diferencia total</span>
                   <strong
-                    className={
-                      formatearDiferenciaArqueo(
-                        arqueoModalSoloLectura
-                          ? Number(arqueoDelDiaGuardado.diferencia) || 0
-                          : diferenciaArqueoTotal
-                      ).clase
-                    }
+                    className={formatearDiferenciaArqueo(diferenciaArqueoTotal).clase}
                   >
-                    {arqueoModalSoloLectura || arqueoContadoValido
-                      ? formatearDiferenciaArqueo(
-                          arqueoModalSoloLectura
-                            ? Number(arqueoDelDiaGuardado.diferencia) || 0
-                            : diferenciaArqueoTotal
-                        ).texto
+                    {arqueoContadoValido
+                      ? formatearDiferenciaArqueo(diferenciaArqueoTotal).texto
                       : '—'}
                   </strong>
                 </div>
               </div>
-              {arqueoModalSoloLectura ? (
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div
-                    className="reportes-arqueo-confirmar-eliminar"
-                    style={{ textAlign: 'left' }}
-                  >
-                    <p className="retiro-modal-error" role="alert">
-                      {MENSAJE_ARQUEO_DIA_EXISTENTE}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
               {errorArqueo ? (
                 <p className="retiro-modal-error" role="alert">
                   {errorArqueo}
@@ -4677,24 +4775,23 @@ function Dashboard() {
                 >
                   Cancelar
                 </button>
-                {!arqueoModalSoloLectura ? (
-                  <button
-                    type="submit"
-                    className="retiro-modal-guardar"
-                    disabled={
-                      !arqueoContadoValido ||
-                      guardandoArqueo ||
-                      cargandoArqueoDatos ||
-                      !negocioId ||
-                      diferenciaArqueoTotal !== 0 ||
-                      totalArqueoContado <= 0
-                    }
-                  >
-                    {guardandoArqueo ? 'Guardando...' : 'Guardar arqueo'}
-                  </button>
-                ) : null}
+                <button
+                  type="submit"
+                  className="retiro-modal-guardar"
+                  disabled={
+                    !arqueoContadoValido ||
+                    guardandoArqueo ||
+                    cargandoArqueoDatos ||
+                    !negocioId ||
+                    !jornadaAbiertaActiva?.id ||
+                    diferenciaArqueoTotal !== 0 ||
+                    totalArqueoContado <= 0
+                  }
+                >
+                  {guardandoArqueo ? 'Guardando...' : 'Guardar arqueo'}
+                </button>
               </div>
-              {!arqueoModalSoloLectura && totalArqueoContado <= 0 ? (
+              {totalArqueoContado <= 0 ? (
                 <p
                   className="retiro-modal-error"
                   role="alert"
@@ -4703,7 +4800,7 @@ function Dashboard() {
                   Debes ingresar los montos contados antes de guardar el arqueo.
                 </p>
               ) : null}
-              {!arqueoModalSoloLectura && diferenciaArqueoTotal !== 0 ? (
+              {diferenciaArqueoTotal !== 0 ? (
                 <p
                   className="retiro-modal-error"
                   role="alert"

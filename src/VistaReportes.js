@@ -34,6 +34,7 @@ import { formatearMoneda } from './pedidosShared';
 import { supabase } from './supabase';
 import { useAuth } from './AuthContext';
 import { queryConNegocio } from './tenantHelpers';
+import { JORNADA_ESTADO_CERRADA } from './jornadaHelpers';
 import {
   cargarFiltrosReportes,
   persistirFiltrosReportes,
@@ -74,8 +75,8 @@ function cargarTabReportes() {
   }
 }
 
-const MENSAJE_RETIRO_BLOQUEADO_ARQUEO =
-  'No puedes eliminar este retiro de efectivo porque existe un arqueo de caja registrado para este día.';
+const MENSAJE_RETIRO_JORNADA_CERRADA =
+  'No puedes eliminar este retiro de efectivo porque la jornada a la que pertenece ya está cerrada.';
 
 const FORMAS_PAGO_ARQUEO = [
   { label: 'Efectivo', sistema: 'efectivo_sistema', contado: 'efectivo_contado' },
@@ -169,7 +170,7 @@ export default function VistaReportes() {
   const [errorRetiros, setErrorRetiros] = useState(null);
   const [retiroConfirmarEliminar, setRetiroConfirmarEliminar] = useState(null);
   const [eliminandoRetiroId, setEliminandoRetiroId] = useState(null);
-  const [arqueosHistorial, setArqueosHistorial] = useState([]);
+  const [jornadaEstadoPorId, setJornadaEstadoPorId] = useState({});
   const [retiroMensajeBloqueo, setRetiroMensajeBloqueo] = useState(null);
   const [fondosFijosArqueos, setFondosFijosArqueos] = useState([]);
   const [cargandoFondosFijos, setCargandoFondosFijos] = useState(false);
@@ -335,26 +336,30 @@ export default function VistaReportes() {
       setRetiroMensajeBloqueo(null);
       setRetiroConfirmarEliminar(null);
 
-      const [retirosRes, arqueosRes] = await Promise.all([
+      const [retirosRes, jornadasRes] = await Promise.all([
         queryConNegocio(
           supabase.from('retiros').select('*').order('created_at', { ascending: false }),
           negocioId
         ),
         queryConNegocio(
-          supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
+          supabase.from('jornadas').select('id, estado'),
           negocioId
         ),
       ]);
 
       if (!activo) return;
 
-      if (retirosRes.error || arqueosRes.error) {
+      if (retirosRes.error || jornadasRes.error) {
         setErrorRetiros('No se pudo cargar el historial de retiros.');
         setRetirosHistorial([]);
-        setArqueosHistorial([]);
+        setJornadaEstadoPorId({});
       } else {
         setRetirosHistorial(retirosRes.data || []);
-        setArqueosHistorial(arqueosRes.data || []);
+        const mapaEstados = {};
+        (jornadasRes.data || []).forEach((jornada) => {
+          mapaEstados[jornada.id] = jornada.estado;
+        });
+        setJornadaEstadoPorId(mapaEstados);
       }
 
       setCargandoRetiros(false);
@@ -418,20 +423,6 @@ export default function VistaReportes() {
     () => filtrarArqueosReporte(fondosFijosArqueos, configPeriodo),
     [fondosFijosArqueos, configPeriodo]
   );
-
-  const diasConArqueo = useMemo(() => {
-    const dias = new Set();
-
-    (arqueosHistorial || []).forEach((arqueo) => {
-      dias.add(
-        claveFechaDesdeDate(
-          arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
-        )
-      );
-    });
-
-    return dias;
-  }, [arqueosHistorial]);
 
   const pedidosFiltrados = useMemo(
     () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
@@ -524,18 +515,15 @@ export default function VistaReportes() {
     setArqueos((prev) => prev.filter((item) => item.id !== arqueoId));
   };
 
-  const existeArqueoDelDiaRetiro = (retiro) => {
-    const claveDia = claveFechaDesdeDate(
-      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
-    );
-
-    return diasConArqueo.has(claveDia);
+  const jornadaDelRetiroEstaCerrada = (retiro) => {
+    if (!retiro?.jornada_id) return false;
+    return jornadaEstadoPorId[retiro.jornada_id] === JORNADA_ESTADO_CERRADA;
   };
 
   const intentarEliminarRetiro = (retiro) => {
     setRetiroConfirmarEliminar(null);
 
-    if (existeArqueoDelDiaRetiro(retiro)) {
+    if (jornadaDelRetiroEstaCerrada(retiro)) {
       setRetiroMensajeBloqueo(retiro.id);
       return;
     }
@@ -549,7 +537,7 @@ export default function VistaReportes() {
 
     const retiro = retirosHistorial.find((item) => item.id === retiroId);
 
-    if (retiro && existeArqueoDelDiaRetiro(retiro)) {
+    if (retiro && jornadaDelRetiroEstaCerrada(retiro)) {
       setRetiroConfirmarEliminar(null);
       setRetiroMensajeBloqueo(retiroId);
       return;
@@ -717,7 +705,7 @@ export default function VistaReportes() {
                 role="alert"
                 style={{ margin: 0, flexBasis: '100%', textAlign: 'left' }}
               >
-                {MENSAJE_RETIRO_BLOQUEADO_ARQUEO}
+                {MENSAJE_RETIRO_JORNADA_CERRADA}
               </p>
               <button
                 type="button"
