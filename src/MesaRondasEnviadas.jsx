@@ -20,6 +20,9 @@ function etiquetaResumenRondas(cantidad) {
   return `${cantidad} rondas enviadas`;
 }
 
+const MENSAJE_JORNADA_CERRADA_EDITAR_PEDIDOS_MESA =
+  'Abre una jornada para editar pedidos de mesa';
+
 export default function MesaRondasEnviadas({
   negocioId,
   numeroMesa,
@@ -32,6 +35,7 @@ export default function MesaRondasEnviadas({
   variantesCtx,
   usuarioId,
   folioId,
+  jornadaAbierta,
   onRondasCambiadas,
 }) {
   const [expandido, setExpandido] = useState(false);
@@ -57,6 +61,10 @@ export default function MesaRondasEnviadas({
   }
 
   const cantidad = rondas.length;
+  const rondasBloqueadasPorJornadaCerrada = !jornadaAbierta?.id;
+  const claseBotonJornadaCerrada = rondasBloqueadasPorJornadaCerrada
+    ? ' btn-accion-jornada-cerrada'
+    : '';
 
   const cerrarPin = () => {
     setModalPinAbierto(false);
@@ -65,6 +73,10 @@ export default function MesaRondasEnviadas({
   };
 
   const solicitarAutorizacion = (ronda, accion) => {
+    if (rondasBloqueadasPorJornadaCerrada) {
+      return;
+    }
+
     setRondaPendienteAutorizacion(ronda);
     setAccionPendientePin(accion);
     setModalPinAbierto(true);
@@ -143,6 +155,11 @@ export default function MesaRondasEnviadas({
 
         {expandido ? (
           <div className="mesa-rondas-enviadas-detalle">
+            {rondasBloqueadasPorJornadaCerrada ? (
+              <p className="header-jornada-cerrada-mensaje" role="status">
+                {MENSAJE_JORNADA_CERRADA_EDITAR_PEDIDOS_MESA}
+              </p>
+            ) : null}
             {rondas.map((ronda, indice) => {
               const numeroRonda =
                 extraerNumeroRondaMesa(ronda.referencia) ?? indice + 1;
@@ -197,8 +214,9 @@ export default function MesaRondasEnviadas({
                       <div className="mesa-rondas-enviadas-acciones">
                         <button
                           type="button"
-                          className="editar-btn"
+                          className={`editar-btn${claseBotonJornadaCerrada}`}
                           disabled={
+                            rondasBloqueadasPorJornadaCerrada ||
                             otraEditando ||
                             eliminandoRondaId === ronda.id
                           }
@@ -208,8 +226,9 @@ export default function MesaRondasEnviadas({
                         </button>
                         <button
                           type="button"
-                          className="eliminar-btn"
+                          className={`eliminar-btn${claseBotonJornadaCerrada}`}
                           disabled={
+                            rondasBloqueadasPorJornadaCerrada ||
                             otraEditando ||
                             eliminandoRondaId === ronda.id
                           }

@@ -29,6 +29,7 @@ import {
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
 const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
+const MENSAJE_JORNADA_CERRADA_COBRAR_MESA = 'Abre una jornada para cobrar mesas';
 
 function carritoTieneProductos(snapshot) {
   const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
@@ -687,6 +688,7 @@ export default function MesaCarritoPanel({
   const rondasEnviadas = metadatosFolio.rondasEnviadas ?? 0;
   const carritoActivoVacio = !carritoTieneProductos(carrito.snapshot);
   const puedeCobrarMesa =
+    Boolean(jornadaAbierta?.id) &&
     Boolean(folioId) &&
     !folioAjenoEnmascarado &&
     rondasEnviadas > 0 &&
@@ -761,6 +763,7 @@ export default function MesaCarritoPanel({
             variantesCtx={variantesCtx}
             usuarioId={usuarioId}
             folioId={folioId}
+            jornadaAbierta={jornadaAbierta}
             onRondasCambiadas={handleRondasCambiadas}
           />
           <div
@@ -821,6 +824,11 @@ export default function MesaCarritoPanel({
                   className="guardar-btn mesa-cobrar-mesa-btn"
                   disabled={!puedeCobrarMesa}
                   onClick={() => {
+                    if (!jornadaAbierta?.id) {
+                      setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_COBRAR_MESA);
+                      return;
+                    }
+
                     setErrorCobroMesa(null);
                     setModalCobroAbierto(true);
                   }}
@@ -831,6 +839,14 @@ export default function MesaCarritoPanel({
               {errorEnvioCocina ? (
                 <p className="formulario-error-guardar" role="alert">
                   {errorEnvioCocina}
+                </p>
+              ) : null}
+              {mesaBloqueadaPorJornadaCerrada &&
+              Boolean(folioId) &&
+              rondasEnviadas > 0 &&
+              carritoActivoVacio ? (
+                <p className="header-jornada-cerrada-mensaje" role="status">
+                  {MENSAJE_JORNADA_CERRADA_COBRAR_MESA}
                 </p>
               ) : null}
               {errorCobroMesa ? (
