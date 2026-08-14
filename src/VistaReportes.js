@@ -3,11 +3,12 @@ import './App.css';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import {
-  agruparPedidosPorDia,
+  agruparPedidosPorJornada,
+  agruparRetirosPorDia,
+  agruparRetirosPorJornadaId,
   calcularReportePorCategoria,
   calcularReportePorProducto,
   calcularResumenReporte,
-  claveFechaDesdeDate,
   descripcionPeriodoTarjeta,
   etiquetaFiltroVentaReporte,
   etiquetaTipoEntregaReporte,
@@ -29,6 +30,7 @@ import {
   periodoMultiplesDias,
   rangoFechasInvalido,
   rangoPersonalizadoActivo,
+  resolverRetirosParaArqueo,
 } from './reportesHelpers';
 import { formatearMoneda } from './pedidosShared';
 import { supabase } from './supabase';
@@ -116,30 +118,6 @@ function formatearFechaSoloReporte(createdAt) {
   });
 }
 
-function agruparRetirosPorDia(retiros) {
-  const grupos = new Map();
-
-  (retiros || []).forEach((retiro) => {
-    const clave = claveFechaDesdeDate(
-      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
-    );
-
-    if (!grupos.has(clave)) {
-      grupos.set(clave, []);
-    }
-
-    grupos.get(clave).push(retiro);
-  });
-
-  grupos.forEach((lista) => {
-    lista.sort(
-      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    );
-  });
-
-  return grupos;
-}
-
 export default function VistaReportes() {
   const { negocioId, rol } = useAuth();
   const [tabReportes, setTabReportes] = useState(() => cargarTabReportes());
@@ -171,6 +149,7 @@ export default function VistaReportes() {
   const [retiroConfirmarEliminar, setRetiroConfirmarEliminar] = useState(null);
   const [eliminandoRetiroId, setEliminandoRetiroId] = useState(null);
   const [jornadaEstadoPorId, setJornadaEstadoPorId] = useState({});
+  const [jornadasPorId, setJornadasPorId] = useState({});
   const [retiroMensajeBloqueo, setRetiroMensajeBloqueo] = useState(null);
   const [fondosFijosArqueos, setFondosFijosArqueos] = useState([]);
   const [cargandoFondosFijos, setCargandoFondosFijos] = useState(false);
@@ -199,6 +178,59 @@ export default function VistaReportes() {
       filtroVenta,
     });
   }, [negocioId, periodo, fechaDesde, fechaHasta, filtroVenta]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (
+      !negocioId ||
+      (tabReportes !== 'ventas' &&
+        tabReportes !== 'arqueos' &&
+        tabReportes !== 'retiros')
+    ) {
+      return undefined;
+    }
+
+    const cargarJornadasReporte = async () => {
+      const { data, error } = await queryConNegocio(
+        supabase
+          .from('jornadas')
+          .select('id, estado, abierta_en, cerrada_en')
+          .order('abierta_en', { ascending: false }),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (error) {
+        setJornadasPorId({});
+        if (tabReportes === 'retiros') {
+          setJornadaEstadoPorId({});
+        }
+        return;
+      }
+
+      const mapaJornadas = {};
+      const mapaEstados = {};
+
+      (data || []).forEach((jornada) => {
+        mapaJornadas[jornada.id] = jornada;
+        mapaEstados[jornada.id] = jornada.estado;
+      });
+
+      setJornadasPorId(mapaJornadas);
+
+      if (tabReportes === 'retiros') {
+        setJornadaEstadoPorId(mapaEstados);
+      }
+    };
+
+    void cargarJornadasReporte();
+
+    return () => {
+      activo = false;
+    };
+  }, [tabReportes, negocioId]);
 
   useEffect(() => {
     let activo = true;
@@ -336,30 +368,18 @@ export default function VistaReportes() {
       setRetiroMensajeBloqueo(null);
       setRetiroConfirmarEliminar(null);
 
-      const [retirosRes, jornadasRes] = await Promise.all([
-        queryConNegocio(
-          supabase.from('retiros').select('*').order('created_at', { ascending: false }),
-          negocioId
-        ),
-        queryConNegocio(
-          supabase.from('jornadas').select('id, estado'),
-          negocioId
-        ),
-      ]);
+      const { data, error: errorConsulta } = await queryConNegocio(
+        supabase.from('retiros').select('*').order('created_at', { ascending: false }),
+        negocioId
+      );
 
       if (!activo) return;
 
-      if (retirosRes.error || jornadasRes.error) {
+      if (errorConsulta) {
         setErrorRetiros('No se pudo cargar el historial de retiros.');
         setRetirosHistorial([]);
-        setJornadaEstadoPorId({});
       } else {
-        setRetirosHistorial(retirosRes.data || []);
-        const mapaEstados = {};
-        (jornadasRes.data || []).forEach((jornada) => {
-          mapaEstados[jornada.id] = jornada.estado;
-        });
-        setJornadaEstadoPorId(mapaEstados);
+        setRetirosHistorial(data || []);
       }
 
       setCargandoRetiros(false);
@@ -408,6 +428,10 @@ export default function VistaReportes() {
   }, [tabReportes, negocioId]);
 
   const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
+  const retirosPorJornadaId = useMemo(
+    () => agruparRetirosPorJornadaId(retiros),
+    [retiros]
+  );
 
   const arqueosFiltrados = useMemo(
     () => filtrarArqueosReporte(arqueos, configPeriodo),
@@ -446,8 +470,11 @@ export default function VistaReportes() {
 
   const multiplesDias = periodoMultiplesDias(configPeriodo);
   const pedidosAgrupados = useMemo(
-    () => (multiplesDias ? agruparPedidosPorDia(pedidosFiltrados) : []),
-    [multiplesDias, pedidosFiltrados]
+    () =>
+      multiplesDias
+        ? agruparPedidosPorJornada(pedidosFiltrados, jornadasPorId)
+        : [],
+    [multiplesDias, pedidosFiltrados, jornadasPorId]
   );
 
   const seleccionarSemana = () => {
@@ -468,6 +495,7 @@ export default function VistaReportes() {
       filtroVenta,
       resumen,
       pedidos: pedidosFiltrados,
+      jornadasPorId,
     });
   };
 
@@ -563,10 +591,11 @@ export default function VistaReportes() {
   };
 
   const renderTarjetaArqueo = (arqueo) => {
-    const claveDia = claveFechaDesdeDate(
-      arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
+    const retirosDelArqueo = resolverRetirosParaArqueo(
+      arqueo,
+      retirosPorJornadaId,
+      retirosPorDia
     );
-    const retirosDelDia = retirosPorDia.get(claveDia) || [];
 
     return (
       <article key={arqueo.id} className="reportes-arqueo-card">
@@ -648,9 +677,9 @@ export default function VistaReportes() {
           <p className="reportes-arqueo-retiros-resumen">
             Retiros del día: {formatearMoneda(arqueo.retiros_del_dia)}
           </p>
-          {retirosDelDia.length > 0 ? (
+          {retirosDelArqueo.length > 0 ? (
             <ul className="reportes-arqueo-retiros-lista">
-              {retirosDelDia.map((retiro) => (
+              {retirosDelArqueo.map((retiro) => (
                 <li key={retiro.id}>
                   {formatearHoraPedidoLista(retiro.created_at)} —{' '}
                   {retiro.motivo?.trim() || 'Sin motivo'} —{' '}
@@ -997,7 +1026,7 @@ export default function VistaReportes() {
                         </span>
                       </span>
                       <span className="pedidos-grupo-encabezado-total">
-                        Total del día: {formatearMoneda(grupo.totalDelDia)}
+                        {grupo.etiquetaTotal}: {formatearMoneda(grupo.totalDelDia)}
                       </span>
                     </div>
                     <div className="reportes-tabla pedidos-reporte">

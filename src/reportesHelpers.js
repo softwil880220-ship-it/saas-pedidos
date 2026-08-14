@@ -508,7 +508,10 @@ export function agruparPedidosPorDia(pedidos) {
     .sort((a, b) => b.fecha - a.fecha)
     .map((grupo) => ({
       ...grupo,
+      jornadaId: null,
+      esGrupoJornada: false,
       etiqueta: formatearEncabezadoGrupoFecha(grupo.fecha),
+      etiquetaTotal: 'Total del día',
       totalDelDia: grupo.pedidos.reduce(
         (suma, pedido) => suma + Number(pedido.total || 0),
         0
@@ -517,6 +520,180 @@ export function agruparPedidosPorDia(pedidos) {
         (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
       ),
     }));
+}
+
+function formatearFechaHoraJornadaReporte(iso) {
+  if (!iso) return '—';
+
+  return new Date(iso).toLocaleString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function formatearEncabezadoGrupoJornada(jornada) {
+  if (!jornada?.abierta_en) {
+    return 'Jornada';
+  }
+
+  const apertura = formatearFechaHoraJornadaReporte(jornada.abierta_en);
+
+  if (jornada.cerrada_en) {
+    const cierre = formatearFechaHoraJornadaReporte(jornada.cerrada_en);
+    return `Jornada: ${apertura} — ${cierre}`;
+  }
+
+  return `Jornada: ${apertura} — Abierta`;
+}
+
+function construirGrupoPedidosReporte({ clave, jornadaId, fecha, pedidos, jornadasPorId }) {
+  const esGrupoJornada = Boolean(jornadaId);
+  const totalDelDia = pedidos.reduce(
+    (suma, pedido) => suma + Number(pedido.total || 0),
+    0
+  );
+  const pedidosOrdenados = [...pedidos].sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+  );
+
+  if (esGrupoJornada) {
+    return {
+      clave,
+      jornadaId,
+      esGrupoJornada: true,
+      fecha,
+      pedidos: pedidosOrdenados,
+      etiqueta: formatearEncabezadoGrupoJornada(jornadasPorId[jornadaId]),
+      etiquetaTotal: 'Total de la jornada',
+      totalDelDia,
+    };
+  }
+
+  return {
+    clave,
+    jornadaId: null,
+    esGrupoJornada: false,
+    fecha,
+    pedidos: pedidosOrdenados,
+    etiqueta: formatearEncabezadoGrupoFecha(fecha),
+    etiquetaTotal: 'Total del día',
+    totalDelDia,
+  };
+}
+
+export function agruparPedidosPorJornada(pedidos, jornadasPorId = {}) {
+  const grupos = new Map();
+
+  (pedidos || []).forEach((pedido) => {
+    if (pedido?.jornada_id) {
+      const clave = `jornada:${pedido.jornada_id}`;
+      const jornada = jornadasPorId[pedido.jornada_id];
+      const fechaOrden = jornada?.abierta_en
+        ? new Date(jornada.abierta_en)
+        : new Date(pedido.created_at || 0);
+
+      if (!grupos.has(clave)) {
+        grupos.set(clave, {
+          clave,
+          jornadaId: pedido.jornada_id,
+          fecha: fechaOrden,
+          pedidos: [],
+        });
+      }
+
+      grupos.get(clave).pedidos.push(pedido);
+      return;
+    }
+
+    const fecha = pedido.created_at ? new Date(pedido.created_at) : new Date(0);
+    const clave = `dia:${claveFechaDesdeDate(fecha)}`;
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        clave,
+        jornadaId: null,
+        fecha,
+        pedidos: [],
+      });
+    }
+
+    grupos.get(clave).pedidos.push(pedido);
+  });
+
+  return Array.from(grupos.values())
+    .sort((a, b) => b.fecha - a.fecha)
+    .map((grupo) =>
+      construirGrupoPedidosReporte({
+        ...grupo,
+        pedidos: grupo.pedidos,
+        jornadasPorId,
+      })
+    );
+}
+
+export function agruparRetirosPorDia(retiros) {
+  const grupos = new Map();
+
+  (retiros || []).forEach((retiro) => {
+    const clave = claveFechaDesdeDate(
+      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
+    );
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, []);
+    }
+
+    grupos.get(clave).push(retiro);
+  });
+
+  grupos.forEach((lista) => {
+    lista.sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+  });
+
+  return grupos;
+}
+
+export function agruparRetirosPorJornadaId(retiros) {
+  const grupos = new Map();
+
+  (retiros || []).forEach((retiro) => {
+    if (!retiro?.jornada_id) {
+      return;
+    }
+
+    const clave = String(retiro.jornada_id);
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, []);
+    }
+
+    grupos.get(clave).push(retiro);
+  });
+
+  grupos.forEach((lista) => {
+    lista.sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+  });
+
+  return grupos;
+}
+
+export function resolverRetirosParaArqueo(arqueo, retirosPorJornadaId, retirosPorDia) {
+  if (arqueo?.jornada_id) {
+    return retirosPorJornadaId.get(String(arqueo.jornada_id)) || [];
+  }
+
+  const claveDia = claveFechaDesdeDate(
+    arqueo?.created_at ? new Date(arqueo.created_at) : new Date(0)
+  );
+
+  return retirosPorDia.get(claveDia) || [];
 }
 
 export function periodoMultiplesDias(configPeriodo) {
@@ -531,6 +708,7 @@ export function exportarReportePdf({
   filtroVenta,
   resumen,
   pedidos,
+  jornadasPorId = {},
 }) {
   const doc = new jsPDF();
   const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
@@ -578,10 +756,10 @@ export function exportarReportePdf({
   let filas = [];
 
   if (multiplesDias) {
-    agruparPedidosPorDia(pedidos).forEach((grupo) => {
+    agruparPedidosPorJornada(pedidos, jornadasPorId).forEach((grupo) => {
       filas.push([
         {
-          content: `${grupo.etiqueta} — Total del día: ${formatearMoneda(grupo.totalDelDia)}`,
+          content: `${grupo.etiqueta} — ${grupo.etiquetaTotal}: ${formatearMoneda(grupo.totalDelDia)}`,
           colSpan: 7,
           styles: {
             fillColor: [236, 253, 245],
@@ -675,21 +853,11 @@ export function filtrarArqueosReporte(arqueos, configPeriodo) {
 }
 
 function agruparRetirosPorDiaPdf(retiros) {
-  const grupos = new Map();
+  return agruparRetirosPorDia(retiros);
+}
 
-  (retiros || []).forEach((retiro) => {
-    const clave = claveFechaDesdeDate(
-      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
-    );
-
-    if (!grupos.has(clave)) {
-      grupos.set(clave, []);
-    }
-
-    grupos.get(clave).push(retiro);
-  });
-
-  return grupos;
+function agruparRetirosPorJornadaIdPdf(retiros) {
+  return agruparRetirosPorJornadaId(retiros);
 }
 
 function formatearDesgloseArqueoPdf(arqueo) {
@@ -737,6 +905,7 @@ export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
   const doc = new jsPDF();
   const arqueosFiltrados = filtrarArqueosReporte(arqueos, configPeriodo);
   const retirosPorDia = agruparRetirosPorDiaPdf(retiros);
+  const retirosPorJornadaId = agruparRetirosPorJornadaIdPdf(retiros);
   const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
 
   doc.setFontSize(16);
@@ -749,16 +918,17 @@ export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
   doc.text(`Total de arqueos: ${arqueosFiltrados.length}`, 14, 32);
 
   const filas = arqueosFiltrados.map((arqueo) => {
-    const claveDia = claveFechaDesdeDate(
-      arqueo.created_at ? new Date(arqueo.created_at) : new Date(0)
+    const retirosDelArqueo = resolverRetirosParaArqueo(
+      arqueo,
+      retirosPorJornadaId,
+      retirosPorDia
     );
-    const retirosDelDia = retirosPorDia.get(claveDia) || [];
 
     return [
       formatearFechaPedidoReporte(arqueo.created_at),
       arqueo.usuario?.trim() || '—',
       formatearDesgloseArqueoPdf(arqueo),
-      formatearRetirosArqueoPdf(arqueo, retirosDelDia),
+      formatearRetirosArqueoPdf(arqueo, retirosDelArqueo),
       formatearDiferenciaArqueoPdf(arqueo.diferencia),
     ];
   });
