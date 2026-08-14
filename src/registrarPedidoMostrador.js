@@ -58,6 +58,7 @@ export async function registrarPedidoMostrador({
   productos,
   mostradorFlujoCocina,
   usuarioId,
+  jornadaId = null,
 }) {
   const payload = construirPayloadPedidoMostrador({
     detallePedido,
@@ -70,7 +71,15 @@ export async function registrarPedidoMostrador({
 
   const { data, error } = await supabase
     .from('pedidos')
-    .insert(payloadConNegocio(payload, negocioId))
+    .insert(
+      payloadConNegocio(
+        {
+          ...payload,
+          jornada_id: jornadaId ?? null,
+        },
+        negocioId
+      )
+    )
     .select()
     .single();
 

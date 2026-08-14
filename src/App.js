@@ -3390,6 +3390,7 @@ function Dashboard() {
       ),
       referencia: esPresencial ? carrito.form.referencia.trim() || null : null,
       created_by: usuario?.id ?? null,
+      jornada_id: jornadaAbierta?.id ?? null,
       ...(esPresencial
         ? {
             status_cocina1: statusPresencial.status_cocina1,

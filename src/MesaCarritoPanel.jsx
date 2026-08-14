@@ -451,6 +451,7 @@ export default function MesaCarritoPanel({
           numeroMesa,
           creadoPor: usuarioId,
           carritoSnapshot: snapshotAlCrear,
+          jornadaId: jornadaAbierta?.id ?? null,
         });
 
         if (cancelado || !carritoTieneProductos(carrito.snapshot)) {
@@ -628,6 +629,7 @@ export default function MesaCarritoPanel({
       numeroMesa,
       numeroRonda: numeroRondaSiguiente,
       productos,
+      jornadaId: jornadaAbierta?.id ?? null,
     });
 
     if (error) {

@@ -14,6 +14,7 @@ export async function ejecutarEnvioCocina({
   numeroMesa,
   numeroRonda,
   productos,
+  jornadaId = null,
 }) {
   const pedidoConDetalle = {
     producto: resumen,
@@ -37,6 +38,7 @@ export async function ejecutarEnvioCocina({
     forma_pago: null,
     referencia: `Ronda ${numeroRonda}`,
     created_by: usuarioId ?? null,
+    jornada_id: jornadaId ?? null,
     status_cocina1: cocinas.status_cocina1,
     status_cocina2: cocinas.status_cocina2,
   };

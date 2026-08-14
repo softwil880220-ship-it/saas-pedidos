@@ -606,6 +606,7 @@ export async function abrirFolioMesa({
   numeroMesa,
   creadoPor,
   carritoSnapshot: carritoSnapshotEntrada = null,
+  jornadaId = null,
 }) {
   const existente = obtenerFolioAbiertoPorMesa(numeroMesa);
   if (existente) {
@@ -622,6 +623,7 @@ export async function abrirFolioMesa({
       creado_por: creadoPor ?? null,
       carrito_snapshot: serializarCarritoSnapshot(carritoSnapshot),
       numero_ronda_siguiente: 1,
+      jornada_id: jornadaId ?? null,
     },
     negocioId
   );

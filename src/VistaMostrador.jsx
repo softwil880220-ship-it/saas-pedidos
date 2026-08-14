@@ -266,6 +266,7 @@ export default function VistaMostrador({
       productos,
       mostradorFlujoCocina,
       usuarioId,
+      jornadaId: jornadaAbierta?.id ?? null,
     });
 
     if (error || !data) {
