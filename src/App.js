@@ -44,6 +44,7 @@ import VistaReportes from './VistaReportes';
 import VistaEquipo from './VistaEquipo';
 import {
   agruparPedidosPorDia,
+  formatearEncabezadoGrupoJornada,
   formatearHoraPedidoLista,
 } from './reportesHelpers';
 import {
@@ -968,6 +969,23 @@ function formatearClaveFecha(fecha) {
 
 function obtenerFechaHoy() {
   return formatearClaveFecha(new Date());
+}
+
+function pedidoPerteneceJornadaDashboard(pedido, jornadaId, hoyClave, abiertaEn) {
+  if (!pedido?.created_at || !jornadaId) return false;
+
+  if (pedido.jornada_id) {
+    return pedido.jornada_id === jornadaId;
+  }
+
+  if (!abiertaEn) return false;
+
+  const fechaCreacion = new Date(pedido.created_at);
+
+  return (
+    formatearClaveFecha(fechaCreacion) === hoyClave &&
+    fechaCreacion >= new Date(abiertaEn)
+  );
 }
 
 function formatearFechaCortaFiltro(claveFecha) {
@@ -2176,11 +2194,16 @@ function Dashboard() {
       formatearClaveFecha(new Date(pedido.created_at)) === hoyClave
   );
 
-  const pedidosHoyTodos = pedidos.filter(
-    (pedido) =>
-      pedido.created_at &&
-      formatearClaveFecha(new Date(pedido.created_at)) === hoyClave
-  );
+  const pedidosHoyTodos = jornadaAbierta?.id
+    ? pedidos.filter((pedido) =>
+        pedidoPerteneceJornadaDashboard(
+          pedido,
+          jornadaAbierta.id,
+          hoyClave,
+          jornadaAbierta.abierta_en
+        )
+      )
+    : [];
   const pedidosHoyCaja = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'presencial');
   const pedidosHoyMostrador = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'mostrador');
   const pedidosHoyRecogerDomicilio = pedidosHoyTodos.filter((pedido) => esPedidoWhatsapp(pedido));
@@ -3057,27 +3080,43 @@ function Dashboard() {
     [totalArqueoContado, arqueoSistema.total]
   );
 
-  const cargarFoliosMesasCerradosDelDia = async () => {
-    if (!negocioId) return [];
+  const cargarFoliosMesasCerradosDelDia = async (jornadaId, abiertaEn) => {
+    if (!negocioId || !jornadaId) return [];
 
-    const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
-    const { data, error } = await queryConNegocio(
-      supabase
-        .from('mesas_folios')
-        .select(
-          'forma_pago, total_cobrado, propina_monto_aplicado, descuento_monto_aplicado'
-        )
-        .eq('estado', 'cerrada')
-        .gte('cerrada_en', inicio.toISOString())
-        .lte('cerrada_en', fin.toISOString()),
-      negocioId
-    );
+    const { fin } = obtenerRangoFechaClave(hoyClave);
+    const camposFolio =
+      'forma_pago, total_cobrado, propina_monto_aplicado, descuento_monto_aplicado';
 
-    if (error) {
-      throw new Error(error.message);
+    const [jornadaResult, legacyResult] = await Promise.all([
+      queryConNegocio(
+        supabase
+          .from('mesas_folios')
+          .select(camposFolio)
+          .eq('estado', 'cerrada')
+          .eq('jornada_id', jornadaId),
+        negocioId
+      ),
+      queryConNegocio(
+        supabase
+          .from('mesas_folios')
+          .select(camposFolio)
+          .eq('estado', 'cerrada')
+          .is('jornada_id', null)
+          .gte('cerrada_en', abiertaEn)
+          .lte('cerrada_en', fin.toISOString()),
+        negocioId
+      ),
+    ]);
+
+    if (jornadaResult.error) {
+      throw new Error(jornadaResult.error.message);
     }
 
-    return data || [];
+    if (legacyResult.error) {
+      throw new Error(legacyResult.error.message);
+    }
+
+    return [...(jornadaResult.data || []), ...(legacyResult.data || [])];
   };
 
   const cargarArqueoDelDia = async () => {
@@ -3709,7 +3748,7 @@ function Dashboard() {
       const [retirosResult, fondoResult, foliosMesasResult] = await Promise.allSettled([
         cargarRetirosJornadaAbierta(jornadaAbierta.id),
         cargarFondoFijoJornadaAbierta(jornadaAbierta.id),
-        cargarFoliosMesasCerradosDelDia(),
+        cargarFoliosMesasCerradosDelDia(jornadaAbierta.id, jornadaAbierta.abierta_en),
       ]);
 
       if (retirosResult.status === 'fulfilled') {
@@ -3740,7 +3779,7 @@ function Dashboard() {
         setFoliosMesasCerradosHoy([]);
         errores.push(
           foliosMesasResult.reason?.message ||
-            'No se pudieron cargar los cobros de mesas del día.'
+            'No se pudieron cargar los cobros de mesas de la jornada.'
         );
       }
 
@@ -4340,9 +4379,9 @@ function Dashboard() {
             jornadaAbierta ? (
           <div className="header-stats">
             <div className="header-stat header-stat-principal">
-              <span className="header-stat-label">Ventas totales hoy</span>
+              <span className="header-stat-label">Ventas de la jornada</span>
               <span className="header-stat-fecha">
-                {formatearFechaCompleta(new Date(fechaActual))}
+                {formatearEncabezadoGrupoJornada(jornadaAbierta)}
               </span>
               <span className="header-stat-value header-stat-value-total">
                 {formatearMoneda(totalVentasHoyTotal)}
@@ -4782,7 +4821,7 @@ function Dashboard() {
               Arqueo de caja
             </h2>
             <p className="arqueo-modal-descripcion">
-              Ventas totales del día: {formatearMoneda(totalVentasHoyTotal)}
+              Ventas totales de la jornada: {formatearMoneda(totalVentasHoyTotal)}
             </p>
             <p className="arqueo-modal-descripcion">
               Fondo fijo del día: {formatearMoneda(fondoFijoDelDia)} | Retiros del día:{' '}
