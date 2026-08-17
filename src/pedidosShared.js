@@ -690,10 +690,17 @@ function formatearDescripcionLineaCocinaSoloValor(linea, variantesCtx) {
   return `${nombre} (${detalles.join('; ')})`;
 }
 
-function etiquetaBadgeLineaDesglose(linea) {
+function etiquetaBadgeLineaDesglose(linea, subtotal) {
   if (esProductoPorPeso(linea)) {
     const gramos = parseGramosLinea(linea?.cantidad);
-    return gramos > 0 ? `${gramos}g` : '—';
+    if (gramos <= 0) return '—';
+
+    const subtotalLinea = Number(subtotal);
+    if (Number.isFinite(subtotalLinea) && subtotalLinea > 0) {
+      return `${gramos}g · ${formatearMoneda(subtotalLinea)}`;
+    }
+
+    return `${gramos}g`;
   }
 
   return String(linea?.cantidad ?? 1);
@@ -771,7 +778,7 @@ export function DesgloseProductosPedido({
                 }`}
                 aria-label={ariaLabelBadgeLineaDesglose(linea)}
               >
-                {etiquetaBadgeLineaDesglose(linea)}
+                {etiquetaBadgeLineaDesglose(linea, sinPrecio ? subtotalLinea : undefined)}
               </span>
               <div className="pedido-desglose-detalle">
                 <span className="pedido-desglose-nombre">
