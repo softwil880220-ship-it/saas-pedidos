@@ -42,6 +42,8 @@ import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
 import VistaEquipo from './VistaEquipo';
+import VistaClientes from './VistaClientes';
+import ClienteBusquedaWhatsapp from './ClienteBusquedaWhatsapp';
 import {
   agruparPedidosPorDia,
   formatearEncabezadoGrupoJornada,
@@ -5066,6 +5068,9 @@ function Dashboard() {
                     />
                   </div>
                   {!esModoPresencial && (
+                    <ClienteBusquedaWhatsapp negocioId={negocioId} />
+                  )}
+                  {!esModoPresencial && (
                     <div className="formulario-campo">
                       <label htmlFor="telefono">Teléfono</label>
                       <input
@@ -5939,6 +5944,14 @@ function App() {
             element={
               <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/clientes"
+            element={
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
+                <VistaClientes />
               </ProtectedRoute>
             }
           />

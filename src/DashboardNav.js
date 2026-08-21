@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 export const DASHBOARD_NAV_ITEMS = [
   { id: 'pedidos', label: 'Pedidos', path: '/', rolesPermitidos: ['dueno', 'administrador', 'cajero'] },
   { id: 'catalogo', label: 'Catálogo de productos', path: '/catalogo', rolesPermitidos: ['dueno', 'administrador'] },
+  { id: 'clientes', label: 'Clientes', path: '/clientes', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'reportes', label: 'Reportes', path: '/reportes', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'equipo', label: 'Equipo', path: '/equipo', rolesPermitidos: ['dueno', 'administrador'] },
 ];
