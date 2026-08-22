@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
 export const DASHBOARD_NAV_ITEMS = [
   { id: 'pedidos', label: 'Pedidos', path: '/', rolesPermitidos: ['dueno', 'administrador', 'cajero'] },
@@ -10,9 +11,12 @@ export const DASHBOARD_NAV_ITEMS = [
 
 export default function DashboardNav({ activo, rol }) {
   const navigate = useNavigate();
-  const items = DASHBOARD_NAV_ITEMS.filter((item) =>
-    rol ? item.rolesPermitidos.includes(rol) : false
-  );
+  const { modulosNegocio } = useAuth();
+  const items = DASHBOARD_NAV_ITEMS.filter((item) => {
+    if (!rol || !item.rolesPermitidos.includes(rol)) return false;
+    if (item.id === 'clientes') return modulosNegocio.habilitar_clientes === true;
+    return true;
+  });
 
   return (
     <nav className="dashboard-nav">

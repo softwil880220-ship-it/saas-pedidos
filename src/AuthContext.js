@@ -4,6 +4,26 @@ import { supabase } from './supabase';
 
 const AuthContext = createContext(null);
 
+const MODULOS_NEGOCIO_VACIOS = {
+  habilitar_caja: false,
+  habilitar_mostrador: false,
+  habilitar_recoger_domicilio: false,
+  habilitar_mesas: false,
+  habilitar_clientes: false,
+};
+
+function modulosNegocioDesdeFila(negocio) {
+  if (!negocio) return { ...MODULOS_NEGOCIO_VACIOS };
+
+  return {
+    habilitar_caja: negocio.habilitar_caja === true,
+    habilitar_mostrador: negocio.habilitar_mostrador === true,
+    habilitar_recoger_domicilio: negocio.habilitar_recoger_domicilio === true,
+    habilitar_mesas: negocio.habilitar_mesas === true,
+    habilitar_clientes: negocio.habilitar_clientes === true,
+  };
+}
+
 export function rutaPorRol(rol) {
   switch (rol) {
     case 'dueno':
@@ -28,7 +48,22 @@ async function cargarUsuario(authUserId) {
 
   const { data, error } = await supabase
     .from('usuarios_negocio')
-    .select('id, negocio_id, rol, nombre, activo')
+    .select(
+      `
+      id,
+      negocio_id,
+      rol,
+      nombre,
+      activo,
+      negocios (
+        habilitar_caja,
+        habilitar_mostrador,
+        habilitar_recoger_domicilio,
+        habilitar_mesas,
+        habilitar_clientes
+      )
+    `
+    )
     .eq('supabase_user_id', authUserId)
     .maybeSingle();
 
@@ -41,7 +76,12 @@ async function cargarUsuario(authUserId) {
 
   if (!data || !data.activo) return null;
 
-  return data;
+  const { negocios, ...usuario } = data;
+
+  return {
+    ...usuario,
+    modulosNegocio: modulosNegocioDesdeFila(negocios),
+  };
 }
 
 export function AuthProvider({ children }) {
@@ -123,6 +163,7 @@ export function AuthProvider({ children }) {
       usuario,
       negocioId: usuario?.negocio_id ?? null,
       rol: usuario?.rol ?? null,
+      modulosNegocio: usuario?.modulosNegocio ?? MODULOS_NEGOCIO_VACIOS,
       cargando,
       errorAuth,
       iniciarSesion,

@@ -5950,7 +5950,10 @@ function App() {
           <Route
             path="/clientes"
             element={
-              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
+              <ProtectedRoute
+                rolesPermitidos={['dueno', 'administrador']}
+                requiereHabilitarClientes
+              >
                 <VistaClientes />
               </ProtectedRoute>
             }

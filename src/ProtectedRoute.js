@@ -1,8 +1,12 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, rutaPorRol } from './AuthContext';
 
-export default function ProtectedRoute({ children, rolesPermitidos }) {
-  const { session, usuario, rol, cargando } = useAuth();
+export default function ProtectedRoute({
+  children,
+  rolesPermitidos,
+  requiereHabilitarClientes = false,
+}) {
+  const { session, usuario, rol, cargando, modulosNegocio } = useAuth();
   const location = useLocation();
 
   if (cargando) {
@@ -26,6 +30,10 @@ export default function ProtectedRoute({ children, rolesPermitidos }) {
   }
 
   if (rolesPermitidos && !rolesPermitidos.includes(rol)) {
+    return <Navigate to={rutaPorRol(rol)} replace />;
+  }
+
+  if (requiereHabilitarClientes && !modulosNegocio.habilitar_clientes) {
     return <Navigate to={rutaPorRol(rol)} replace />;
   }
 
