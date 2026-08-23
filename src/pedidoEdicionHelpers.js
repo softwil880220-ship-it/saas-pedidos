@@ -5,7 +5,10 @@ import {
   enriquecerLineasDetalleCocina,
   mergeStatusCocinasEnEdicion,
   normalizarLineasDetallePedido,
+  normalizarTipoEntrega,
   obtenerStatusGlobalTrasCocinas,
+  payloadStatusCocinasParaStatusGlobal,
+  prepararStatusCocinasAlEntrar,
   todasCocinasRequeridasListas,
 } from './pedidosShared';
 import {
@@ -287,6 +290,168 @@ export function construirPayloadEdicionRondaMesa({
     status_cocina1,
     status_cocina2,
   };
+}
+
+export const CLIENTE_PUBLICO_CAJA = 'Público general';
+
+/** Status fijo de venta Caja completada ("Venta completada" en UI). */
+export const STATUS_VENTA_CAJA_COMPLETADA = 'entregado';
+
+const FORMAS_PAGO_VALIDAS = new Set(['efectivo', 'tarjeta', 'transferencia', 'link_pago']);
+
+export const CAMPOS_AUDITORIA_EDICION_CAJA = [
+  'total',
+  'cliente',
+  'forma_pago',
+  'lineas_detalle',
+];
+
+export const CAMPOS_AUDITORIA_EDICION_RECOGER_DOMICILIO = [
+  'total',
+  'cliente',
+  'forma_pago',
+  'tipo_entrega',
+  'lineas_detalle',
+];
+
+function normalizarFormaPagoPayload(valor) {
+  const forma = String(valor ?? '').trim();
+  if (!forma) return null;
+  return FORMAS_PAGO_VALIDAS.has(forma) ? forma : null;
+}
+
+function valorEdicionComoTexto(valor) {
+  if (valor == null) return '';
+  if (typeof valor === 'object') return JSON.stringify(valor);
+  return String(valor);
+}
+
+function resolverStatusEdicionRecogerDomicilio(pedidoOriginal, pedidoConDetalle, form) {
+  let statusEdicion = form.status;
+  let statusCocinas = {};
+
+  if (statusEdicion === 'en-cocina') {
+    if (pedidoOriginal.status === 'en-cocina') {
+      const merge = mergeStatusCocinasEnEdicion(pedidoOriginal, pedidoConDetalle);
+      if (!merge.requiereAlgunaCocina) {
+        statusEdicion = obtenerStatusGlobalTrasCocinas(form.tipoEntrega);
+        statusCocinas = { status_cocina1: null, status_cocina2: null };
+      } else {
+        statusCocinas = {
+          status_cocina1: merge.status_cocina1,
+          status_cocina2: merge.status_cocina2,
+        };
+        const pedidoProyectado = {
+          ...pedidoConDetalle,
+          status: 'en-cocina',
+          ...statusCocinas,
+        };
+        if (todasCocinasRequeridasListas(pedidoProyectado)) {
+          statusEdicion = obtenerStatusGlobalTrasCocinas(form.tipoEntrega);
+        }
+      }
+    } else {
+      const cocinas = prepararStatusCocinasAlEntrar(pedidoConDetalle);
+      if (!cocinas.requiereAlgunaCocina) {
+        statusEdicion = obtenerStatusGlobalTrasCocinas(form.tipoEntrega);
+        statusCocinas = { status_cocina1: null, status_cocina2: null };
+      } else {
+        statusCocinas = {
+          status_cocina1: cocinas.status_cocina1,
+          status_cocina2: cocinas.status_cocina2,
+        };
+      }
+    }
+  } else {
+    statusCocinas = payloadStatusCocinasParaStatusGlobal(pedidoConDetalle, statusEdicion);
+  }
+
+  return {
+    status: statusEdicion,
+    ...statusCocinas,
+  };
+}
+
+export function construirPayloadEdicionCaja({ detallePedido, resumen, form }) {
+  return {
+    producto: resumen,
+    lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
+    total: detallePedido.total,
+    cliente: CLIENTE_PUBLICO_CAJA,
+    referencia: form.referencia?.trim() || null,
+    forma_pago: normalizarFormaPagoPayload(form.formaPago),
+    status: STATUS_VENTA_CAJA_COMPLETADA,
+  };
+}
+
+export function construirPayloadEdicionRecogerDomicilio({
+  pedidoOriginal,
+  detallePedido,
+  resumen,
+  form,
+}) {
+  const pedidoConDetalle = {
+    ...pedidoOriginal,
+    producto: resumen,
+    lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
+    total: detallePedido.total,
+  };
+
+  const { status, status_cocina1, status_cocina2 } = resolverStatusEdicionRecogerDomicilio(
+    pedidoOriginal,
+    pedidoConDetalle,
+    form
+  );
+
+  return {
+    producto: resumen,
+    lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
+    total: detallePedido.total,
+    forma_pago: normalizarFormaPagoPayload(form.formaPago),
+    cliente: form.cliente.trim(),
+    referencia: null,
+    telefono: form.telefono?.trim() || null,
+    tipo_entrega: normalizarTipoEntrega(form.tipoEntrega),
+    direccion:
+      form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
+        ? form.direccion?.trim() || null
+        : null,
+    status,
+    status_cocina1,
+    status_cocina2,
+  };
+}
+
+export function construirRegistrosAuditoriaEdicionPedido({
+  pedidoOriginal,
+  payload,
+  negocioId,
+  editadoPor,
+  campos,
+  normalizarValorAnterior = (campo, pedido) => pedido[campo],
+  normalizarValorNuevo = (campo, payloadActual) => payloadActual[campo],
+}) {
+  const valoresAnteriores = Object.fromEntries(
+    campos.map((campo) => [campo, normalizarValorAnterior(campo, pedidoOriginal)])
+  );
+  const valoresNuevos = Object.fromEntries(
+    campos.map((campo) => [campo, normalizarValorNuevo(campo, payload)])
+  );
+
+  return campos
+    .filter(
+      (campo) =>
+        valorEdicionComoTexto(valoresAnteriores[campo]) !==
+        valorEdicionComoTexto(valoresNuevos[campo])
+    )
+    .map((campo) => ({
+      pedido_id: pedidoOriginal.id,
+      negocio_id: pedidoOriginal.negocio_id ?? negocioId,
+      editado_por: editadoPor ?? null,
+      campo_modificado: campo,
+      valor_anterior: valorEdicionComoTexto(valoresAnteriores[campo]),
+      valor_nuevo: valorEdicionComoTexto(valoresNuevos[campo]),
+    }));
 }
 
 export function tituloAutorizacionPinPedido(accion, pedido) {

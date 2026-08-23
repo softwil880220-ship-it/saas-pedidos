@@ -29,13 +29,8 @@ import {
   etiquetaCocinaProducto,
   formatearMoneda,
   formatearProgresoCocinas,
-  mergeStatusCocinasEnEdicion,
   normalizarCocinaProducto,
-  obtenerStatusGlobalTrasCocinas,
-  payloadStatusCocinasParaStatusGlobal,
   pedidoRequiereAlgunaCocina,
-  prepararStatusCocinasAlEntrar,
-  todasCocinasRequeridasListas,
 } from './pedidosShared';
 import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
@@ -69,11 +64,16 @@ import {
 } from './pedidoPendingSyncStorage';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import {
-  lineasFormularioDesdePedido,
+  CAMPOS_AUDITORIA_EDICION_CAJA,
+  CAMPOS_AUDITORIA_EDICION_RECOGER_DOMICILIO,
+  construirPayloadEdicionCaja,
+  construirPayloadEdicionRecogerDomicilio,
+  construirRegistrosAuditoriaEdicionPedido,
+  construirSnapshotCarritoDesdePedido,
   normalizarLineasDetallePedido,
+  resumenProductosDesdeLineas,
   tituloAutorizacionPinPedido,
 } from './pedidoEdicionHelpers';
-import SelectorProductosPedido from './SelectorProductosPedido.jsx';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import CajaPagoEfectivo from './CajaPagoEfectivo.jsx';
@@ -101,7 +101,6 @@ import {
   calcularDetalleLineaPedido,
   calcularDetalleLineasPedido,
   calcularSubtotal,
-  calcularTotalLineas,
   formatearDescripcionLinea,
   redondearMoneda,
 } from './pedidoCarritoCalculos';
@@ -1204,7 +1203,7 @@ function Dashboard() {
   const [modalMesasAbiertasJornadaAbierto, setModalMesasAbiertasJornadaAbierto] =
     useState(false);
   const [mesasAbiertasBloqueoJornada, setMesasAbiertasBloqueoJornada] = useState([]);
-  const nextEditLineaId = useRef(2);
+  const pedidoFormularioRef = useRef(null);
   const [productoForm, setProductoForm] = useState({
     nombre: '',
     precio: '',
@@ -1220,7 +1219,6 @@ function Dashboard() {
   const [editandoVariante, setEditandoVariante] = useState(null);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
-  const [pedidoEditForm, setPedidoEditForm] = useState(null);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [guardandoVariante, setGuardandoVariante] = useState(false);
   const [guardandoEdicionPedido, setGuardandoEdicionPedido] = useState(false);
@@ -1697,8 +1695,15 @@ function Dashboard() {
   const handleFormChange = (e) => {
     setErrorGuardarPedido(null);
     const { name, value } = e.target;
+    const pedidoEdicion = editandoPedidoId
+      ? pedidos.find((item) => item.id === editandoPedidoId)
+      : null;
+    const esPresencial =
+      editandoPedidoId != null
+        ? pedidoEdicion?.tipo === 'presencial'
+        : modo === 'presencial';
 
-    if (modo === 'presencial') {
+    if (esPresencial) {
       carrito.setCampoCaptura(name, value);
       return;
     }
@@ -1719,6 +1724,10 @@ function Dashboard() {
 
   const limpiarPedidoCaptura = () => {
     setErrorGuardarPedido(null);
+    if (editandoPedidoId) {
+      cancelarEdicionPedido();
+      return;
+    }
     resetFormPedido(modo);
   };
 
@@ -1748,8 +1757,9 @@ function Dashboard() {
     setFiltroSucursal('todos');
     setFiltroFecha(obtenerFechaHoy());
     setResumenVenta(null);
-    setEditandoPedidoId(null);
-    setPedidoEditForm(null);
+    if (editandoPedidoId) {
+      cancelarEdicionPedido();
+    }
 
     if (nuevoModo === 'mesas' || nuevoModo === 'mostrador') {
       return;
@@ -1775,11 +1785,18 @@ function Dashboard() {
     resetFormPedido(nuevoModo, { limpiarStorage: false });
   };
 
-  const carritoCaptura = modo === 'presencial' ? carrito : carritoWhatsapp;
+  const enModoEdicion = Boolean(editandoPedidoId);
+  const pedidoEnEdicion = enModoEdicion
+    ? pedidos.find((item) => item.id === editandoPedidoId)
+    : null;
+  const esCapturaPresencial = enModoEdicion
+    ? pedidoEnEdicion?.tipo === 'presencial'
+    : modo === 'presencial';
+  const carritoCaptura = esCapturaPresencial ? carrito : carritoWhatsapp;
   const formCaptura = carritoCaptura.form;
-  const pagoValido = modo === 'presencial' ? carrito.pagoValido : false;
-  const cambio = modo === 'presencial' ? carrito.cambio : null;
-  const pagoInsuficiente = modo === 'presencial' ? carrito.pagoInsuficiente : false;
+  const pagoValido = esCapturaPresencial ? carrito.pagoValido : false;
+  const cambio = esCapturaPresencial ? carrito.cambio : null;
+  const pagoInsuficiente = esCapturaPresencial ? carrito.pagoInsuficiente : false;
 
   const handleProductoFormChange = (e) => {
     const { name, value } = e.target;
@@ -1820,6 +1837,11 @@ function Dashboard() {
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorGuardarPedido(null);
+
+    if (editandoPedidoId) {
+      void guardarEdicionPedidoCarrito();
+      return;
+    }
 
     const esPresencial = modo === 'presencial';
     const carritoActivo = esPresencial ? carrito : carritoWhatsapp;
@@ -2376,8 +2398,22 @@ function Dashboard() {
   };
 
   const cancelarEdicionPedido = () => {
+    if (!editandoPedidoId) return;
+
+    const pedido = pedidos.find((item) => item.id === editandoPedidoId);
+    const esPresencial = pedido?.tipo === 'presencial';
+
     setEditandoPedidoId(null);
-    setPedidoEditForm(null);
+    setErrorGuardarPedido(null);
+
+    if (esPresencial) {
+      carrito.resetCarrito({ limpiarStorage: false });
+      carrito.reanudarPersistencia();
+      return;
+    }
+
+    carritoWhatsapp.resetCarrito({ limpiarStorage: false });
+    carritoWhatsapp.reanudarPersistencia();
   };
 
   const iniciarEdicionPedido = async (pedido) => {
@@ -2395,576 +2431,109 @@ function Dashboard() {
       );
     }
 
-    const lineas = lineasFormularioDesdePedido(
+    const snapshot = construirSnapshotCarritoDesdePedido(
       pedidoFuente,
       productos,
       variantesCtx
     );
-    nextEditLineaId.current = lineas.length + 1;
+    const esPresencial = pedidoFuente.tipo === 'presencial';
+
+    if (esPresencial) {
+      carrito.pausarPersistencia();
+      carrito.aplicarSnapshot(snapshot);
+    } else {
+      carritoWhatsapp.pausarPersistencia();
+      carritoWhatsapp.aplicarSnapshot(snapshot);
+    }
+
     setEditandoPedidoId(pedido.id);
-    setPedidoEditForm({
-      cliente: pedidoFuente.cliente,
-      telefono: pedidoFuente.telefono || '',
-      tipoEntrega: normalizarTipoEntrega(pedidoFuente.tipo_entrega),
-      direccion: pedidoFuente.direccion || '',
-      formaPago:
-        pedidoFuente.forma_pago ||
-        (pedidoFuente.tipo === 'presencial' ? FORMA_PAGO_DEFAULT_CAJA : ''),
-      referencia: pedidoFuente.referencia || '',
-      status: pedidoFuente.status || 'por-aceptar',
-      lineas,
+    setErrorGuardarPedido(null);
+
+    requestAnimationFrame(() => {
+      pedidoFormularioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
 
-  const handlePedidoEditChange = (e) => {
-    const { name, value } = e.target;
-    setPedidoEditForm((prev) => {
-      if (!prev) return prev;
-      if (name === 'tipoEntrega') {
-        if (!value) {
-          return {
-            ...prev,
-            tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-            direccion: '',
-          };
-        }
+  const guardarEdicionPedidoCarrito = async () => {
+    if (!editandoPedidoId || guardandoEdicionPedido) return;
 
-        const flujo = obtenerFlujoStatus(value);
-        const status = flujo.includes(prev.status)
-          ? prev.status
-          : STATUS_DEFAULT_WHATSAPP_FORM;
-        const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
-        return {
-          ...prev,
-          tipoEntrega: value,
-          status,
-          direccion: esDomicilio ? prev.direccion : '',
-        };
-      }
-      return { ...prev, [name]: value };
-    });
-  };
+    const pedidoOriginal = pedidos.find((item) => item.id === editandoPedidoId);
+    if (!pedidoOriginal) return;
 
-  const actualizarLineaEdicion = (lineaId, campo, valor) => {
-    setPedidoEditForm((prev) => ({
-      ...prev,
-      lineas: prev.lineas.map((linea) => {
-        if (linea.id !== lineaId) return linea;
-        if (campo === 'productoId') {
-          return {
-            ...linea,
-            productoId: String(valor),
-            variantes: crearVariantesLineaVacias(variantesCtx.categorias),
-          };
-        }
-        return { ...linea, [campo]: valor };
-      }),
-    }));
-  };
-
-  const cambiarVarianteLineaEdicion = (lineaId, categoria, itemId) => {
-    setPedidoEditForm((prev) => ({
-      ...prev,
-      lineas: prev.lineas.map((linea) =>
-        linea.id === lineaId
-          ? {
-              ...linea,
-              variantes: {
-                ...linea.variantes,
-                [categoria]: toggleIdEnLinea(linea.variantes?.[categoria], itemId),
-              },
-            }
-          : linea
-      ),
-    }));
-  };
-
-  const agregarLineaEdicion = () => {
-    setPedidoEditForm((prev) => ({
-      ...prev,
-      lineas: [...prev.lineas, crearLineaPedido(nextEditLineaId.current++, variantesCtx)],
-    }));
-  };
-
-  const eliminarLineaEdicion = (lineaId) => {
-    setPedidoEditForm((prev) => {
-      if (prev.lineas.length <= 1) return prev;
-      return {
-        ...prev,
-        lineas: prev.lineas.filter((linea) => linea.id !== lineaId),
-      };
-    });
-  };
-
-  const guardarEdicionPedido = async (pedido) => {
-    if (!pedidoEditForm) return;
-
-    const detallePedido = calcularDetalleLineasPedido(
-      pedidoEditForm.lineas,
-      productos,
-      variantesCtx
-    );
+    const esPresencial = pedidoOriginal.tipo === 'presencial';
+    const carritoActivo = esPresencial ? carrito : carritoWhatsapp;
+    const detallePedido = carritoActivo.obtenerDetallePedido();
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) return;
 
-    const resumen = resumenProductos(
-      pedidoEditForm.lineas,
-      productos,
-      variantesCtx
-    );
-    const esPresencial = pedido.tipo === 'presencial';
+    if (
+      !esPresencial &&
+      !tipoEntregaWhatsAppSeleccionado(carritoWhatsapp.form.tipoEntrega)
+    ) {
+      return;
+    }
 
     setGuardandoEdicionPedido(true);
 
-    const pedidoConDetalle = {
-      ...pedido,
-      producto: resumen,
-      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
-      total: detallePedido.total,
-    };
+    const resumen = resumenProductosDesdeLineas(
+      carritoActivo.lineasPedidoActivas,
+      productos,
+      variantesCtx
+    );
 
-    let statusEdicion = pedidoEditForm.status;
-    let statusCocinas = {};
-
-    if (!esPresencial) {
-      if (statusEdicion === 'en-cocina') {
-        if (pedido.status === 'en-cocina') {
-          const merge = mergeStatusCocinasEnEdicion(pedido, pedidoConDetalle);
-          if (!merge.requiereAlgunaCocina) {
-            statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
-            statusCocinas = { status_cocina1: null, status_cocina2: null };
-          } else {
-            statusCocinas = {
-              status_cocina1: merge.status_cocina1,
-              status_cocina2: merge.status_cocina2,
-            };
-            const pedidoProyectado = {
-              ...pedidoConDetalle,
-              status: 'en-cocina',
-              ...statusCocinas,
-            };
-            if (todasCocinasRequeridasListas(pedidoProyectado)) {
-              statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
-            }
-          }
-        } else {
-          const cocinas = prepararStatusCocinasAlEntrar(pedidoConDetalle);
-          if (!cocinas.requiereAlgunaCocina) {
-            statusEdicion = obtenerStatusGlobalTrasCocinas(pedidoEditForm.tipoEntrega);
-            statusCocinas = { status_cocina1: null, status_cocina2: null };
-          } else {
-            statusCocinas = {
-              status_cocina1: cocinas.status_cocina1,
-              status_cocina2: cocinas.status_cocina2,
-            };
-          }
-        }
-      } else {
-        statusCocinas = payloadStatusCocinasParaStatusGlobal(
-          pedidoConDetalle,
-          statusEdicion
-        );
-      }
-    }
-
-    const payload = {
-      producto: resumen,
-      lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
-      total: detallePedido.total,
-      forma_pago: normalizarFormaPagoPayload(pedidoEditForm.formaPago),
-      ...(esPresencial
-        ? {
-            cliente: CLIENTE_PUBLICO,
-            referencia: pedidoEditForm.referencia?.trim() || null,
-            status: 'entregado',
-            tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
-          }
-        : {
-            cliente: pedidoEditForm.cliente.trim(),
-            referencia: null,
-            telefono: pedidoEditForm.telefono?.trim() || null,
-            tipo_entrega: normalizarTipoEntrega(pedidoEditForm.tipoEntrega),
-            direccion:
-              pedidoEditForm.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
-                ? pedidoEditForm.direccion?.trim() || null
-                : null,
-            status: statusEdicion,
-            ...statusCocinas,
-          }),
-    };
+    const payload = esPresencial
+      ? construirPayloadEdicionCaja({
+          detallePedido,
+          resumen,
+          form: carritoActivo.form,
+        })
+      : construirPayloadEdicionRecogerDomicilio({
+          pedidoOriginal,
+          detallePedido,
+          resumen,
+          form: carritoActivo.form,
+        });
 
     const { data, error } = await queryConNegocio(
-      supabase.from('pedidos').update(payload).eq('id', pedido.id),
+      supabase.from('pedidos').update(payload).eq('id', pedidoOriginal.id),
       negocioId
     )
       .select()
       .single();
 
-    setGuardandoEdicionPedido(false);
-
     if (!error && data) {
-      const valorEdicionComoTexto = (valor) => {
-        if (valor == null) return '';
-        if (typeof valor === 'object') return JSON.stringify(valor);
-        return String(valor);
-      };
+      const camposAuditoria = esPresencial
+        ? CAMPOS_AUDITORIA_EDICION_CAJA
+        : CAMPOS_AUDITORIA_EDICION_RECOGER_DOMICILIO;
 
-      const camposEdicion = [
-        'total',
-        'cliente',
-        'forma_pago',
-        'tipo_entrega',
-        'lineas_detalle',
-      ];
-      const valoresAnteriores = {
-        total: pedido.total,
-        cliente: pedido.cliente,
-        forma_pago: normalizarFormaPagoPayload(pedido.forma_pago),
-        tipo_entrega: normalizarTipoEntrega(pedido.tipo_entrega),
-        lineas_detalle: pedido.lineas_detalle,
-      };
-      const valoresNuevos = {
-        total: payload.total,
-        cliente: payload.cliente,
-        forma_pago: payload.forma_pago,
-        tipo_entrega: payload.tipo_entrega,
-        lineas_detalle: payload.lineas_detalle,
-      };
-
-      const registrosEdicion = camposEdicion
-        .filter(
-          (campo) =>
-            valorEdicionComoTexto(valoresAnteriores[campo]) !==
-            valorEdicionComoTexto(valoresNuevos[campo])
-        )
-        .map((campo) => ({
-          pedido_id: pedido.id,
-          negocio_id: pedido.negocio_id ?? negocioId,
-          editado_por: session?.user?.id ?? null,
-          campo_modificado: campo,
-          valor_anterior: valorEdicionComoTexto(valoresAnteriores[campo]),
-          valor_nuevo: valorEdicionComoTexto(valoresNuevos[campo]),
-        }));
+      const registrosEdicion = construirRegistrosAuditoriaEdicionPedido({
+        pedidoOriginal,
+        payload,
+        negocioId,
+        editadoPor: session?.user?.id ?? null,
+        campos: camposAuditoria,
+        normalizarValorAnterior: (campo, pedido) => {
+          if (campo === 'forma_pago') {
+            return normalizarFormaPagoPayload(pedido.forma_pago);
+          }
+          if (campo === 'tipo_entrega') {
+            return normalizarTipoEntrega(pedido.tipo_entrega);
+          }
+          return pedido[campo];
+        },
+      });
 
       if (registrosEdicion.length > 0) {
         await supabase.from('pedidos_ediciones').insert(registrosEdicion);
       }
 
-      setPedidos((prev) => prev.map((p) => (p.id === data.id ? data : p)));
-      cancelarEdicionPedido();
+      setPedidos((prev) => prev.map((item) => (item.id === data.id ? data : item)));
+      setEditandoPedidoId(null);
+      carritoActivo.resetCarrito({ limpiarStorage: true });
+      carritoActivo.reanudarPersistencia();
     }
-  };
 
-  const renderPedidoEnEdicion = (pedido, totalEdicion) => {
-    if (!pedidoEditForm || editandoPedidoId !== pedido.id) return null;
-
-    const esPresencialPedido = pedido.tipo === 'presencial';
-
-    return (
-                            <article
-                              key={pedido.id}
-                              className="pedido-tarjeta pedido-tarjeta-editando"
-                            >
-                              <div className="pedido-tarjeta-cabecera">
-                                <h2 className="pedido-cliente">Editar pedido</h2>
-                                <time
-                                  className="pedido-hora"
-                                  dateTime={pedido.created_at}
-                                >
-                                  {formatearHoraPedido(pedido.created_at)}
-                                </time>
-                              </div>
-
-                              <div className="pedido-edit-form">
-                                <div className="formulario-campo">
-                                  <label htmlFor={`edit-cliente-${pedido.id}`}>
-                                    Cliente
-                                  </label>
-                                  <input
-                                    id={`edit-cliente-${pedido.id}`}
-                                    name="cliente"
-                                    type="text"
-                                    value={
-                                      esPresencialPedido
-                                        ? CLIENTE_PUBLICO
-                                        : pedidoEditForm.cliente
-                                    }
-                                    onChange={handlePedidoEditChange}
-                                    readOnly={esPresencialPedido}
-                                    required
-                                  />
-                                </div>
-
-                                {!esPresencialPedido && (
-                                  <div className="formulario-campo">
-                                    <label htmlFor={`edit-telefono-${pedido.id}`}>
-                                      Teléfono
-                                    </label>
-                                    <input
-                                      id={`edit-telefono-${pedido.id}`}
-                                      name="telefono"
-                                      type="tel"
-                                      inputMode="tel"
-                                      autoComplete="tel"
-                                      placeholder="10 dígitos o con lada"
-                                      value={pedidoEditForm.telefono}
-                                      onChange={handlePedidoEditChange}
-                                    />
-                                  </div>
-                                )}
-
-                                {!esPresencialPedido && (
-                                  <div className="formulario-campo">
-                                    <label htmlFor={`edit-tipo-entrega-${pedido.id}`}>
-                                      Tipo de entrega
-                                    </label>
-                                    <select
-                                      id={`edit-tipo-entrega-${pedido.id}`}
-                                      name="tipoEntrega"
-                                      value={pedidoEditForm.tipoEntrega}
-                                      onChange={handlePedidoEditChange}
-                                    >
-                                      {TIPOS_ENTREGA_OPCIONES.map((opcion) => (
-                                        <option key={opcion.value} value={opcion.value}>
-                                          {opcion.icono} {opcion.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
-
-                                {!esPresencialPedido &&
-                                  pedidoEditForm.tipoEntrega === TIPOS_ENTREGA.DOMICILIO && (
-                                    <div className="formulario-campo formulario-campo-direccion">
-                                      <label htmlFor={`edit-direccion-${pedido.id}`}>
-                                        Dirección de entrega
-                                      </label>
-                                      <input
-                                        id={`edit-direccion-${pedido.id}`}
-                                        name="direccion"
-                                        type="text"
-                                        placeholder="Calle, número, colonia, referencias..."
-                                        value={pedidoEditForm.direccion}
-                                        onChange={handlePedidoEditChange}
-                                      />
-                                    </div>
-                                  )}
-
-                                {esPresencialPedido && (
-                                  <div className="formulario-campo">
-                                    <label htmlFor={`edit-referencia-${pedido.id}`}>
-                                      Referencia / Nombre
-                                    </label>
-                                    <input
-                                      id={`edit-referencia-${pedido.id}`}
-                                      name="referencia"
-                                      type="text"
-                                      placeholder="Opcional"
-                                      value={pedidoEditForm.referencia}
-                                      onChange={handlePedidoEditChange}
-                                    />
-                                  </div>
-                                )}
-
-                                <div className="formulario-campo">
-                                  <label htmlFor={`edit-forma-pago-${pedido.id}`}>
-                                    Forma de pago
-                                  </label>
-                                  <select
-                                    id={`edit-forma-pago-${pedido.id}`}
-                                    name="formaPago"
-                                    value={pedidoEditForm.formaPago}
-                                    onChange={handlePedidoEditChange}
-                                  >
-                                    {!esPresencialPedido && (
-                                      <option value="">Sin especificar</option>
-                                    )}
-                                    {FORMAS_PAGO.filter(
-                                      (forma) =>
-                                        !esPresencialPedido || forma.value !== 'link_pago'
-                                    ).map((forma) => (
-                                      <option key={forma.value} value={forma.value}>
-                                        {forma.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                {!esPresencialPedido && (
-                                  <div className="formulario-campo">
-                                    <label htmlFor={`edit-status-${pedido.id}`}>
-                                      Estatus del pedido
-                                    </label>
-                                    <select
-                                      id={`edit-status-${pedido.id}`}
-                                      name="status"
-                                      value={pedidoEditForm.status}
-                                      onChange={handlePedidoEditChange}
-                                    >
-                                      {obtenerFlujoStatus(pedidoEditForm.tipoEntrega).map(
-                                        (status) => (
-                                          <option key={status} value={status}>
-                                            {STATUS_LABELS[status]}
-                                          </option>
-                                        )
-                                      )}
-                                    </select>
-                                  </div>
-                                )}
-
-                                <div className="pedido-edit-lineas">
-                                  {pedidoEditForm.lineas.map((linea, indice) => {
-                                    const productoSeleccionado = buscarProductoPorId(
-                                      productos,
-                                      linea.productoId
-                                    );
-                                    const subtotal = calcularSubtotal(
-                      linea,
-                      productos,
-                      variantesCtx
-                    );
-
-                                    return (
-                                      <div
-                                        key={linea.id}
-                                        className="pedido-edit-linea-contenedor"
-                                      >
-                                        <div className="pedido-edit-linea">
-                                          <div className="formulario-campo">
-                                            <label
-                                              htmlFor={`edit-producto-${pedido.id}-${linea.id}`}
-                                            >
-                                              Producto #{indice + 1}
-                                            </label>
-                                            <select
-                                              id={`edit-producto-${pedido.id}-${linea.id}`}
-                                              value={String(linea.productoId)}
-                                              onChange={(e) =>
-                                                actualizarLineaEdicion(
-                                                  linea.id,
-                                                  'productoId',
-                                                  e.target.value
-                                                )
-                                              }
-                                              required
-                                            >
-                                              <option value="">
-                                                Seleccionar producto...
-                                              </option>
-                                              {productosOrdenados.map((producto) => (
-                                                <option
-                                                  key={producto.id}
-                                                  value={String(producto.id)}
-                                                >
-                                                  {formatearEtiquetaProducto(producto)}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </div>
-                                          <div className="formulario-campo">
-                                            <label
-                                              htmlFor={`edit-cantidad-${pedido.id}-${linea.id}`}
-                                            >
-                                              Cantidad
-                                            </label>
-                                            <input
-                                              id={`edit-cantidad-${pedido.id}-${linea.id}`}
-                                              type="number"
-                                              min="1"
-                                              step="1"
-                                              value={linea.cantidad}
-                                              onChange={(e) =>
-                                                actualizarLineaEdicion(
-                                                  linea.id,
-                                                  'cantidad',
-                                                  e.target.value
-                                                )
-                                              }
-                                              required
-                                            />
-                                          </div>
-                                          <div className="formulario-campo">
-                                            <label>Subtotal</label>
-                                            <input
-                                              type="text"
-                                              value={
-                                                subtotal > 0
-                                                  ? formatearMoneda(subtotal)
-                                                  : ''
-                                              }
-                                              readOnly
-                                            />
-                                          </div>
-                                          <button
-                                            type="button"
-                                            className="eliminar-linea-btn"
-                                            onClick={() =>
-                                              eliminarLineaEdicion(linea.id)
-                                            }
-                                            disabled={
-                                              pedidoEditForm.lineas.length <= 1
-                                            }
-                                            aria-label={`Eliminar producto ${indice + 1}`}
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
-                                        {esPedidoWhatsapp(pedido) && productoSeleccionado && (
-                                          <VariantesPedido
-                                            key={`variantes-edit-${linea.id}-${linea.productoId}`}
-                                            linea={linea}
-                                            producto={productoSeleccionado}
-                                            variantesCtx={variantesCtx}
-                                            onToggleVariante={cambiarVarianteLineaEdicion}
-                                          />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                <button
-                                  type="button"
-                                  className="agregar-linea-btn"
-                                  onClick={agregarLineaEdicion}
-                                  disabled={productos.length === 0}
-                                >
-                                  + Agregar producto
-                                </button>
-
-                                <div className="pedido-edit-total">
-                                  <span className="pedido-total-label">Total</span>
-                                  <span className="pedido-total-valor">
-                                    {formatearMoneda(totalEdicion)}
-                                  </span>
-                                </div>
-
-                                <div className="tarjeta-acciones pedido-edit-acciones">
-                                  <button
-                                    type="button"
-                                    className="guardar-btn"
-                                    disabled={
-                                      guardandoEdicionPedido ||
-                                      totalEdicion <= 0
-                                    }
-                                    onClick={() => guardarEdicionPedido(pedido)}
-                                  >
-                                    {guardandoEdicionPedido
-                                      ? 'Guardando...'
-                                      : 'Guardar cambios'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="cancelar-btn"
-                                    onClick={cancelarEdicionPedido}
-                                    disabled={guardandoEdicionPedido}
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            </article>
-    );
+    setGuardandoEdicionPedido(false);
   };
 
   const retiroFormValido =
@@ -4010,24 +3579,13 @@ function Dashboard() {
                 {pedidosGrupo.map((pedido) => {
                   const otroEditando =
                     editandoPedidoId !== null && editandoPedidoId !== pedido.id;
-                  const totalEdicionHistorico = pedidoEditForm
-                    ? calcularTotalLineas(
-                        pedidoEditForm.lineas,
-                        productos,
-                        variantesCtx
-                      )
-                    : 0;
-
-                  if (editandoPedidoId === pedido.id && pedidoEditForm) {
-                    return (
-                      <div key={pedido.id} className="pedidos-reporte-editando">
-                        {renderPedidoEnEdicion(pedido, totalEdicionHistorico)}
-                      </div>
-                    );
-                  }
+                  const estaEditando = editandoPedidoId === pedido.id;
 
                   return (
-                    <div key={pedido.id} className="pedidos-reporte-fila">
+                    <div
+                      key={pedido.id}
+                      className={`pedidos-reporte-fila${estaEditando ? ' pedidos-reporte-fila-editando' : ''}`}
+                    >
                       <span className="reporte-hora">
                         {formatearHoraPedidoLista(pedido.created_at)}
                       </span>
@@ -4074,20 +3632,12 @@ function Dashboard() {
                         const estaEditando = editandoPedidoId === pedido.id;
                         const otroEditando =
                           editandoPedidoId !== null && !estaEditando;
-                        const totalEdicion = pedidoEditForm
-                          ? calcularTotalLineas(
-                              pedidoEditForm.lineas,
-                              productos,
-                              variantesCtx
-                            )
-                          : 0;
-
-                        if (estaEditando && pedidoEditForm) {
-                          return renderPedidoEnEdicion(pedido, totalEdicion);
-                        }
 
                         return (
-                          <article key={pedido.id} className="pedido-tarjeta">
+                          <article
+                            key={pedido.id}
+                            className={`pedido-tarjeta${estaEditando ? ' pedido-tarjeta-editando-remoto' : ''}`}
+                          >
                             <div className="pedido-tarjeta-cabecera">
                               <h2 className="pedido-cliente">
                                 {formatearNombreClientePedido(pedido)}
@@ -4992,7 +4542,7 @@ function Dashboard() {
               ))}
             </nav>
 
-            {resumenVenta && esModoPresencial && (
+            {resumenVenta && esModoPresencial && !enModoEdicion && (
               <section className="venta-resumen">
                 <h3 className="venta-resumen-titulo">Venta registrada</h3>
                 <p className="venta-resumen-cliente">
@@ -5024,7 +4574,7 @@ function Dashboard() {
               </section>
             )}
 
-            <section className="pedido-formulario">
+            <section className="pedido-formulario" ref={pedidoFormularioRef}>
               {esModoMesas ? (
                 <VistaMesas
                   productos={productos}
@@ -5051,7 +4601,11 @@ function Dashboard() {
               ) : (
                 <>
               <h2 className="formulario-titulo">
-                {esModoPresencial ? 'Nueva venta' : 'Nuevo pedido'}
+                {enModoEdicion
+                  ? 'Editar pedido'
+                  : esModoPresencial
+                    ? 'Nueva venta'
+                    : 'Nuevo pedido'}
               </h2>
               <form className="formulario-pedido" onSubmit={handleSubmit}>
                 <div className="formulario formulario-cabecera">
@@ -5061,16 +4615,16 @@ function Dashboard() {
                       id="cliente"
                       name="cliente"
                       type="text"
-                      value={esModoPresencial ? CLIENTE_PUBLICO : formCaptura.cliente}
+                      value={esCapturaPresencial ? CLIENTE_PUBLICO : formCaptura.cliente}
                       onChange={handleFormChange}
-                      readOnly={esModoPresencial}
+                      readOnly={esCapturaPresencial}
                       required
                     />
                   </div>
-                  {!esModoPresencial && (
+                  {!esCapturaPresencial && (
                     <ClienteBusquedaWhatsapp negocioId={negocioId} />
                   )}
-                  {!esModoPresencial && (
+                  {!esCapturaPresencial && (
                     <div className="formulario-campo">
                       <label htmlFor="telefono">Teléfono</label>
                       <input
@@ -5085,7 +4639,7 @@ function Dashboard() {
                       />
                     </div>
                   )}
-                  {!esModoPresencial && (
+                  {!esCapturaPresencial && (
                     <div className="formulario-campo">
                       <label htmlFor="tipoEntrega">Tipo de entrega</label>
                       <select
@@ -5104,7 +4658,7 @@ function Dashboard() {
                       </select>
                     </div>
                   )}
-                  {!esModoPresencial &&
+                  {!esCapturaPresencial &&
                     formCaptura.tipoEntrega === TIPOS_ENTREGA.DOMICILIO && (
                       <div className="formulario-campo formulario-campo-direccion">
                         <label htmlFor="direccion">Dirección de entrega</label>
@@ -5118,7 +4672,7 @@ function Dashboard() {
                         />
                       </div>
                     )}
-                  {!esModoPresencial && tipoEntregaWhatsAppSeleccionado(formCaptura.tipoEntrega) && (
+                  {!esCapturaPresencial && tipoEntregaWhatsAppSeleccionado(formCaptura.tipoEntrega) && (
                     <div className="formulario-campo">
                       <label htmlFor="status">Estatus del pedido</label>
                       <select
@@ -5135,7 +4689,7 @@ function Dashboard() {
                       </select>
                     </div>
                   )}
-                  {esModoPresencial && (
+                  {esCapturaPresencial && (
                     <div className="formulario-campo">
                       <label htmlFor="referencia">Referencia / Nombre</label>
                       <input
@@ -5156,9 +4710,9 @@ function Dashboard() {
                       value={formCaptura.formaPago}
                       onChange={handleFormChange}
                     >
-                      {!esModoPresencial && <option value="">Sin especificar</option>}
+                      {!esCapturaPresencial && <option value="">Sin especificar</option>}
                       {FORMAS_PAGO.filter(
-                        (forma) => !esModoPresencial || forma.value !== 'link_pago'
+                        (forma) => !esCapturaPresencial || forma.value !== 'link_pago'
                       ).map((forma) => (
                         <option key={forma.value} value={forma.value}>
                           {forma.label}
@@ -5169,39 +4723,30 @@ function Dashboard() {
                 </div>
 
                 {productos.length > 0 && (
-                  esModoPresencial ? (
-                    <SelectorProductosPedido
-                      productos={productosOrdenados}
-                      frecuenciaCategorias={frecuenciaCategoriasPedidos}
-                      frecuenciaLista={frecuenciaLista}
-                      categoriaActiva={carrito.categoriaPedidoActiva}
-                      onCategoriaChange={carrito.setCategoriaPedidoActiva}
-                      onAgregarProducto={carrito.agregarProductoAlPedido}
-                    />
-                  ) : (
-                    <SelectorProductosPedidoConModal
-                      productos={productosOrdenados}
-                      variantesCtx={variantesCtx}
-                      frecuenciaCategorias={frecuenciaCategoriasPedidos}
-                      frecuenciaLista={frecuenciaLista}
-                      categoriaActiva={carritoWhatsapp.categoriaPedidoActiva}
-                      onCategoriaChange={carritoWhatsapp.setCategoriaPedidoActiva}
-                      onAgregarDirecto={carritoWhatsapp.agregarProductoAlPedido}
-                      onConfirmarLinea={carritoWhatsapp.agregarLineaConVariantes}
-                    />
-                  )
+                  <SelectorProductosPedidoConModal
+                    productos={productosOrdenados}
+                    variantesCtx={variantesCtx}
+                    frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                    frecuenciaLista={frecuenciaLista}
+                    categoriaActiva={carritoCaptura.categoriaPedidoActiva}
+                    onCategoriaChange={carritoCaptura.setCategoriaPedidoActiva}
+                    onAgregarDirecto={carritoCaptura.agregarProductoAlPedido}
+                    onConfirmarLinea={carritoCaptura.agregarLineaConVariantes}
+                  />
                 )}
 
-                {esModoPresencial ? (
-                  <PedidoLineasCarrito
-                    lineas={carrito.lineasPedidoConProducto}
-                    productos={productos}
-                    variantesCtx={variantesCtx}
-                    totalPedido={carrito.totalPedido}
-                    onAjustarCantidad={carrito.ajustarCantidadLinea}
-                    onActualizarCantidad={carrito.actualizarCantidadLinea}
-                    onEliminarLinea={carrito.eliminarLinea}
-                  >
+                <PedidoLineasCarrito
+                  lineas={carritoCaptura.lineasPedidoConProducto}
+                  productos={productos}
+                  variantesCtx={variantesCtx}
+                  totalPedido={carritoCaptura.totalPedido}
+                  colapsablePorDefecto={!esCapturaPresencial}
+                  onAjustarCantidad={carritoCaptura.ajustarCantidadLinea}
+                  onActualizarCantidad={carritoCaptura.actualizarCantidadLinea}
+                  onEliminarLinea={carritoCaptura.eliminarLinea}
+                  onCambiarVariante={carritoCaptura.cambiarVarianteLinea}
+                >
+                  {esCapturaPresencial && !enModoEdicion ? (
                     <CajaPagoEfectivo
                       formaPago={carrito.form.formaPago}
                       pagoRecibido={carrito.pagoRecibido}
@@ -5210,7 +4755,18 @@ function Dashboard() {
                       pagoInsuficiente={pagoInsuficiente}
                       cambio={cambio}
                     />
-                    <div className="pedido-acciones-principales">
+                  ) : null}
+                  <div className="pedido-acciones-principales">
+                    {enModoEdicion ? (
+                      <button
+                        type="button"
+                        className="limpiar-pedido-btn"
+                        onClick={cancelarEdicionPedido}
+                        disabled={guardandoEdicionPedido}
+                      >
+                        Cancelar
+                      </button>
+                    ) : (
                       <button
                         type="button"
                         className="limpiar-pedido-btn"
@@ -5218,73 +4774,37 @@ function Dashboard() {
                       >
                         Limpiar pedido
                       </button>
-                      <button
-                        type="submit"
-                        className="guardar-btn"
-                        disabled={
-                          productos.length === 0 ||
-                          carrito.totalPedido <= 0 ||
-                          !jornadaAbierta
-                        }
-                      >
-                        Registrar venta
-                      </button>
-                    </div>
-                    {esModoPresencial && !jornadaAbierta ? (
-                      <p className="header-jornada-cerrada-mensaje" role="status">
-                        {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
-                      </p>
-                    ) : null}
-                    {errorGuardarPedido ? (
-                      <p className="formulario-error-guardar" role="alert">
-                        {errorGuardarPedido}
-                      </p>
-                    ) : null}
-                  </PedidoLineasCarrito>
-                ) : (
-                  <PedidoLineasCarrito
-                    lineas={carritoWhatsapp.lineasPedidoConProducto}
-                    productos={productos}
-                    variantesCtx={variantesCtx}
-                    totalPedido={carritoWhatsapp.totalPedido}
-                    colapsablePorDefecto
-                    onAjustarCantidad={carritoWhatsapp.ajustarCantidadLinea}
-                    onActualizarCantidad={carritoWhatsapp.actualizarCantidadLinea}
-                    onEliminarLinea={carritoWhatsapp.eliminarLinea}
-                    onCambiarVariante={carritoWhatsapp.cambiarVarianteLinea}
-                  >
-                    <div className="pedido-acciones-principales">
-                      <button
-                        type="button"
-                        className="limpiar-pedido-btn"
-                        onClick={limpiarPedidoCaptura}
-                      >
-                        Limpiar pedido
-                      </button>
-                      <button
-                        type="submit"
-                        className="guardar-btn"
-                        disabled={
-                          productos.length === 0 ||
-                          carritoWhatsapp.totalPedido <= 0 ||
-                          !jornadaAbierta
-                        }
-                      >
-                        Guardar pedido
-                      </button>
-                    </div>
-                    {!jornadaAbierta ? (
-                      <p className="header-jornada-cerrada-mensaje" role="status">
-                        {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
-                      </p>
-                    ) : null}
-                    {errorGuardarPedido ? (
-                      <p className="formulario-error-guardar" role="alert">
-                        {errorGuardarPedido}
-                      </p>
-                    ) : null}
-                  </PedidoLineasCarrito>
-                )}
+                    )}
+                    <button
+                      type="submit"
+                      className="guardar-btn"
+                      disabled={
+                        productos.length === 0 ||
+                        carritoCaptura.totalPedido <= 0 ||
+                        guardandoEdicionPedido ||
+                        !jornadaAbierta
+                      }
+                    >
+                      {enModoEdicion
+                        ? guardandoEdicionPedido
+                          ? 'Guardando...'
+                          : 'Guardar cambios'
+                        : esCapturaPresencial
+                          ? 'Registrar venta'
+                          : 'Guardar pedido'}
+                    </button>
+                  </div>
+                  {!jornadaAbierta ? (
+                    <p className="header-jornada-cerrada-mensaje" role="status">
+                      {MENSAJE_JORNADA_CERRADA_REGISTRAR_VENTAS}
+                    </p>
+                  ) : null}
+                  {errorGuardarPedido ? (
+                    <p className="formulario-error-guardar" role="alert">
+                      {errorGuardarPedido}
+                    </p>
+                  ) : null}
+                </PedidoLineasCarrito>
               </form>
               {productos.length === 0 && (
                 <p className="formulario-aviso">
