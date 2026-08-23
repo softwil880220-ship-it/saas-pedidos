@@ -7,8 +7,10 @@ import {
   aplicarConsolidacionCarrito,
   buscarProductoPorId,
   calcularDetalleLineasPedido,
+  calcularNextLineaIdDesdeLineas,
   calcularTotalLineas,
   consolidarLineasPorProducto,
+  normalizarFormLineasCarrito,
 } from './pedidoCarritoCalculos';
 import {
   cantidadInicialLinea,
@@ -167,22 +169,28 @@ function resumenProductos(lineas, listaProductos, variantesCtx) {
     .join(', ');
 }
 
-function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folioId) {
+function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folioId, productos) {
+  const ctx = { ...variantesCtx, productos };
+
   if (snapshotInicial?.form) {
+    const form = normalizarFormLineasCarrito(snapshotInicial.form, ctx);
+
     return {
-      form: snapshotInicial.form,
+      form,
       pagoRecibido: snapshotInicial.pagoRecibido ?? '',
-      nextLineaId: snapshotInicial.nextLineaId ?? 2,
+      nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
     };
   }
 
   if (folioId) {
     const restaurado = cargarCarritosMesasAbiertos()[folioId];
     if (restaurado?.form) {
+      const form = normalizarFormLineasCarrito(restaurado.form, ctx);
+
       return {
-        form: restaurado.form,
+        form,
         pagoRecibido: restaurado.pagoRecibido ?? '',
-        nextLineaId: restaurado.nextLineaId ?? 2,
+        nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
       };
     }
   }
@@ -206,7 +214,8 @@ export default function useCarritoPedido({
     snapshotInicial,
     modoCaptura,
     variantesCtx,
-    folioId
+    folioId,
+    productos
   );
   const [form, setForm] = useState(estadoInicial.form);
   const [pagoRecibido, setPagoRecibido] = useState(estadoInicial.pagoRecibido);
@@ -297,11 +306,16 @@ export default function useCarritoPedido({
     persistirSnapshotActual();
   }, [persistirSnapshotActual]);
 
-  const aplicarSnapshot = useCallback(({ form: formRestaurado, pagoRecibido: pagoRestaurado, nextLineaId: nextId }) => {
-    setForm(formRestaurado);
+  const aplicarSnapshot = useCallback(({ form: formRestaurado, pagoRecibido: pagoRestaurado }) => {
+    const formNormalizado = normalizarFormLineasCarrito(
+      formRestaurado,
+      ctxConsolidacion
+    );
+
+    setForm(formNormalizado);
     setPagoRecibido(pagoRestaurado ?? '');
-    nextLineaId.current = nextId ?? 2;
-  }, []);
+    nextLineaId.current = calcularNextLineaIdDesdeLineas(formNormalizado?.lineas);
+  }, [ctxConsolidacion]);
 
   const pausarPersistencia = useCallback(() => {
     persistenciaPausadaRef.current = true;
