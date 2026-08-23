@@ -88,14 +88,49 @@ export function consolidarLineasPorProducto(lineas, ctx) {
   return orden.map((clave) => map.get(clave));
 }
 
+/** Id estable para React/handlers: una clave de consolidación → un id único. */
+export function idEstableLineaCarrito(linea, ctx) {
+  const productoId = String(linea.productoId);
+  const producto = buscarProductoPorId(ctx?.productos || [], productoId);
+
+  if (esProductoPorPeso(producto)) {
+    return `peso:${productoId}:${huellaVariantesLineaCarrito(linea, ctx)}:${String(linea.cantidad ?? '')}`;
+  }
+
+  return `pieza:${claveConsolidacionLineaCarrito(linea, ctx)}`;
+}
+
+export function calcularNextLineaIdDesdeLineas(lineas) {
+  let max = 1;
+
+  for (const linea of lineas || []) {
+    const n = Number(linea?.id);
+    if (Number.isFinite(n)) max = Math.max(max, n);
+  }
+
+  return max + 1;
+}
+
 export function aplicarConsolidacionCarrito(lineas, ctx) {
   const vacias = (lineas || []).filter((linea) => !linea?.productoId);
   const consolidadas = consolidarLineasPorProducto(
     (lineas || []).filter((linea) => linea?.productoId),
     ctx
-  );
+  ).map((linea) => ({
+    ...linea,
+    id: idEstableLineaCarrito(linea, ctx),
+  }));
 
   return [...consolidadas, ...vacias];
+}
+
+export function normalizarFormLineasCarrito(form, ctx) {
+  if (!form) return form;
+
+  return {
+    ...form,
+    lineas: aplicarConsolidacionCarrito(form.lineas || [], ctx),
+  };
 }
 
 function buscarPorId(lista, id) {
