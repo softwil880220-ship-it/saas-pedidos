@@ -1,4 +1,5 @@
 import { buscarProductoPorId } from './pedidoCarritoCalculos';
+import { payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
 import { CLIENTE_MOSTRADOR } from './pedidoCarritoStorage';
 import {
   TIPOS_ENTREGA,
@@ -167,6 +168,14 @@ export function construirSnapshotCarritoDesdePedido(pedido, productos, variantes
       telefono: pedido?.telefono || '',
       tipoEntrega: pedido?.tipo_entrega || TIPOS_ENTREGA.SUCURSAL,
       direccion: pedido?.direccion || '',
+      etiqueta: '',
+      calle: pedido?.calle || '',
+      numero: pedido?.numero || '',
+      entre_calles: pedido?.entre_calles || '',
+      direccion_referencia: pedido?.direccion_referencia || '',
+      colonia: pedido?.colonia || '',
+      municipio: pedido?.municipio || '',
+      zona_id: pedido?.zona_id || '',
       formaPago: pedido?.forma_pago || 'efectivo',
       referencia: pedido?.referencia || '',
       status: pedido?.status || 'en-cocina',
@@ -403,6 +412,8 @@ export function construirPayloadEdicionRecogerDomicilio({
     form
   );
 
+  const direccionPayload = payloadDireccionDomicilioDesdeForm(form);
+
   return {
     producto: resumen,
     lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
@@ -412,10 +423,7 @@ export function construirPayloadEdicionRecogerDomicilio({
     referencia: null,
     telefono: form.telefono?.trim() || null,
     tipo_entrega: normalizarTipoEntrega(form.tipoEntrega),
-    direccion:
-      form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
-        ? form.direccion?.trim() || null
-        : null,
+    ...direccionPayload,
     status,
     status_cocina1,
     status_cocina2,

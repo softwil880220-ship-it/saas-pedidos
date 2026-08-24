@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './VistaRecogerDomicilio.css';
 import './VistaMostrador.css';
+import { useAuth } from './AuthContext';
 import BuscadorPedidosRecogerDomicilio from './BuscadorPedidosRecogerDomicilio.jsx';
 import ClienteBusquedaWhatsapp from './ClienteBusquedaWhatsapp';
 import ListaPedidosRecogerDomicilio from './ListaPedidosRecogerDomicilio.jsx';
@@ -9,6 +10,7 @@ import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import useRepartidoresNegocio from './useRepartidoresNegocio';
+import { payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
 import {
   cargarCarritoWhatsappDisponible,
   cargarTabRecogerDomicilio,
@@ -91,6 +93,11 @@ export default function VistaRecogerDomicilio({
   const [accionPendientePin, setAccionPendientePin] = useState(null);
   const [modalJornadaCerradaAbierto, setModalJornadaCerradaAbierto] = useState(false);
   const [mensajeModalJornadaCerrada, setMensajeModalJornadaCerrada] = useState(null);
+  const [zonasActivas, setZonasActivas] = useState([]);
+
+  const { modulosNegocio } = useAuth();
+  const mostrarBuscadorClientes = modulosNegocio.habilitar_clientes === true;
+  const mostrarSelectorZona = zonasActivas.length > 0;
 
   const snapshotInicialRef = useRef(cargarCarritoWhatsappDisponible() ?? undefined);
   const resaltadoTimerRef = useRef(null);
@@ -104,6 +111,71 @@ export default function VistaRecogerDomicilio({
   });
 
   const { repartidores } = useRepartidoresNegocio(negocioId);
+
+  useEffect(() => {
+    if (!negocioId) {
+      setZonasActivas([]);
+      return;
+    }
+
+    const cargarZonas = async () => {
+      const { data } = await queryConNegocio(
+        supabase
+          .from('zonas')
+          .select('id, nombre, tarifa_flete, activa')
+          .eq('activa', true)
+          .order('nombre'),
+        negocioId
+      );
+
+      setZonasActivas(data || []);
+    };
+
+    void cargarZonas();
+  }, [negocioId]);
+
+  const aplicarSeleccionCliente = useCallback(
+    (seleccion) => {
+      const formActualizado = { ...carrito.form };
+
+      if (seleccion.cliente !== undefined) {
+        formActualizado.cliente = seleccion.cliente;
+      }
+      if (seleccion.telefono !== undefined) {
+        formActualizado.telefono = seleccion.telefono;
+      }
+      if (seleccion.etiqueta !== undefined) {
+        formActualizado.etiqueta = seleccion.etiqueta || 'Casa';
+      }
+      if (seleccion.calle !== undefined) {
+        formActualizado.calle = seleccion.calle || '';
+      }
+      if (seleccion.numero !== undefined) {
+        formActualizado.numero = seleccion.numero || '';
+      }
+      if (seleccion.entre_calles !== undefined) {
+        formActualizado.entre_calles = seleccion.entre_calles || '';
+      }
+      if (seleccion.direccion_referencia !== undefined) {
+        formActualizado.direccion_referencia = seleccion.direccion_referencia || '';
+      }
+      if (seleccion.colonia !== undefined) {
+        formActualizado.colonia = seleccion.colonia || '';
+      }
+      if (seleccion.municipio !== undefined) {
+        formActualizado.municipio = seleccion.municipio || '';
+      }
+      if (seleccion.zona_id !== undefined && mostrarSelectorZona) {
+        formActualizado.zona_id = seleccion.zona_id || '';
+      }
+
+      carrito.aplicarSnapshot({
+        form: formActualizado,
+        pagoRecibido: carrito.pagoRecibido,
+      });
+    },
+    [carrito, mostrarSelectorZona]
+  );
 
   useEffect(() => {
     persistirTabRecogerDomicilio(tabActivo);
@@ -188,6 +260,7 @@ export default function VistaRecogerDomicilio({
     const detallePedido = carrito.obtenerDetallePedido();
     const resumen = carrito.obtenerResumenProductos();
     const form = carrito.form;
+    const direccionPayload = payloadDireccionDomicilioDesdeForm(form);
 
     const payload = {
       cliente: form.cliente.trim(),
@@ -198,12 +271,8 @@ export default function VistaRecogerDomicilio({
       status: form.status,
       tipo: 'whatsapp',
       tipo_entrega: normalizarTipoEntrega(form.tipoEntrega),
-      direccion:
-        form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO
-          ? form.direccion.trim() || null
-          : null,
+      ...direccionPayload,
       forma_pago: normalizarFormaPagoRecogerDomicilio(form.formaPago),
-      referencia: null,
       created_by: usuarioId ?? null,
       jornada_id: jornadaAbierta?.id ?? null,
       repartidor_usuario_id: null,
@@ -591,7 +660,12 @@ export default function VistaRecogerDomicilio({
                   required
                 />
               </div>
-              <ClienteBusquedaWhatsapp negocioId={negocioId} />
+              {mostrarBuscadorClientes ? (
+                <ClienteBusquedaWhatsapp
+                  negocioId={negocioId}
+                  onSeleccionarCliente={aplicarSeleccionCliente}
+                />
+              ) : null}
               <div className="formulario-campo">
                 <label htmlFor="telefono">Teléfono</label>
                 <input
@@ -627,18 +701,112 @@ export default function VistaRecogerDomicilio({
                 </select>
               </div>
               {carrito.form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO ? (
-                <div className="formulario-campo formulario-campo-direccion">
-                  <label htmlFor="direccion">Dirección de entrega</label>
-                  <input
-                    id="direccion"
-                    name="direccion"
-                    type="text"
-                    placeholder="Calle, número, colonia, referencias..."
-                    value={carrito.form.direccion}
-                    onChange={(evento) =>
-                      carrito.setCampoCaptura('direccion', evento.target.value)
-                    }
-                  />
+                <div className="formulario-direccion-domicilio">
+                  <div className="formulario-campo">
+                    <label htmlFor="etiqueta">Etiqueta</label>
+                    <input
+                      id="etiqueta"
+                      name="etiqueta"
+                      type="text"
+                      placeholder="Casa, trabajo..."
+                      value={carrito.form.etiqueta || 'Casa'}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('etiqueta', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="calle">Calle</label>
+                    <input
+                      id="calle"
+                      name="calle"
+                      type="text"
+                      value={carrito.form.calle}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('calle', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="numero">Número</label>
+                    <input
+                      id="numero"
+                      name="numero"
+                      type="text"
+                      value={carrito.form.numero}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('numero', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="entre_calles">Entre calles</label>
+                    <input
+                      id="entre_calles"
+                      name="entre_calles"
+                      type="text"
+                      value={carrito.form.entre_calles}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('entre_calles', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="direccion_referencia">Referencia</label>
+                    <input
+                      id="direccion_referencia"
+                      name="direccion_referencia"
+                      type="text"
+                      value={carrito.form.direccion_referencia}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('direccion_referencia', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="colonia">Colonia</label>
+                    <input
+                      id="colonia"
+                      name="colonia"
+                      type="text"
+                      value={carrito.form.colonia}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('colonia', evento.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="municipio">Municipio</label>
+                    <input
+                      id="municipio"
+                      name="municipio"
+                      type="text"
+                      value={carrito.form.municipio}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('municipio', evento.target.value)
+                      }
+                    />
+                  </div>
+                  {mostrarSelectorZona ? (
+                    <div className="formulario-campo">
+                      <label htmlFor="zona_id">Zona</label>
+                      <select
+                        id="zona_id"
+                        name="zona_id"
+                        value={carrito.form.zona_id || ''}
+                        onChange={(evento) =>
+                          carrito.setCampoCaptura('zona_id', evento.target.value)
+                        }
+                      >
+                        <option value="">Sin zona</option>
+                        {zonasActivas.map((zona) => (
+                          <option key={zona.id} value={zona.id}>
+                            {zona.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {tipoEntregaRecogerDomicilioSeleccionado(carrito.form.tipoEntrega) ? (

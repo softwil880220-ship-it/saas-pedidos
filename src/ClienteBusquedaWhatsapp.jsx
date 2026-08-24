@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import { supabase } from './supabase';
-import { formatearDireccionResumen, telefonoPrincipal } from './clientesHelpers';
+import {
+  formatearDireccionResumen,
+  seleccionClienteAForm,
+  telefonoPrincipal,
+} from './clientesHelpers';
 import ClienteAltaRapidaModal from './ClienteAltaRapidaModal';
 import './PanelClientes.css';
 
 const MIN_QUERY = 3;
 
-export default function ClienteBusquedaWhatsapp({ negocioId }) {
+function resumenDireccionConZona(direccion) {
+  const resumen = formatearDireccionResumen(direccion);
+  return direccion.zona_nombre ? `${resumen} · Zona: ${direccion.zona_nombre}` : resumen;
+}
+
+export default function ClienteBusquedaWhatsapp({ negocioId, onSeleccionarCliente }) {
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState([]);
   const [buscado, setBuscado] = useState(false);
@@ -43,12 +52,33 @@ export default function ClienteBusquedaWhatsapp({ negocioId }) {
     setBuscando(false);
   };
 
+  const aplicarSeleccion = (cliente, direccion) => {
+    onSeleccionarCliente?.(seleccionClienteAForm(cliente, direccion));
+    setMensajeExito(
+      'Cliente y dirección aplicados al formulario. Puedes editarlos antes de guardar.'
+    );
+  };
+
+  const seleccionarCliente = (cliente) => {
+    const direcciones = Array.isArray(cliente.direcciones) ? cliente.direcciones : [];
+
+    if (direcciones.length === 0) {
+      onSeleccionarCliente?.(seleccionClienteAForm(cliente, {}));
+      setMensajeExito(
+        'Cliente aplicado al formulario. Completa la dirección manualmente si hace falta.'
+      );
+      return;
+    }
+
+    aplicarSeleccion(cliente, direcciones[0]);
+  };
+
   return (
     <div className="panel-clientes-subseccion cliente-busqueda-whatsapp">
       <h4>Buscar en base de clientes</h4>
       <p className="panel-clientes-detalle">
-        Vista previa de resultados (Fase 1). La selección para autocompletar el pedido llegará en
-        Fase 3.
+        Busca por nombre o teléfono y haz clic en un resultado para autocompletar cliente,
+        teléfono y dirección. Si hay varias direcciones, elige la que corresponda.
       </p>
 
       <div className="cliente-busqueda-form">
@@ -98,22 +128,51 @@ export default function ClienteBusquedaWhatsapp({ negocioId }) {
 
       {resultados.length > 0 ? (
         <ul className="cliente-busqueda-resultados">
-          {resultados.map((cliente) => (
-            <li key={cliente.id} className="cliente-busqueda-item">
-              <strong>{cliente.nombre}</strong>
-              <p className="panel-clientes-detalle">
-                Tel: {telefonoPrincipal(cliente)}
-              </p>
-              {(cliente.direcciones || []).slice(0, 2).map((direccion) => (
-                <p key={direccion.id} className="panel-clientes-detalle">
-                  {formatearDireccionResumen(direccion)}
-                  {direccion.zona_nombre
-                    ? ` · Zona: ${direccion.zona_nombre}`
-                    : ''}
-                </p>
-              ))}
-            </li>
-          ))}
+          {resultados.map((cliente) => {
+            const direcciones = Array.isArray(cliente.direcciones) ? cliente.direcciones : [];
+            const variasDirecciones = direcciones.length > 1;
+
+            if (variasDirecciones) {
+              return (
+                <li key={cliente.id} className="cliente-busqueda-item">
+                  <strong>{cliente.nombre}</strong>
+                  <p className="panel-clientes-detalle">
+                    Tel: {telefonoPrincipal(cliente)}
+                  </p>
+                  {direcciones.map((direccion, indice) => (
+                    <button
+                      key={direccion.id ?? indice}
+                      type="button"
+                      className="cliente-busqueda-direccion-clickeable"
+                      onClick={() => aplicarSeleccion(cliente, direccion)}
+                    >
+                      {resumenDireccionConZona(direccion)}
+                    </button>
+                  ))}
+                </li>
+              );
+            }
+
+            return (
+              <li key={cliente.id}>
+                <button
+                  type="button"
+                  className="cliente-busqueda-item cliente-busqueda-item-clickeable"
+                  onClick={() => seleccionarCliente(cliente)}
+                >
+                  <strong>{cliente.nombre}</strong>
+                  <p className="panel-clientes-detalle">
+                    Tel: {telefonoPrincipal(cliente)}
+                  </p>
+                  {direcciones.map((direccion, indice) => (
+                    <p key={direccion.id ?? indice} className="panel-clientes-detalle">
+                      {resumenDireccionConZona(direccion)}
+                    </p>
+                  ))}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 

@@ -53,6 +53,14 @@ export function crearFormularioPedidoDefault(modoActual, tipoEntrega = TIPO_ENTR
     telefono: '',
     tipoEntrega: esPresencial || esMostrador ? TIPOS_ENTREGA.DOMICILIO : tipoEntrega,
     direccion: '',
+    etiqueta: '',
+    calle: '',
+    numero: '',
+    entre_calles: '',
+    direccion_referencia: '',
+    colonia: '',
+    municipio: '',
+    zona_id: '',
     formaPago: esPresencial || esMostrador ? FORMA_PAGO_DEFAULT_CAJA : '',
     referencia: '',
     lineas: [crearLineaPedidoVacia(1)],
@@ -137,7 +145,13 @@ function esCarritoVacio({ form, pagoRecibido }, modo, tipoEntrega) {
     return (
       !form?.cliente?.trim() &&
       !form?.telefono?.trim() &&
-      !form?.direccion?.trim() &&
+      !form?.calle?.trim() &&
+      !form?.numero?.trim() &&
+      !form?.entre_calles?.trim() &&
+      !form?.direccion_referencia?.trim() &&
+      !form?.colonia?.trim() &&
+      !form?.municipio?.trim() &&
+      !form?.zona_id &&
       !form?.formaPago?.trim() &&
       (form?.status || STATUS_DEFAULT_WHATSAPP) === STATUS_DEFAULT_WHATSAPP
     );
