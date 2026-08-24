@@ -10,10 +10,17 @@ export const STORAGE_KEYS = {
   SECCION_ACTIVA: 'pos_seccion_activa',
   TAB_MOSTRADOR: 'pos_tab_mostrador',
   TAB_MESAS: 'pos_tab_mesas',
+  TAB_RECOGER_DOMICILIO: 'pos_tab_recoger_domicilio',
 };
 
 const TABS_MOSTRADOR_VALIDOS = new Set(['nuevo', 'pendientes', 'entregados']);
 const TABS_MESAS_VALIDOS = new Set(['activas', 'cobradas']);
+const TABS_RECOGER_DOMICILIO_VALIDOS = new Set([
+  'nuevo',
+  'cocina',
+  'pendientes',
+  'entregados',
+]);
 
 export const CLIENTE_MOSTRADOR = 'Mostrador';
 
@@ -371,6 +378,46 @@ export function cargarTabMesas() {
   } catch {
     return 'activas';
   }
+}
+
+export function persistirTabRecogerDomicilio(tab) {
+  if (typeof window === 'undefined' || !TABS_RECOGER_DOMICILIO_VALIDOS.has(tab)) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.TAB_RECOGER_DOMICILIO, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarTabRecogerDomicilio() {
+  if (typeof window === 'undefined') return 'nuevo';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEYS.TAB_RECOGER_DOMICILIO);
+    return TABS_RECOGER_DOMICILIO_VALIDOS.has(tab) ? tab : 'nuevo';
+  } catch {
+    return 'nuevo';
+  }
+}
+
+export function actualizarLineasCarritoWhatsappPersistido(actualizarLineas) {
+  const restaurado = cargarCarritoWhatsappDisponible();
+  if (!restaurado?.form) return;
+
+  const lineas = actualizarLineas(restaurado.form.lineas || []);
+
+  persistirCarritoPedido({
+    modo: 'whatsapp',
+    form: {
+      ...restaurado.form,
+      lineas,
+    },
+    pagoRecibido: restaurado.pagoRecibido,
+    nextLineaId: restaurado.nextLineaId,
+  });
 }
 
 export {

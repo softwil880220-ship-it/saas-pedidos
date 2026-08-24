@@ -12,6 +12,33 @@ export function puedeGestionarJornada(rol) {
   return ROLES_GESTION_JORNADA.includes(rol);
 }
 
+export function formatearClaveFechaJornada(fecha) {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function pedidoPerteneceJornada(pedido, jornada) {
+  const jornadaId = jornada?.id;
+  if (!pedido?.created_at || !jornadaId) return false;
+
+  if (pedido.jornada_id) {
+    return pedido.jornada_id === jornadaId;
+  }
+
+  const abiertaEn = jornada?.abierta_en;
+  if (!abiertaEn) return false;
+
+  const fechaCreacion = new Date(pedido.created_at);
+  const hoyClave = formatearClaveFechaJornada(new Date());
+
+  return (
+    formatearClaveFechaJornada(fechaCreacion) === hoyClave &&
+    fechaCreacion >= new Date(abiertaEn)
+  );
+}
+
 export function formatearHoraJornada(iso) {
   if (!iso) return '—';
 
