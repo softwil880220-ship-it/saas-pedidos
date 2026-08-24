@@ -20,34 +20,28 @@ import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
   COCINAS,
   COCINAS_OPCIONES,
-  construirPayloadAvancePedido,
-  construirPayloadRetrocesoPedido,
-  construirUrlWhatsApp,
   determinarStatusInicialPresencial,
   DesgloseProductosPedido,
-  enriquecerLineasDetalleCocina,
   etiquetaCocinaProducto,
   formatearMoneda,
-  formatearProgresoCocinas,
   normalizarCocinaProducto,
-  pedidoRequiereAlgunaCocina,
 } from './pedidosShared';
+import VistaRecogerDomicilio from './VistaRecogerDomicilio';
 import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
 import VistaEquipo from './VistaEquipo';
 import VistaClientes from './VistaClientes';
-import ClienteBusquedaWhatsapp from './ClienteBusquedaWhatsapp';
 import {
   agruparPedidosPorDia,
   formatearEncabezadoGrupoJornada,
   formatearHoraPedidoLista,
 } from './reportesHelpers';
 import {
+  actualizarLineasCarritoWhatsappPersistido,
   cargarCarritoMostradorDisponible,
   cargarCarritoPresencialDisponible,
-  cargarCarritoWhatsappDisponible,
   crearFormularioPedidoDefault,
   cargarEstadoInicialCapturaPedidoWeb,
   cargarSeccionActiva,
@@ -65,9 +59,7 @@ import {
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import {
   CAMPOS_AUDITORIA_EDICION_CAJA,
-  CAMPOS_AUDITORIA_EDICION_RECOGER_DOMICILIO,
   construirPayloadEdicionCaja,
-  construirPayloadEdicionRecogerDomicilio,
   construirRegistrosAuditoriaEdicionPedido,
   construirSnapshotCarritoDesdePedido,
   normalizarLineasDetallePedido,
@@ -93,6 +85,7 @@ import {
   formatearHoraJornada,
   jornadaEstaCerrada,
   MENSAJE_JORNADA_YA_ABIERTA,
+  pedidoPerteneceJornada,
   puedeGestionarJornada,
 } from './jornadaHelpers';
 import { payloadConNegocio, perteneceANegocio, queryConNegocio } from './tenantHelpers';
@@ -133,54 +126,10 @@ import {
   variantesActivasFormDesdeProducto,
 } from './variantesDinamicas';
 
-const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
-const STATUS_FLOW_SUCURSAL = [
-  'por-aceptar',
-  'en-cocina',
-  'listo-para-recoger',
-  'entregado',
-];
-
-const STATUS_LABELS = {
-  'por-aceptar': 'Por aceptar',
-  'en-cocina': 'En cocina',
-  enviado: 'Enviado',
-  entregado: 'Entregado',
-  'listo-para-recoger': 'Listo para recoger',
-};
-
 const TIPOS_ENTREGA = {
   DOMICILIO: 'domicilio',
   SUCURSAL: 'sucursal',
 };
-
-const TIPOS_ENTREGA_OPCIONES = [
-  { value: TIPOS_ENTREGA.DOMICILIO, label: 'A domicilio', icono: '🛵' },
-  { value: TIPOS_ENTREGA.SUCURSAL, label: 'Recoger en sucursal', icono: '🏪' },
-];
-
-const SECCIONES_ENTREGA_DASHBOARD = [
-  {
-    key: TIPOS_ENTREGA.DOMICILIO,
-    titulo: '🛵 A domicilio',
-    flujo: STATUS_FLOW_DOMICILIO,
-  },
-  {
-    key: TIPOS_ENTREGA.SUCURSAL,
-    titulo: '🏪 Para recoger',
-    flujo: STATUS_FLOW_SUCURSAL,
-  },
-];
-
-function crearFiltrosPorFlujo(flujo) {
-  return [
-    { value: 'todos', label: 'Todos' },
-    ...flujo.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
-  ];
-}
-
-const FILTROS_DOMICILIO = crearFiltrosPorFlujo(STATUS_FLOW_DOMICILIO);
-const FILTROS_SUCURSAL = crearFiltrosPorFlujo(STATUS_FLOW_SUCURSAL);
 
 const MODOS = [
   { value: 'presencial', label: 'Caja' },
@@ -204,7 +153,6 @@ function crearCatalogoTabs(categorias) {
 
 const STORAGE_KEY_MODO_PEDIDOS = 'pos_modo_pedidos';
 const STORAGE_KEY_TAB_CATALOGO = 'pos_tab_catalogo';
-const STORAGE_KEY_TAB_WHATSAPP_PEDIDOS = 'pos_tab_whatsapp_pedidos';
 
 function normalizarModoPedidos(modo) {
   if (modo === 'whatsapp') return 'whatsapp';
@@ -260,32 +208,6 @@ function cargarTabCatalogo(tabs) {
     return validos.has(tab) ? tab : 'productos';
   } catch {
     return 'productos';
-  }
-}
-
-function valoresTabWhatsappPedidosValidos() {
-  return new Set([TIPOS_ENTREGA.DOMICILIO, TIPOS_ENTREGA.SUCURSAL]);
-}
-
-function persistirTabWhatsappPedidos(tab) {
-  if (typeof window === 'undefined' || !valoresTabWhatsappPedidosValidos().has(tab)) return;
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY_TAB_WHATSAPP_PEDIDOS, tab);
-  } catch {
-    // Ignorar errores de almacenamiento local.
-  }
-}
-
-function cargarTabWhatsappPedidos() {
-  const validos = valoresTabWhatsappPedidosValidos();
-  if (typeof window === 'undefined') return TIPOS_ENTREGA.DOMICILIO;
-
-  try {
-    const tab = window.localStorage.getItem(STORAGE_KEY_TAB_WHATSAPP_PEDIDOS);
-    return validos.has(tab) ? tab : TIPOS_ENTREGA.DOMICILIO;
-  } catch {
-    return TIPOS_ENTREGA.DOMICILIO;
   }
 }
 
@@ -551,76 +473,6 @@ function formatearNombreClientePedido(pedido) {
   }
 
   return cliente;
-}
-
-const STATUS_DEFAULT_WHATSAPP_FORM = 'en-cocina';
-
-function statusDefaultFormularioPedido(modoActual) {
-  return modoActual === 'presencial' ? 'por-aceptar' : STATUS_DEFAULT_WHATSAPP_FORM;
-}
-
-const TIPO_ENTREGA_SIN_SELECCION = '';
-
-function tipoEntregaWhatsAppSeleccionado(tipoEntrega) {
-  return (
-    tipoEntrega === TIPOS_ENTREGA.DOMICILIO || tipoEntrega === TIPOS_ENTREGA.SUCURSAL
-  );
-}
-
-function normalizarTipoEntrega(tipoEntrega) {
-  return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
-    ? TIPOS_ENTREGA.SUCURSAL
-    : TIPOS_ENTREGA.DOMICILIO;
-}
-
-function obtenerFlujoStatus(tipoEntrega) {
-  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
-    ? STATUS_FLOW_SUCURSAL
-    : STATUS_FLOW_DOMICILIO;
-}
-
-function formatearTipoEntrega(tipoEntrega) {
-  const opcion = TIPOS_ENTREGA_OPCIONES.find(
-    (item) => item.value === normalizarTipoEntrega(tipoEntrega)
-  );
-  return opcion ? `${opcion.icono} ${opcion.label}` : '🛵 A domicilio';
-}
-
-function siguienteStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
-  const flujo = obtenerFlujoStatus(tipoEntrega);
-  const indice = flujo.indexOf(status);
-  if (indice === -1 || indice === flujo.length - 1) return status;
-  return flujo[indice + 1];
-}
-
-function anteriorStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
-  const flujo = obtenerFlujoStatus(tipoEntrega);
-  const indice = flujo.indexOf(status);
-  if (indice <= 0) return status;
-  return flujo[indice - 1];
-}
-
-function esStatusFinal(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
-  const flujo = obtenerFlujoStatus(tipoEntrega);
-  return status === flujo[flujo.length - 1];
-}
-
-function puedeRetrocederPedido(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
-  if (normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL) {
-    return (
-      status === 'en-cocina' ||
-      status === 'listo-para-recoger' ||
-      status === 'entregado'
-    );
-  }
-  return status === 'en-cocina' || status === 'enviado' || status === 'entregado';
-}
-
-function mostrarContactoWhatsAppPedido(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
-  if (normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL) {
-    return status === 'por-aceptar' || status === 'listo-para-recoger';
-  }
-  return status === 'por-aceptar' || status === 'enviado';
 }
 
 function crearLineaPedido(id, ctx) {
@@ -944,23 +796,6 @@ function esPedidoWhatsapp(pedido) {
   return !pedido.tipo || pedido.tipo === 'whatsapp';
 }
 
-const MENSAJES_WHATSAPP = {
-  'por-aceptar': (nombre) =>
-    `Hola ${nombre}, recibimos tu pedido. En breve te confirmamos ✅`,
-  'en-cocina': (nombre) => `Hola ${nombre}, tu pedido está en preparación 👨‍🍳`,
-  enviado: (nombre) => `Hola ${nombre}, tu pedido ya va en camino 🛵`,
-  entregado: (nombre) => `Hola ${nombre}, tu pedido fue entregado. ¡Gracias! 🙏`,
-  'listo-para-recoger': (nombre) =>
-    `Hola ${nombre}, tu pedido está listo para recoger en sucursal 🏪`,
-};
-
-function obtenerMensajeWhatsAppPedido(pedido) {
-  const nombre = pedido.cliente?.trim() || 'cliente';
-  const status = pedido.status || 'por-aceptar';
-  const plantilla = MENSAJES_WHATSAPP[status] || MENSAJES_WHATSAPP['por-aceptar'];
-  return plantilla(nombre);
-}
-
 function formatearClaveFecha(fecha) {
   const year = fecha.getFullYear();
   const month = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -973,20 +808,7 @@ function obtenerFechaHoy() {
 }
 
 function pedidoPerteneceJornadaDashboard(pedido, jornadaId, hoyClave, abiertaEn) {
-  if (!pedido?.created_at || !jornadaId) return false;
-
-  if (pedido.jornada_id) {
-    return pedido.jornada_id === jornadaId;
-  }
-
-  if (!abiertaEn) return false;
-
-  const fechaCreacion = new Date(pedido.created_at);
-
-  return (
-    formatearClaveFecha(fechaCreacion) === hoyClave &&
-    fechaCreacion >= new Date(abiertaEn)
-  );
+  return pedidoPerteneceJornada(pedido, { id: jornadaId, abierta_en: abiertaEn });
 }
 
 function formatearFechaCortaFiltro(claveFecha) {
@@ -1055,27 +877,8 @@ function agruparPedidosPorFecha(listaPedidos) {
   return agruparPedidosPorDia(listaPedidos);
 }
 
-function pedidosPorTipoEntrega(pedidos, tipoEntrega) {
-  return pedidos.filter(
-    (pedido) => normalizarTipoEntrega(pedido.tipo_entrega) === tipoEntrega
-  );
-}
-
-function aplicarFiltroStatus(pedidos, filtro) {
-  if (filtro === 'todos') return pedidos;
-  return pedidos.filter((pedido) => pedido.status === filtro);
-}
-
 function totalVentasPedidos(pedidos) {
   return pedidos.reduce((suma, pedido) => suma + Number(pedido.total), 0);
-}
-
-function contadoresPorFlujo(pedidos, flujo) {
-  return flujo.map((status) => ({
-    status,
-    label: STATUS_LABELS[status],
-    count: pedidos.filter((pedido) => pedido.status === status).length,
-  }));
 }
 
 function crearIdOptimisticoPedido() {
@@ -1137,11 +940,6 @@ function Dashboard() {
     }
     return estadoInicialCaptura.modo ?? 'presencial';
   });
-  const [filtroDomicilio, setFiltroDomicilio] = useState('todos');
-  const [filtroSucursal, setFiltroSucursal] = useState('todos');
-  const [tabEntregaWhatsAppMovil, setTabEntregaWhatsAppMovil] = useState(() =>
-    cargarTabWhatsappPedidos()
-  );
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
   const { pedidos, setPedidos } = usePedidosRealtime({
     channelName: 'dashboard-pedidos',
@@ -1183,14 +981,6 @@ function Dashboard() {
     modoCaptura: 'presencial',
     persistir: true,
     snapshotInicial: snapshotInicialCajaRef.current,
-  });
-  const snapshotInicialWhatsappRef = useRef(cargarCarritoWhatsappDisponible() ?? undefined);
-  const carritoWhatsapp = useCarritoPedido({
-    variantesCtx,
-    productos,
-    modoCaptura: 'whatsapp',
-    persistir: true,
-    snapshotInicial: snapshotInicialWhatsappRef.current,
   });
   const [resumenVenta, setResumenVenta] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -1624,18 +1414,6 @@ function Dashboard() {
   }, [seccion, modo]);
 
   useEffect(() => {
-    if (!esMobileDashboard || seccion !== 'pedidos' || modo !== 'whatsapp') return;
-
-    setTabEntregaWhatsAppMovil(cargarTabWhatsappPedidos());
-  }, [esMobileDashboard, seccion, modo]);
-
-  useEffect(() => {
-    if (!esMobileDashboard || seccion !== 'pedidos' || modo !== 'whatsapp') return;
-
-    persistirTabWhatsappPedidos(tabEntregaWhatsAppMovil);
-  }, [esMobileDashboard, seccion, modo, tabEntregaWhatsAppMovil]);
-
-  useEffect(() => {
     if (!negocioId) return;
 
     const pendientes = obtenerPedidosPendientesSync(negocioId);
@@ -1695,30 +1473,12 @@ function Dashboard() {
   const handleFormChange = (e) => {
     setErrorGuardarPedido(null);
     const { name, value } = e.target;
-    const pedidoEdicion = editandoPedidoId
-      ? pedidos.find((item) => item.id === editandoPedidoId)
-      : null;
-    const esPresencial =
-      editandoPedidoId != null
-        ? pedidoEdicion?.tipo === 'presencial'
-        : modo === 'presencial';
-
-    if (esPresencial) {
-      carrito.setCampoCaptura(name, value);
-      return;
-    }
-
-    carritoWhatsapp.setCampoCaptura(name, value);
+    carrito.setCampoCaptura(name, value);
   };
 
   const resetFormPedido = (modoActual = modo, { limpiarStorage = true } = {}) => {
     if (modoActual === 'presencial') {
       carrito.resetCarrito({ limpiarStorage });
-      return;
-    }
-
-    if (modoActual === 'whatsapp') {
-      carritoWhatsapp.resetCarrito({ limpiarStorage });
     }
   };
 
@@ -1739,13 +1499,6 @@ function Dashboard() {
         pagoRecibido: carrito.pagoRecibido,
         nextLineaId: carrito.snapshot.nextLineaId,
       });
-    } else if (modo === 'whatsapp') {
-      persistirCarritoPedido({
-        modo: 'whatsapp',
-        form: carritoWhatsapp.form,
-        pagoRecibido: carritoWhatsapp.pagoRecibido,
-        nextLineaId: carritoWhatsapp.snapshot.nextLineaId,
-      });
     }
     persistirModoCaptura(
       nuevoModo === 'mesas' ? 'presencial' : nuevoModo
@@ -1753,50 +1506,30 @@ function Dashboard() {
     persistirModoPedidos(nuevoModo);
     setModo(nuevoModo);
     setErrorGuardarPedido(null);
-    setFiltroDomicilio('todos');
-    setFiltroSucursal('todos');
     setFiltroFecha(obtenerFechaHoy());
     setResumenVenta(null);
     if (editandoPedidoId) {
       cancelarEdicionPedido();
     }
 
-    if (nuevoModo === 'mesas' || nuevoModo === 'mostrador') {
+    if (nuevoModo === 'mesas' || nuevoModo === 'mostrador' || nuevoModo === 'whatsapp') {
       return;
     }
 
-    if (nuevoModo === 'presencial') {
-      const restaurado = cargarCarritoPresencialDisponible();
-      if (restaurado) {
-        carrito.aplicarSnapshot(restaurado);
-        return;
-      }
-
-      carrito.resetCarrito({ limpiarStorage: false });
-      return;
-    }
-
-    const restaurado = cargarCarritoWhatsappDisponible();
+    const restaurado = cargarCarritoPresencialDisponible();
     if (restaurado) {
-      carritoWhatsapp.aplicarSnapshot(restaurado);
+      carrito.aplicarSnapshot(restaurado);
       return;
     }
 
-    resetFormPedido(nuevoModo, { limpiarStorage: false });
+    resetFormPedido('presencial', { limpiarStorage: false });
   };
 
   const enModoEdicion = Boolean(editandoPedidoId);
-  const pedidoEnEdicion = enModoEdicion
-    ? pedidos.find((item) => item.id === editandoPedidoId)
-    : null;
-  const esCapturaPresencial = enModoEdicion
-    ? pedidoEnEdicion?.tipo === 'presencial'
-    : modo === 'presencial';
-  const carritoCaptura = esCapturaPresencial ? carrito : carritoWhatsapp;
-  const formCaptura = carritoCaptura.form;
-  const pagoValido = esCapturaPresencial ? carrito.pagoValido : false;
-  const cambio = esCapturaPresencial ? carrito.cambio : null;
-  const pagoInsuficiente = esCapturaPresencial ? carrito.pagoInsuficiente : false;
+  const formCaptura = carrito.form;
+  const pagoValido = carrito.pagoValido;
+  const cambio = carrito.cambio;
+  const pagoInsuficiente = carrito.pagoInsuficiente;
 
   const handleProductoFormChange = (e) => {
     const { name, value } = e.target;
@@ -1843,19 +1576,13 @@ function Dashboard() {
       return;
     }
 
-    const esPresencial = modo === 'presencial';
-    const carritoActivo = esPresencial ? carrito : carritoWhatsapp;
-    const detallePedido = carritoActivo.obtenerDetallePedido();
+    const detallePedido = carrito.obtenerDetallePedido();
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) {
       return;
     }
 
-    if (!esPresencial && !tipoEntregaWhatsAppSeleccionado(carritoWhatsapp.form.tipoEntrega)) {
-      return;
-    }
-
-    void ejecutarGuardadoPedido(detallePedido, esPresencial);
+    void ejecutarGuardadoPedido(detallePedido);
   };
 
   const resetProductoForm = () => {
@@ -2160,21 +1887,8 @@ function Dashboard() {
       }
 
       if (!nuevoActivo) {
-        carritoWhatsapp.aplicarSnapshot({
-          ...carritoWhatsapp.snapshot,
-          form: {
-            ...carritoWhatsapp.form,
-            lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, carritoWhatsapp.form.lineas),
-          },
-        });
-
-        setPedidoEditForm((prev) =>
-          prev
-            ? {
-                ...prev,
-                lineas: quitarVarianteDeLineas(categoriaIdStr, item.id, prev.lineas),
-              }
-            : prev
+        actualizarLineasCarritoWhatsappPersistido((lineas) =>
+          quitarVarianteDeLineas(categoriaIdStr, item.id, lineas)
         );
       }
     }
@@ -2191,33 +1905,19 @@ function Dashboard() {
       if (editandoProductoId === id) {
         resetProductoForm();
       }
-      carritoWhatsapp.aplicarSnapshot({
-        ...carritoWhatsapp.snapshot,
-        form: {
-          ...carritoWhatsapp.form,
-          lineas: carritoWhatsapp.form.lineas.map((linea) =>
-            String(linea.productoId) === String(id)
-              ? { ...linea, productoId: '' }
-              : linea
-          ),
-        },
-      });
+      actualizarLineasCarritoWhatsappPersistido((lineas) =>
+        lineas.map((linea) =>
+          String(linea.productoId) === String(id)
+            ? { ...linea, productoId: '' }
+            : linea
+        )
+      );
     }
   };
 
-  const pedidosModoActual = pedidos.filter((pedido) =>
-    modo === 'presencial'
-      ? pedido.tipo === 'presencial'
-      : esPedidoWhatsapp(pedido)
-  );
+  const pedidosModoActual = pedidos.filter((pedido) => pedido.tipo === 'presencial');
 
   const hoyClave = obtenerFechaHoy();
-  const pedidosHoyModo = pedidosModoActual.filter(
-    (pedido) =>
-      pedido.created_at &&
-      formatearClaveFecha(new Date(pedido.created_at)) === hoyClave
-  );
-
   const pedidosHoyTodos = jornadaAbierta?.id
     ? pedidos.filter((pedido) =>
         pedidoPerteneceJornadaDashboard(
@@ -2284,28 +1984,8 @@ function Dashboard() {
       formatearClaveFecha(new Date(pedido.created_at)) === filtroFecha
   );
 
-  const pedidosPorFechaDomicilio = pedidosPorTipoEntrega(
-    pedidosPorFecha,
-    TIPOS_ENTREGA.DOMICILIO
-  );
-  const pedidosPorFechaSucursal = pedidosPorTipoEntrega(
-    pedidosPorFecha,
-    TIPOS_ENTREGA.SUCURSAL
-  );
-
-  const pedidosFiltradosDomicilio = aplicarFiltroStatus(
-    pedidosPorFechaDomicilio,
-    filtroDomicilio
-  );
-  const pedidosFiltradosSucursal = aplicarFiltroStatus(
-    pedidosPorFechaSucursal,
-    filtroSucursal
-  );
-
   const pedidosFiltradosPresencial = pedidosPorFecha;
   const pedidosAgrupadosPresencial = agruparPedidosPorFecha(pedidosFiltradosPresencial);
-  const pedidosAgrupadosDomicilio = agruparPedidosPorFecha(pedidosFiltradosDomicilio);
-  const pedidosAgrupadosSucursal = agruparPedidosPorFecha(pedidosFiltradosSucursal);
 
   const totalVentasFechaFiltro = pedidosPorFecha.reduce(
     (suma, pedido) => suma + Number(pedido.total),
@@ -2313,68 +1993,10 @@ function Dashboard() {
   );
 
   const esFiltroHoy = filtroFecha === hoyClave;
-  const totalVentasFechaDomicilio = totalVentasPedidos(pedidosPorFechaDomicilio);
-  const totalVentasFechaSucursal = totalVentasPedidos(pedidosPorFechaSucursal);
-  const contadoresDomicilioFecha = contadoresPorFlujo(
-    pedidosPorFechaDomicilio,
-    STATUS_FLOW_DOMICILIO
-  );
-  const contadoresSucursalFecha = contadoresPorFlujo(
-    pedidosPorFechaSucursal,
-    STATUS_FLOW_SUCURSAL
-  );
-
   const esModoPresencial = modo === 'presencial';
+  const esModoWhatsapp = modo === 'whatsapp';
   const esModoMesas = modo === 'mesas';
   const esModoMostrador = modo === 'mostrador';
-
-  const avanzarPedido = async (id) => {
-    const pedido = pedidos.find((p) => p.id === id);
-    if (!pedido) return;
-
-    const pedidoConCocina = enriquecerLineasDetalleCocina(pedido, productos);
-    const payload = construirPayloadAvancePedido(pedidoConCocina);
-    if (!payload) return;
-
-    if (pedidoConCocina.lineas_detalle !== pedido.lineas_detalle) {
-      payload.lineas_detalle = pedidoConCocina.lineas_detalle;
-    }
-
-    const { error } = await queryConNegocio(
-      supabase.from('pedidos').update(payload).eq('id', id),
-      negocioId
-    );
-
-    if (!error) {
-      setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...payload } : p))
-      );
-    }
-  };
-
-  const retrocederPedido = async (id) => {
-    const pedido = pedidos.find((p) => p.id === id);
-    if (!pedido || !puedeRetrocederPedido(pedido.status, pedido.tipo_entrega)) return;
-
-    const pedidoConCocina = enriquecerLineasDetalleCocina(pedido, productos);
-    const payload = construirPayloadRetrocesoPedido(pedidoConCocina);
-    if (!payload) return;
-
-    if (pedidoConCocina.lineas_detalle !== pedido.lineas_detalle) {
-      payload.lineas_detalle = pedidoConCocina.lineas_detalle;
-    }
-
-    const { error } = await queryConNegocio(
-      supabase.from('pedidos').update(payload).eq('id', id),
-      negocioId
-    );
-
-    if (!error) {
-      setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...payload } : p))
-      );
-    }
-  };
 
   const eliminarPedido = async (id, autorizadoPor = null) => {
     const { error } = await queryConNegocio(
@@ -2400,20 +2022,10 @@ function Dashboard() {
   const cancelarEdicionPedido = () => {
     if (!editandoPedidoId) return;
 
-    const pedido = pedidos.find((item) => item.id === editandoPedidoId);
-    const esPresencial = pedido?.tipo === 'presencial';
-
     setEditandoPedidoId(null);
     setErrorGuardarPedido(null);
-
-    if (esPresencial) {
-      carrito.resetCarrito({ limpiarStorage: false });
-      carrito.reanudarPersistencia();
-      return;
-    }
-
-    carritoWhatsapp.resetCarrito({ limpiarStorage: false });
-    carritoWhatsapp.reanudarPersistencia();
+    carrito.resetCarrito({ limpiarStorage: false });
+    carrito.reanudarPersistencia();
   };
 
   const iniciarEdicionPedido = async (pedido) => {
@@ -2436,15 +2048,9 @@ function Dashboard() {
       productos,
       variantesCtx
     );
-    const esPresencial = pedidoFuente.tipo === 'presencial';
 
-    if (esPresencial) {
-      carrito.pausarPersistencia();
-      carrito.aplicarSnapshot(snapshot);
-    } else {
-      carritoWhatsapp.pausarPersistencia();
-      carritoWhatsapp.aplicarSnapshot(snapshot);
-    }
+    carrito.pausarPersistencia();
+    carrito.aplicarSnapshot(snapshot);
 
     setEditandoPedidoId(pedido.id);
     setErrorGuardarPedido(null);
@@ -2458,41 +2064,25 @@ function Dashboard() {
     if (!editandoPedidoId || guardandoEdicionPedido) return;
 
     const pedidoOriginal = pedidos.find((item) => item.id === editandoPedidoId);
-    if (!pedidoOriginal) return;
+    if (!pedidoOriginal || pedidoOriginal.tipo !== 'presencial') return;
 
-    const esPresencial = pedidoOriginal.tipo === 'presencial';
-    const carritoActivo = esPresencial ? carrito : carritoWhatsapp;
-    const detallePedido = carritoActivo.obtenerDetallePedido();
+    const detallePedido = carrito.obtenerDetallePedido();
 
     if (detallePedido.lineas.length === 0 || detallePedido.total <= 0) return;
-
-    if (
-      !esPresencial &&
-      !tipoEntregaWhatsAppSeleccionado(carritoWhatsapp.form.tipoEntrega)
-    ) {
-      return;
-    }
 
     setGuardandoEdicionPedido(true);
 
     const resumen = resumenProductosDesdeLineas(
-      carritoActivo.lineasPedidoActivas,
+      carrito.lineasPedidoActivas,
       productos,
       variantesCtx
     );
 
-    const payload = esPresencial
-      ? construirPayloadEdicionCaja({
-          detallePedido,
-          resumen,
-          form: carritoActivo.form,
-        })
-      : construirPayloadEdicionRecogerDomicilio({
-          pedidoOriginal,
-          detallePedido,
-          resumen,
-          form: carritoActivo.form,
-        });
+    const payload = construirPayloadEdicionCaja({
+      detallePedido,
+      resumen,
+      form: carrito.form,
+    });
 
     const { data, error } = await queryConNegocio(
       supabase.from('pedidos').update(payload).eq('id', pedidoOriginal.id),
@@ -2502,22 +2092,15 @@ function Dashboard() {
       .single();
 
     if (!error && data) {
-      const camposAuditoria = esPresencial
-        ? CAMPOS_AUDITORIA_EDICION_CAJA
-        : CAMPOS_AUDITORIA_EDICION_RECOGER_DOMICILIO;
-
       const registrosEdicion = construirRegistrosAuditoriaEdicionPedido({
         pedidoOriginal,
         payload,
         negocioId,
         editadoPor: session?.user?.id ?? null,
-        campos: camposAuditoria,
+        campos: CAMPOS_AUDITORIA_EDICION_CAJA,
         normalizarValorAnterior: (campo, pedido) => {
           if (campo === 'forma_pago') {
             return normalizarFormaPagoPayload(pedido.forma_pago);
-          }
-          if (campo === 'tipo_entrega') {
-            return normalizarTipoEntrega(pedido.tipo_entrega);
           }
           return pedido[campo];
         },
@@ -2529,8 +2112,8 @@ function Dashboard() {
 
       setPedidos((prev) => prev.map((item) => (item.id === data.id ? data : item)));
       setEditandoPedidoId(null);
-      carritoActivo.resetCarrito({ limpiarStorage: true });
-      carritoActivo.reanudarPersistencia();
+      carrito.resetCarrito({ limpiarStorage: true });
+      carrito.reanudarPersistencia();
     }
 
     setGuardandoEdicionPedido(false);
@@ -2856,157 +2439,34 @@ function Dashboard() {
     void intentarEliminarPedido(pedido);
   };
 
-  const pedidoWhatsappBloqueadoPorJornadaCerrada = !esModoPresencial && !jornadaAbierta?.id;
-
-  const claseBotonPedidoWhatsappJornadaCerrada = pedidoWhatsappBloqueadoPorJornadaCerrada
-    ? ' btn-accion-jornada-cerrada'
-    : '';
-
-  const intentarEditarPedidoWhatsapp = (pedido) => {
-    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
+  const ejecutarGuardadoPedido = async (detallePedido) => {
+    if (!jornadaAbierta?.id) {
       abrirModalPedidoBloqueadoArqueo(
-        MENSAJE_EDITAR_PEDIDO_SIN_JORNADA,
-        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
+        MENSAJE_REGISTRAR_VENTA_SIN_JORNADA,
+        TITULO_MODAL_VENTA_SIN_JORNADA
       );
       return;
     }
 
-    void intentarEditarPedido(pedido);
-  };
-
-  const intentarEliminarPedidoWhatsapp = (pedido) => {
-    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
-      abrirModalPedidoBloqueadoArqueo(
-        MENSAJE_ELIMINAR_PEDIDO_SIN_JORNADA,
-        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
-      );
-      return;
-    }
-
-    void intentarEliminarPedido(pedido);
-  };
-
-  const intentarAvanzarPedido = async (id) => {
-    const pedido = pedidos.find((item) => item.id === id);
-    if (!pedido) return;
-
-    try {
-      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
-        pedido,
-        MENSAJE_AVANZAR_PEDIDO_SIN_JORNADA
-      );
-      if (bloqueado) return;
-    } catch (err) {
-      abrirModalPedidoBloqueadoArqueo(
-        err.message || 'No se pudo verificar el arqueo del día.'
-      );
-      return;
-    }
-
-    await avanzarPedido(id);
-  };
-
-  const intentarRetrocederPedido = async (id) => {
-    const pedido = pedidos.find((item) => item.id === id);
-    if (!pedido) return;
-
-    try {
-      const bloqueado = await verificarArqueoDelDiaBloqueaPedido(
-        pedido,
-        MENSAJE_RETROCEDER_PEDIDO_SIN_JORNADA
-      );
-      if (bloqueado) return;
-    } catch (err) {
-      abrirModalPedidoBloqueadoArqueo(
-        err.message || 'No se pudo verificar el arqueo del día.'
-      );
-      return;
-    }
-
-    await retrocederPedido(id);
-  };
-
-  const intentarAvanzarPedidoWhatsapp = (id) => {
-    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
-      abrirModalPedidoBloqueadoArqueo(
-        MENSAJE_AVANZAR_PEDIDO_SIN_JORNADA,
-        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
-      );
-      return;
-    }
-
-    const pedido = pedidos.find((item) => item.id === id);
-    if (!pedido || esStatusFinal(pedido.status, pedido.tipo_entrega)) {
-      return;
-    }
-
-    void intentarAvanzarPedido(id);
-  };
-
-  const intentarRetrocederPedidoWhatsapp = (id) => {
-    if (pedidoWhatsappBloqueadoPorJornadaCerrada) {
-      abrirModalPedidoBloqueadoArqueo(
-        MENSAJE_RETROCEDER_PEDIDO_SIN_JORNADA,
-        TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
-      );
-      return;
-    }
-
-    void intentarRetrocederPedido(id);
-  };
-
-  const ejecutarGuardadoPedido = async (detallePedido, esPresencial) => {
-    if (esPresencial) {
-      if (!jornadaAbierta?.id) {
-        abrirModalPedidoBloqueadoArqueo(
-          MENSAJE_REGISTRAR_VENTA_SIN_JORNADA,
-          TITULO_MODAL_VENTA_SIN_JORNADA
-        );
-        return;
-      }
-    } else {
-      if (!jornadaAbierta?.id) {
-        abrirModalPedidoBloqueadoArqueo(
-          MENSAJE_GUARDAR_PEDIDO_SIN_JORNADA,
-          TITULO_MODAL_PEDIDO_WHATSAPP_SIN_JORNADA
-        );
-        return;
-      }
-    }
-
-    const resumen = esPresencial
-      ? carrito.obtenerResumenProductos()
-      : carritoWhatsapp.obtenerResumenProductos();
-    const statusPresencial = esPresencial ? determinarStatusInicialPresencial() : null;
-    const formWhatsapp = carritoWhatsapp.form;
+    const resumen = carrito.obtenerResumenProductos();
+    const statusPresencial = determinarStatusInicialPresencial();
 
     const payload = {
-      cliente: esPresencial ? CLIENTE_PUBLICO : formWhatsapp.cliente.trim(),
-      telefono: esPresencial ? null : formWhatsapp.telefono.trim() || null,
+      cliente: CLIENTE_PUBLICO,
+      telefono: null,
       producto: resumen,
       lineas_detalle: Array.isArray(detallePedido.lineas) ? detallePedido.lineas : [],
       total: detallePedido.total,
-      status: esPresencial ? statusPresencial.status : formWhatsapp.status,
-      tipo: esPresencial ? 'presencial' : 'whatsapp',
-      tipo_entrega: esPresencial
-        ? TIPOS_ENTREGA.DOMICILIO
-        : normalizarTipoEntrega(formWhatsapp.tipoEntrega),
-      direccion:
-        esPresencial || formWhatsapp.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO
-          ? null
-          : formWhatsapp.direccion.trim() || null,
-      forma_pago: normalizarFormaPagoPayload(
-        esPresencial ? carrito.form.formaPago : formWhatsapp.formaPago
-      ),
-      referencia: esPresencial ? carrito.form.referencia.trim() || null : null,
+      status: statusPresencial.status,
+      tipo: 'presencial',
+      tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
+      direccion: null,
+      forma_pago: normalizarFormaPagoPayload(carrito.form.formaPago),
+      referencia: carrito.form.referencia.trim() || null,
       created_by: usuario?.id ?? null,
       jornada_id: jornadaAbierta?.id ?? null,
-      ...(esPresencial
-        ? {
-            status_cocina1: statusPresencial.status_cocina1,
-            status_cocina2: statusPresencial.status_cocina2,
-          }
-        : {}),
+      status_cocina1: statusPresencial.status_cocina1,
+      status_cocina2: statusPresencial.status_cocina2,
     };
 
     const optimisticId = crearIdOptimisticoPedido();
@@ -3028,21 +2488,15 @@ function Dashboard() {
 
     setPedidos((prev) => ordenarPedidosDesc([...prev, pedidoOptimista]));
 
-    if (esPresencial) {
-      setResumenVenta({
-        producto: resumen,
-        total: detallePedido.total,
-        referencia: carrito.form.referencia.trim(),
-        formaPago: carrito.form.formaPago,
-      });
-    }
+    setResumenVenta({
+      producto: resumen,
+      total: detallePedido.total,
+      referencia: carrito.form.referencia.trim(),
+      formaPago: carrito.form.formaPago,
+    });
 
-    if (esPresencial) {
-      carrito.pausarPersistencia();
-    } else {
-      carritoWhatsapp.pausarPersistencia();
-    }
-    resetFormPedido(modo);
+    carrito.pausarPersistencia();
+    resetFormPedido('presencial');
 
     const { data, error } = await supabase
       .from('pedidos')
@@ -3054,21 +2508,13 @@ function Dashboard() {
       setErrorGuardarPedido(
         'Pedido guardado localmente. Se sincronizará cuando haya conexión.'
       );
-      if (esPresencial) {
-        carrito.reanudarPersistencia();
-      } else {
-        carritoWhatsapp.reanudarPersistencia();
-      }
+      carrito.reanudarPersistencia();
       return;
     }
 
     eliminarPedidoPendienteSync(optimisticId);
     setErrorGuardarPedido(null);
-    if (esPresencial) {
-      carrito.reanudarPersistencia();
-    } else {
-      carritoWhatsapp.reanudarPersistencia();
-    }
+    carrito.reanudarPersistencia();
 
     setPedidos((prev) => {
       const sinOptimistico = prev.filter((pedido) => pedido.id !== optimisticId);
@@ -3624,11 +3070,6 @@ function Dashboard() {
           ) : (
             <div className="pedidos-grid">
                       {pedidosGrupo.map((pedido) => {
-                        const esFinal = esStatusFinal(
-                          pedido.status,
-                          pedido.tipo_entrega
-                        );
-                        const esPresencialPedido = pedido.tipo === 'presencial';
                         const estaEditando = editandoPedidoId === pedido.id;
                         const otroEditando =
                           editandoPedidoId !== null && !estaEditando;
@@ -3681,155 +3122,27 @@ function Dashboard() {
                                 Forma de pago: {etiquetaFormaPago(pedido.forma_pago)}
                               </p>
                             )}
-                            {!esModoPresencial && (
-                              <p className="pedido-tipo-entrega">
-                                {formatearTipoEntrega(pedido.tipo_entrega)}
-                              </p>
-                            )}
-                            {esModoPresencial ? (
-                              <>
-                                <span className="status-badge status-entregado">
-                                  Venta completada
-                                </span>
-                                <div className="tarjeta-acciones">
-                                  <button
-                                    type="button"
-                                    className={`editar-btn${claseBotonVentaJornadaCerrada}`}
-                                    disabled={otroEditando}
-                                    onClick={() => intentarEditarVentaCaja(pedido)}
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`eliminar-btn${claseBotonVentaJornadaCerrada}`}
-                                    disabled={otroEditando}
-                                    onClick={() => intentarEliminarVentaCaja(pedido)}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <span className={`status-badge status-${pedido.status}`}>
-                                  {STATUS_LABELS[pedido.status]}
-                                </span>
-                                {pedido.status === 'en-cocina' &&
-                                  pedidoRequiereAlgunaCocina(pedido) && (
-                                    <p className="pedido-progreso-cocinas">
-                                      {formatearProgresoCocinas(pedido)}
-                                    </p>
-                                  )}
-                                <div className="tarjeta-acciones tarjeta-acciones-doble">
-                                  {(() => {
-                                    const muestraRetroceder = puedeRetrocederPedido(
-                                      pedido.status,
-                                      pedido.tipo_entrega
-                                    );
-                                    const muestraContactar = mostrarContactoWhatsAppPedido(
-                                      pedido.status,
-                                      pedido.tipo_entrega
-                                    );
-                                    const botonesFila1 =
-                                      Number(muestraRetroceder) +
-                                      1 +
-                                      Number(muestraContactar);
-                                    const fila1Class =
-                                      botonesFila1 === 3
-                                        ? ' tarjeta-acciones-fila-triple'
-                                        : '';
-
-                                    return (
-                                      <div className={`tarjeta-acciones-fila${fila1Class}`}>
-                                        {muestraRetroceder && (
-                                          <button
-                                            type="button"
-                                            className={`retroceder-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
-                                            disabled={otroEditando}
-                                            onClick={() =>
-                                              intentarRetrocederPedidoWhatsapp(pedido.id)
-                                            }
-                                          >
-                                            Retroceder
-                                          </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          className={`avanzar-btn${
-                                            claseBotonPedidoWhatsappJornadaCerrada ||
-                                            (esFinal && !pedidoWhatsappBloqueadoPorJornadaCerrada)
-                                              ? ' btn-accion-jornada-cerrada'
-                                              : ''
-                                          }`}
-                                          disabled={otroEditando}
-                                          onClick={() => intentarAvanzarPedidoWhatsapp(pedido.id)}
-                                        >
-                                          Avanzar
-                                        </button>
-                                        {muestraContactar && (() => {
-                                          const urlWhatsApp = construirUrlWhatsApp(
-                                            pedido.telefono,
-                                            obtenerMensajeWhatsAppPedido(pedido)
-                                          );
-
-                                          return (
-                                            <a
-                                              className={`whatsapp-btn${
-                                                urlWhatsApp ? '' : ' whatsapp-btn-deshabilitado'
-                                              }`}
-                                              href={urlWhatsApp || '#contactar'}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              aria-disabled={!urlWhatsApp}
-                                              title={
-                                                urlWhatsApp
-                                                  ? 'Contactar por WhatsApp'
-                                                  : 'Agrega un teléfono al pedido para contactar'
-                                              }
-                                              onClick={(e) => {
-                                                if (!urlWhatsApp) e.preventDefault();
-                                              }}
-                                            >
-                                              <svg
-                                                className="whatsapp-btn-icono"
-                                                viewBox="0 0 24 24"
-                                                aria-hidden="true"
-                                                focusable="false"
-                                              >
-                                                <path
-                                                  fill="currentColor"
-                                                  d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
-                                                />
-                                              </svg>
-                                              Contactar
-                                            </a>
-                                          );
-                                        })()}
-                                      </div>
-                                    );
-                                  })()}
-                                  <div className="tarjeta-acciones-fila">
-                                    <button
-                                      type="button"
-                                      className={`editar-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
-                                      disabled={otroEditando}
-                                      onClick={() => intentarEditarPedidoWhatsapp(pedido)}
-                                    >
-                                      Editar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={`eliminar-btn${claseBotonPedidoWhatsappJornadaCerrada}`}
-                                      disabled={otroEditando}
-                                      onClick={() => intentarEliminarPedidoWhatsapp(pedido)}
-                                    >
-                                      Eliminar
-                                    </button>
-                                  </div>
-                                </div>
-                              </>
-                            )}
+                            <span className="status-badge status-entregado">
+                              Venta completada
+                            </span>
+                            <div className="tarjeta-acciones">
+                              <button
+                                type="button"
+                                className={`editar-btn${claseBotonVentaJornadaCerrada}`}
+                                disabled={otroEditando}
+                                onClick={() => intentarEditarVentaCaja(pedido)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className={`eliminar-btn${claseBotonVentaJornadaCerrada}`}
+                                disabled={otroEditando}
+                                onClick={() => intentarEliminarVentaCaja(pedido)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
                           </article>
                         );
                       })}
@@ -3838,32 +3151,6 @@ function Dashboard() {
         </div>
       );
     });
-  };
-
-  const estiloSeccionesEntregaDobleWeb = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: '1rem',
-    alignItems: 'stretch',
-    width: '100vw',
-    maxWidth: '100vw',
-    marginLeft: 'calc(50% - 50vw)',
-    marginRight: 'calc(50% - 50vw)',
-    paddingLeft: '2rem',
-    paddingRight: '2rem',
-    boxSizing: 'border-box',
-  };
-  const estiloSeccionEntregaColumnaWeb = {
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
-    marginBottom: 0,
-    maxHeight: 'calc(100vh - 14rem)',
-  };
-  const estiloSeccionEntregaListaScrollWeb = {
-    flex: 1,
-    minHeight: 0,
-    overflowY: 'auto',
   };
 
   return (
@@ -4598,14 +3885,23 @@ function Dashboard() {
                   usuarioId={usuario?.id}
                   jornadaAbierta={jornadaAbierta}
                 />
+              ) : esModoWhatsapp ? (
+                <VistaRecogerDomicilio
+                  productos={productos}
+                  productosOrdenados={productosOrdenados}
+                  frecuenciaCategorias={frecuenciaCategoriasPedidos}
+                  frecuenciaLista={frecuenciaLista}
+                  variantesCtx={variantesCtx}
+                  negocioId={negocioId}
+                  usuarioId={usuario?.id}
+                  jornadaAbierta={jornadaAbierta}
+                  pedidos={pedidos}
+                  setPedidos={setPedidos}
+                />
               ) : (
                 <>
               <h2 className="formulario-titulo">
-                {enModoEdicion
-                  ? 'Editar pedido'
-                  : esModoPresencial
-                    ? 'Nueva venta'
-                    : 'Nuevo pedido'}
+                {enModoEdicion ? 'Editar pedido' : 'Nueva venta'}
               </h2>
               <form className="formulario-pedido" onSubmit={handleSubmit}>
                 <div className="formulario formulario-cabecera">
@@ -4615,93 +3911,23 @@ function Dashboard() {
                       id="cliente"
                       name="cliente"
                       type="text"
-                      value={esCapturaPresencial ? CLIENTE_PUBLICO : formCaptura.cliente}
+                      value={CLIENTE_PUBLICO}
                       onChange={handleFormChange}
-                      readOnly={esCapturaPresencial}
+                      readOnly
                       required
                     />
                   </div>
-                  {!esCapturaPresencial && (
-                    <ClienteBusquedaWhatsapp negocioId={negocioId} />
-                  )}
-                  {!esCapturaPresencial && (
-                    <div className="formulario-campo">
-                      <label htmlFor="telefono">Teléfono</label>
-                      <input
-                        id="telefono"
-                        name="telefono"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        placeholder="10 dígitos o con lada"
-                        value={formCaptura.telefono}
-                        onChange={handleFormChange}
-                      />
-                    </div>
-                  )}
-                  {!esCapturaPresencial && (
-                    <div className="formulario-campo">
-                      <label htmlFor="tipoEntrega">Tipo de entrega</label>
-                      <select
-                        id="tipoEntrega"
-                        name="tipoEntrega"
-                        value={formCaptura.tipoEntrega}
-                        onChange={handleFormChange}
-                        required
-                      >
-                        <option value="">Seleccionar tipo de entrega…</option>
-                        {TIPOS_ENTREGA_OPCIONES.map((opcion) => (
-                          <option key={opcion.value} value={opcion.value}>
-                            {opcion.icono} {opcion.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {!esCapturaPresencial &&
-                    formCaptura.tipoEntrega === TIPOS_ENTREGA.DOMICILIO && (
-                      <div className="formulario-campo formulario-campo-direccion">
-                        <label htmlFor="direccion">Dirección de entrega</label>
-                        <input
-                          id="direccion"
-                          name="direccion"
-                          type="text"
-                          placeholder="Calle, número, colonia, referencias..."
-                          value={formCaptura.direccion}
-                          onChange={handleFormChange}
-                        />
-                      </div>
-                    )}
-                  {!esCapturaPresencial && tipoEntregaWhatsAppSeleccionado(formCaptura.tipoEntrega) && (
-                    <div className="formulario-campo">
-                      <label htmlFor="status">Estatus del pedido</label>
-                      <select
-                        id="status"
-                        name="status"
-                        value={formCaptura.status}
-                        onChange={handleFormChange}
-                      >
-                        {obtenerFlujoStatus(formCaptura.tipoEntrega).map((status) => (
-                          <option key={status} value={status}>
-                            {STATUS_LABELS[status]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {esCapturaPresencial && (
-                    <div className="formulario-campo">
-                      <label htmlFor="referencia">Referencia / Nombre</label>
-                      <input
-                        id="referencia"
-                        name="referencia"
-                        type="text"
-                        placeholder="Opcional"
-                        value={formCaptura.referencia}
-                        onChange={handleFormChange}
-                      />
-                    </div>
-                  )}
+                  <div className="formulario-campo">
+                    <label htmlFor="referencia">Referencia / Nombre</label>
+                    <input
+                      id="referencia"
+                      name="referencia"
+                      type="text"
+                      placeholder="Opcional"
+                      value={formCaptura.referencia}
+                      onChange={handleFormChange}
+                    />
+                  </div>
                   <div className="formulario-campo">
                     <label htmlFor="formaPago">Forma de pago</label>
                     <select
@@ -4710,14 +3936,13 @@ function Dashboard() {
                       value={formCaptura.formaPago}
                       onChange={handleFormChange}
                     >
-                      {!esCapturaPresencial && <option value="">Sin especificar</option>}
-                      {FORMAS_PAGO.filter(
-                        (forma) => !esCapturaPresencial || forma.value !== 'link_pago'
-                      ).map((forma) => (
-                        <option key={forma.value} value={forma.value}>
-                          {forma.label}
-                        </option>
-                      ))}
+                      {FORMAS_PAGO.filter((forma) => forma.value !== 'link_pago').map(
+                        (forma) => (
+                          <option key={forma.value} value={forma.value}>
+                            {forma.label}
+                          </option>
+                        )
+                      )}
                     </select>
                   </div>
                 </div>
@@ -4728,25 +3953,25 @@ function Dashboard() {
                     variantesCtx={variantesCtx}
                     frecuenciaCategorias={frecuenciaCategoriasPedidos}
                     frecuenciaLista={frecuenciaLista}
-                    categoriaActiva={carritoCaptura.categoriaPedidoActiva}
-                    onCategoriaChange={carritoCaptura.setCategoriaPedidoActiva}
-                    onAgregarDirecto={carritoCaptura.agregarProductoAlPedido}
-                    onConfirmarLinea={carritoCaptura.agregarLineaConVariantes}
+                    categoriaActiva={carrito.categoriaPedidoActiva}
+                    onCategoriaChange={carrito.setCategoriaPedidoActiva}
+                    onAgregarDirecto={carrito.agregarProductoAlPedido}
+                    onConfirmarLinea={carrito.agregarLineaConVariantes}
                   />
                 )}
 
                 <PedidoLineasCarrito
-                  lineas={carritoCaptura.lineasPedidoConProducto}
+                  lineas={carrito.lineasPedidoConProducto}
                   productos={productos}
                   variantesCtx={variantesCtx}
-                  totalPedido={carritoCaptura.totalPedido}
-                  colapsablePorDefecto={!esCapturaPresencial}
-                  onAjustarCantidad={carritoCaptura.ajustarCantidadLinea}
-                  onActualizarCantidad={carritoCaptura.actualizarCantidadLinea}
-                  onEliminarLinea={carritoCaptura.eliminarLinea}
-                  onCambiarVariante={carritoCaptura.cambiarVarianteLinea}
+                  totalPedido={carrito.totalPedido}
+                  colapsablePorDefecto={false}
+                  onAjustarCantidad={carrito.ajustarCantidadLinea}
+                  onActualizarCantidad={carrito.actualizarCantidadLinea}
+                  onEliminarLinea={carrito.eliminarLinea}
+                  onCambiarVariante={carrito.cambiarVarianteLinea}
                 >
-                  {esCapturaPresencial && !enModoEdicion ? (
+                  {!enModoEdicion ? (
                     <CajaPagoEfectivo
                       formaPago={carrito.form.formaPago}
                       pagoRecibido={carrito.pagoRecibido}
@@ -4780,7 +4005,7 @@ function Dashboard() {
                       className="guardar-btn"
                       disabled={
                         productos.length === 0 ||
-                        carritoCaptura.totalPedido <= 0 ||
+                        carrito.totalPedido <= 0 ||
                         guardandoEdicionPedido ||
                         !jornadaAbierta
                       }
@@ -4789,9 +4014,7 @@ function Dashboard() {
                         ? guardandoEdicionPedido
                           ? 'Guardando...'
                           : 'Guardar cambios'
-                        : esCapturaPresencial
-                          ? 'Registrar venta'
-                          : 'Guardar pedido'}
+                        : 'Registrar venta'}
                     </button>
                   </div>
                   {!jornadaAbierta ? (
@@ -4815,7 +4038,7 @@ function Dashboard() {
               )}
             </section>
 
-            {!esModoMesas && !esModoMostrador && (
+            {esModoPresencial && (
             <>
             <section className="dashboard-filtros dashboard-filtros-fecha">
               <div className="filtro-fecha-campo">
@@ -4844,124 +4067,17 @@ function Dashboard() {
               )}
             </section>
 
-            {esModoPresencial ? (
-              <section className="dashboard-lista">
-                {pedidosModoActual.length === 0 ? (
-                  <p className="dashboard-vacio">No hay ventas registradas aún</p>
-                ) : (
-                  renderPedidosLista(
-                    pedidosAgrupadosPresencial,
-                    'todos',
-                    pedidosPorFecha.length
-                  )
-                )}
-              </section>
-            ) : (
-              <>
-                {esMobileDashboard && (
-                  <nav className="catalogo-nav">
-                    {SECCIONES_ENTREGA_DASHBOARD.map((seccionEntrega) => (
-                      <button
-                        key={seccionEntrega.key}
-                        type="button"
-                        className={`catalogo-tab${
-                          tabEntregaWhatsAppMovil === seccionEntrega.key ? ' activo' : ''
-                        }`}
-                        onClick={() => setTabEntregaWhatsAppMovil(seccionEntrega.key)}
-                      >
-                        {seccionEntrega.key === TIPOS_ENTREGA.DOMICILIO
-                          ? 'A domicilio'
-                          : 'Para recoger'}
-                      </button>
-                    ))}
-                  </nav>
-                )}
-                <div style={esMobileDashboard ? undefined : estiloSeccionesEntregaDobleWeb}>
-                  {SECCIONES_ENTREGA_DASHBOARD.filter(
-                    (seccionEntrega) =>
-                      !esMobileDashboard || tabEntregaWhatsAppMovil === seccionEntrega.key
-                  ).map((seccionEntrega) => {
-                  const esDomicilio =
-                    seccionEntrega.key === TIPOS_ENTREGA.DOMICILIO;
-                  const pedidosTipo = esDomicilio
-                    ? pedidosPorFechaDomicilio
-                    : pedidosPorFechaSucursal;
-                  const pedidosAgrupadosSeccion = esDomicilio
-                    ? pedidosAgrupadosDomicilio
-                    : pedidosAgrupadosSucursal;
-                  const filtroSeccion = esDomicilio
-                    ? filtroDomicilio
-                    : filtroSucursal;
-                  const setFiltroSeccion = esDomicilio
-                    ? setFiltroDomicilio
-                    : setFiltroSucursal;
-                  const filtrosSeccion = esDomicilio
-                    ? FILTROS_DOMICILIO
-                    : FILTROS_SUCURSAL;
-                  const contadoresSeccion = esDomicilio
-                    ? contadoresDomicilioFecha
-                    : contadoresSucursalFecha;
-                  const totalSeccion = esDomicilio
-                    ? totalVentasFechaDomicilio
-                    : totalVentasFechaSucursal;
-
-                  return (
-                    <section
-                      key={seccionEntrega.key}
-                      className={`dashboard-seccion-entrega dashboard-seccion-entrega-${seccionEntrega.key}`}
-                      style={esMobileDashboard ? undefined : estiloSeccionEntregaColumnaWeb}
-                    >
-                      <div className="seccion-entrega-cabecera">
-                        <h2 className="seccion-entrega-titulo">{seccionEntrega.titulo}</h2>
-                        <div className="seccion-entrega-resumen">
-                          <span className="seccion-entrega-total">
-                            Total: {formatearMoneda(totalSeccion)}
-                          </span>
-                          <span className="seccion-entrega-pedidos">
-                            {pedidosTipo.length} pedido
-                            {pedidosTipo.length === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="seccion-entrega-contadores">
-                        {contadoresSeccion.map(({ status, label, count }) => (
-                          <div
-                            key={status}
-                            className={`seccion-entrega-contador status-${status}`}
-                          >
-                            <span className="seccion-entrega-contador-count">{count}</span>
-                            <span className="seccion-entrega-contador-label">{label}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="dashboard-filtros seccion-entrega-filtros">
-                        {filtrosSeccion.map(({ value, label }) => (
-                          <button
-                            key={value}
-                            type="button"
-                            className={`filtro-btn filtro-btn-${value}${filtroSeccion === value ? ' activo' : ''}`}
-                            onClick={() => setFiltroSeccion(value)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div
-                        className="dashboard-lista seccion-entrega-lista"
-                        style={esMobileDashboard ? undefined : estiloSeccionEntregaListaScrollWeb}
-                      >
-                        {renderPedidosLista(
-                          pedidosAgrupadosSeccion,
-                          filtroSeccion,
-                          pedidosTipo.length
-                        )}
-                      </div>
-                    </section>
-                  );
-                })}
-                </div>
-              </>
-            )}
+            <section className="dashboard-lista">
+              {pedidosModoActual.length === 0 ? (
+                <p className="dashboard-vacio">No hay ventas registradas aún</p>
+              ) : (
+                renderPedidosLista(
+                  pedidosAgrupadosPresencial,
+                  'todos',
+                  pedidosPorFecha.length
+                )
+              )}
+            </section>
             </>
             )}
           </>

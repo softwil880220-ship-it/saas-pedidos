@@ -1,0 +1,122 @@
+.vista-recoger-domicilio {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recoger-domicilio-buscador {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.recoger-domicilio-buscador-label {
+  font-weight: 600;
+}
+
+.recoger-domicilio-buscador input {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.recoger-domicilio-buscador-resultados {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.recoger-domicilio-buscador-resultado {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.recoger-domicilio-buscador-vacio,
+.recoger-domicilio-lista-vacio {
+  color: #64748b;
+}
+
+.recoger-domicilio-recibo-meta {
+  margin: 0;
+  color: var(--texto-secundario, #6b7280);
+  font-size: 0.78rem;
+}
+
+.recoger-domicilio-recibo-progreso {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.recoger-domicilio-recibo-acciones {
+  margin-top: 0.25rem;
+}
+
+.recoger-domicilio-recibo-resaltada {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.recoger-domicilio-recibo-editando {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.recoger-domicilio-recibo .mostrador-recibo-estado-badge.status-por-aceptar {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.recoger-domicilio-recibo .mostrador-recibo-estado-badge.status-pendiente-repartidor {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.recoger-domicilio-recibo .mostrador-recibo-estado-badge.status-enviado {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.recoger-domicilio-recibo .mostrador-recibo-estado-badge.status-entregado {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.recoger-domicilio-recibo .mostrador-recibo-estado-badge.status-listo-para-recoger {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.pedido-asignacion-repartidor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.selector-repartidor-pedido {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.status-pendiente-repartidor {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.recoger-domicilio-lista-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
