@@ -42,6 +42,7 @@ import {
   actualizarLineasCarritoWhatsappPersistido,
   cargarCarritoMostradorDisponible,
   cargarCarritoPresencialDisponible,
+  cargarCarritoWhatsappDisponible,
   crearFormularioPedidoDefault,
   cargarEstadoInicialCapturaPedidoWeb,
   cargarSeccionActiva,
