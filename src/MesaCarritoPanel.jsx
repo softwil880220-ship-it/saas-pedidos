@@ -107,10 +107,8 @@ export default function MesaCarritoPanel({
 
   useEffect(() => {
     if (folioId !== folioIdSesionRef.current) {
+      abiertaEnSesionRef.current = null;
       folioIdSesionRef.current = folioId;
-      if (!folioId) {
-        abiertaEnSesionRef.current = null;
-      }
     }
 
     if (metadatosFolio.abiertaEn) {

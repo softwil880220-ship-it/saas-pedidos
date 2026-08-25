@@ -98,16 +98,31 @@ export default function MesaRondasEnviadas({
       negocioId
     );
 
-    if (!error && editandoRondaId === ronda.id) {
+    if (error) {
+      console.error('[mesas_folios] eliminar ronda falló', {
+        folioId: folioId ?? null,
+        rondaId: ronda.id,
+        error,
+      });
+    } else if (editandoRondaId === ronda.id) {
       setEditandoRondaId(null);
     }
 
     setEliminandoRondaId(null);
 
     if (!error) {
-      if (folioId) {
-        decrementarNumeroRondaSiguienteFolio(folioId);
+      if (!folioId) {
+        console.error('[mesas_folios] no se decrementó contador tras eliminar ronda', {
+          motivo: 'sin_folio_id_al_eliminar_ronda',
+          rondaId: ronda.id,
+        });
+      } else if (!decrementarNumeroRondaSiguienteFolio(folioId)) {
+        console.error('[mesas_folios] no se decrementó contador tras eliminar ronda', {
+          folioId,
+          rondaId: ronda.id,
+        });
       }
+
       onRondasCambiadas?.();
     }
   };

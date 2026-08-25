@@ -165,6 +165,13 @@ function registrarErrorFlushFolio(folioId, detalle) {
   });
 }
 
+function registrarErrorDecrementoContador(folioId, detalle) {
+  console.error('[mesas_folios] decrementarNumeroRondaSiguienteFolio falló', {
+    folioId: String(folioId),
+    ...detalle,
+  });
+}
+
 function supabaseAfectoAlMenosUnaFila(data) {
   return Array.isArray(data) && data.length > 0;
 }
@@ -373,7 +380,16 @@ export function decrementarNumeroRondaSiguienteFolio(folioId) {
   const clave = String(folioId);
   const entrada = cacheFolios.get(clave);
 
-  if (!entrada || entrada.estado !== 'abierta') {
+  if (!entrada) {
+    registrarErrorDecrementoContador(clave, { motivo: 'sin_entrada_en_cache' });
+    return false;
+  }
+
+  if (entrada.estado !== 'abierta') {
+    registrarErrorDecrementoContador(clave, {
+      motivo: 'folio_no_abierta',
+      estado: entrada.estado ?? null,
+    });
     return false;
   }
 
@@ -381,6 +397,10 @@ export function decrementarNumeroRondaSiguienteFolio(folioId) {
   const nuevo = Math.max(1, actual - 1);
 
   if (nuevo === actual) {
+    registrarErrorDecrementoContador(clave, {
+      motivo: 'contador_ya_en_minimo',
+      numeroRondaSiguiente: actual,
+    });
     return false;
   }
 
