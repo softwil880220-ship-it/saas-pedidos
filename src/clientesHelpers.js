@@ -1,4 +1,4 @@
-import { TIPOS_ENTREGA, formatearMoneda } from './pedidosShared';
+import { formatearMoneda } from './pedidosShared';
 
 function formatearCalleConNumero(direccion) {
   const calle = (direccion.calle || '').trim();
@@ -74,95 +74,5 @@ export function telefonoVacio(esPrincipal = false) {
     id: null,
     telefono: '',
     es_principal: esPrincipal,
-  };
-}
-
-const CAMPOS_DIRECCION_DOMCILIO_VACIOS = {
-  direccion: null,
-  calle: null,
-  numero: null,
-  entre_calles: null,
-  direccion_referencia: null,
-  colonia: null,
-  municipio: null,
-  zona_id: null,
-};
-
-function telefonoPrincipalFormulario(cliente) {
-  const valor = telefonoPrincipal(cliente);
-  return valor === '—' ? '' : valor;
-}
-
-export function direccionClienteADireccionForm(direccion) {
-  return {
-    etiqueta: direccion?.etiqueta?.trim() || 'Casa',
-    calle: direccion?.calle || '',
-    numero: direccion?.numero || '',
-    entre_calles: direccion?.entre_calles || '',
-    direccion_referencia: direccion?.referencia || '',
-    colonia: direccion?.colonia || '',
-    municipio: direccion?.municipio || '',
-    zona_id: direccion?.zona_id || '',
-  };
-}
-
-export function seleccionClienteBasicaAForm(cliente) {
-  return {
-    cliente: cliente?.nombre?.trim() || '',
-    telefono: telefonoPrincipalFormulario(cliente),
-  };
-}
-
-export function seleccionClienteAForm(cliente, direccion) {
-  return {
-    ...seleccionClienteBasicaAForm(cliente),
-    ...direccionClienteADireccionForm(direccion),
-  };
-}
-
-export function payloadDireccionDomicilioDesdeForm(form) {
-  if (form?.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO) {
-    return { ...CAMPOS_DIRECCION_DOMCILIO_VACIOS };
-  }
-
-  const etiqueta = form.etiqueta?.trim() || 'Casa';
-  const calle = form.calle?.trim() || null;
-  const numero = form.numero?.trim() || null;
-  const entre_calles = form.entre_calles?.trim() || null;
-  const direccion_referencia = form.direccion_referencia?.trim() || null;
-  const colonia = form.colonia?.trim() || null;
-  const municipio = form.municipio?.trim() || null;
-  const zona_id = form.zona_id?.trim?.() ? form.zona_id.trim() : form.zona_id || null;
-
-  const hayContenido = [
-    calle,
-    numero,
-    entre_calles,
-    direccion_referencia,
-    colonia,
-    municipio,
-  ].some(Boolean);
-
-  const direccion = hayContenido
-    ? formatearDireccionResumen({
-        etiqueta,
-        calle: calle || '',
-        numero: numero || '',
-        entre_calles: entre_calles || '',
-        referencia: direccion_referencia || '',
-        colonia: colonia || '',
-        municipio: municipio || '',
-      })
-    : null;
-
-  return {
-    direccion,
-    calle,
-    numero,
-    entre_calles,
-    direccion_referencia,
-    colonia,
-    municipio,
-    zona_id: zona_id || null,
   };
 }

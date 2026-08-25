@@ -170,7 +170,7 @@ export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsa
 
   return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'listo-para-recoger'
-    : 'pendiente-repartidor';
+    : 'enviado';
 }
 
 export function determinarStatusInicialPresencial() {
@@ -247,11 +247,7 @@ export function payloadStatusCocinasParaStatusGlobal(pedido, statusGlobal) {
     return { status_cocina1: null, status_cocina2: null };
   }
 
-  if (
-    ['listo-para-recoger', 'pendiente-repartidor', 'enviado', 'entregado'].includes(
-      statusGlobal
-    )
-  ) {
+  if (['listo-para-recoger', 'enviado', 'entregado'].includes(statusGlobal)) {
     const req1 = pedidoRequiereCocina(pedido, COCINAS.COCINA1);
     const req2 = pedidoRequiereCocina(pedido, COCINAS.COCINA2);
     return {
@@ -266,13 +262,6 @@ export function payloadStatusCocinasParaStatusGlobal(pedido, statusGlobal) {
 export function construirPayloadAvancePedido(pedido) {
   const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
   if (nuevoStatus === pedido.status) return null;
-
-  if (
-    pedido.status === 'pendiente-repartidor' &&
-    nuevoStatus === 'enviado'
-  ) {
-    return null;
-  }
 
   const payload = {
     status: nuevoStatus,
@@ -356,35 +345,13 @@ export function pedidoVisibleEnCocina(pedido, cocina, productos, mostradorFlujoC
   return obtenerStatusCocinaPedido(pedido, cocina) === STATUS_COCINA.EN_COCINA;
 }
 
-export const STATUS_PENDIENTE_REPARTIDOR = 'pendiente-repartidor';
-
-export const STATUS_FLOW_DOMICILIO = [
-  'por-aceptar',
-  'en-cocina',
-  STATUS_PENDIENTE_REPARTIDOR,
-  'enviado',
-  'entregado',
-];
-
+export const STATUS_FLOW_DOMICILIO = ['por-aceptar', 'en-cocina', 'enviado', 'entregado'];
 export const STATUS_FLOW_SUCURSAL = [
   'por-aceptar',
   'en-cocina',
   'listo-para-recoger',
   'entregado',
 ];
-
-export const STATUS_PEDIDO_LABELS = {
-  'por-aceptar': 'Por aceptar',
-  'en-cocina': 'En cocina',
-  [STATUS_PENDIENTE_REPARTIDOR]: 'Esperando repartidor',
-  enviado: 'Enviado',
-  entregado: 'Entregado',
-  'listo-para-recoger': 'Listo para recoger',
-};
-
-export function etiquetaStatusPedido(status) {
-  return STATUS_PEDIDO_LABELS[status] || status || '—';
-}
 
 export function normalizarTipoEntrega(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL

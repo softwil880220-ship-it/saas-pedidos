@@ -7,10 +7,8 @@ import {
   aplicarConsolidacionCarrito,
   buscarProductoPorId,
   calcularDetalleLineasPedido,
-  calcularNextLineaIdDesdeLineas,
   calcularTotalLineas,
   consolidarLineasPorProducto,
-  normalizarFormLineasCarrito,
 } from './pedidoCarritoCalculos';
 import {
   cantidadInicialLinea,
@@ -169,28 +167,22 @@ function resumenProductos(lineas, listaProductos, variantesCtx) {
     .join(', ');
 }
 
-function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folioId, productos) {
-  const ctx = { ...variantesCtx, productos };
-
+function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folioId) {
   if (snapshotInicial?.form) {
-    const form = normalizarFormLineasCarrito(snapshotInicial.form, ctx);
-
     return {
-      form,
+      form: snapshotInicial.form,
       pagoRecibido: snapshotInicial.pagoRecibido ?? '',
-      nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
+      nextLineaId: snapshotInicial.nextLineaId ?? 2,
     };
   }
 
   if (folioId) {
     const restaurado = cargarCarritosMesasAbiertos()[folioId];
     if (restaurado?.form) {
-      const form = normalizarFormLineasCarrito(restaurado.form, ctx);
-
       return {
-        form,
+        form: restaurado.form,
         pagoRecibido: restaurado.pagoRecibido ?? '',
-        nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
+        nextLineaId: restaurado.nextLineaId ?? 2,
       };
     }
   }
@@ -214,8 +206,7 @@ export default function useCarritoPedido({
     snapshotInicial,
     modoCaptura,
     variantesCtx,
-    folioId,
-    productos
+    folioId
   );
   const [form, setForm] = useState(estadoInicial.form);
   const [pagoRecibido, setPagoRecibido] = useState(estadoInicial.pagoRecibido);
@@ -306,16 +297,11 @@ export default function useCarritoPedido({
     persistirSnapshotActual();
   }, [persistirSnapshotActual]);
 
-  const aplicarSnapshot = useCallback(({ form: formRestaurado, pagoRecibido: pagoRestaurado }) => {
-    const formNormalizado = normalizarFormLineasCarrito(
-      formRestaurado,
-      ctxConsolidacion
-    );
-
-    setForm(formNormalizado);
+  const aplicarSnapshot = useCallback(({ form: formRestaurado, pagoRecibido: pagoRestaurado, nextLineaId: nextId }) => {
+    setForm(formRestaurado);
     setPagoRecibido(pagoRestaurado ?? '');
-    nextLineaId.current = calcularNextLineaIdDesdeLineas(formNormalizado?.lineas);
-  }, [ctxConsolidacion]);
+    nextLineaId.current = nextId ?? 2;
+  }, []);
 
   const pausarPersistencia = useCallback(() => {
     persistenciaPausadaRef.current = true;
