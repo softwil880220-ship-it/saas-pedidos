@@ -137,6 +137,34 @@ export function debeSuprimirPersistEco(snapshot) {
   );
 }
 
+function contadorRondaCambioEnSnapshot(snapshot, anterior) {
+  if (snapshot?.numeroRondaSiguiente == null) {
+    return false;
+  }
+
+  const valorAnterior = anterior?.numeroRondaSiguiente ?? 1;
+  return snapshot.numeroRondaSiguiente !== valorAnterior;
+}
+
+function debeOmitirFlushPorEcoCompleto(entrada, carritoSnapshot) {
+  if (!debeSuprimirPersistEco(carritoSnapshot)) {
+    return false;
+  }
+
+  const persistidoEnServidor =
+    entrada?.numeroRondaSiguientePersistidoEnServidor ?? entrada?.numeroRondaSiguiente ?? 1;
+  const valorActual = entrada?.numeroRondaSiguiente ?? 1;
+
+  return valorActual === persistidoEnServidor;
+}
+
+function registrarErrorFlushFolio(folioId, detalle) {
+  console.error('[mesas_folios] flushFolioToSupabase falló', {
+    folioId: String(folioId),
+    ...detalle,
+  });
+}
+
 function supabaseAfectoAlMenosUnaFila(data) {
   return Array.isArray(data) && data.length > 0;
 }
@@ -261,6 +289,7 @@ function aplicarFilaACache(fila) {
     estado: fila.estado,
     creadoPor: fila.creado_por ?? null,
     abiertaEn: fila.abierta_en ?? null,
+    numeroRondaSiguientePersistidoEnServidor: fila.numero_ronda_siguiente ?? 1,
   });
 
   if (fila.estado === 'abierta') {
@@ -269,13 +298,22 @@ function aplicarFilaACache(fila) {
 }
 
 async function flushFolioToSupabase(folioId) {
-  const entrada = cacheFolios.get(String(folioId));
-  if (!entrada || !negocioIdCache) return;
+  const clave = String(folioId);
+  const entrada = cacheFolios.get(clave);
+
+  if (!entrada || !negocioIdCache) {
+    registrarErrorFlushFolio(clave, {
+      motivo: 'sin_entrada_en_cache_o_negocio',
+      tieneEntrada: Boolean(entrada),
+      negocioIdCache: negocioIdCache ?? null,
+    });
+    return { ok: false, folioId: clave, error: 'Sin entrada en cache o negocioId' };
+  }
 
   const carritoSnapshot = serializarCarritoSnapshot(entrada);
 
-  if (debeSuprimirPersistEco(carritoSnapshot)) {
-    return;
+  if (debeOmitirFlushPorEcoCompleto(entrada, carritoSnapshot)) {
+    return { ok: true, folioId: clave, skipped: true };
   }
 
   const { data, error } = await queryConNegocio(
@@ -290,9 +328,30 @@ async function flushFolioToSupabase(folioId) {
     negocioIdCache
   );
 
-  if (error || !supabaseAfectoAlMenosUnaFila(data)) {
-    return;
+  if (error) {
+    registrarErrorFlushFolio(clave, {
+      motivo: 'error_supabase',
+      supabaseMessage: error.message,
+      supabaseCode: error.code ?? null,
+      numeroRondaSiguiente: entrada.numeroRondaSiguiente ?? 1,
+    });
+    return { ok: false, folioId: clave, error: error.message };
   }
+
+  if (!supabaseAfectoAlMenosUnaFila(data)) {
+    registrarErrorFlushFolio(clave, {
+      motivo: 'update_sin_filas_afectadas',
+      numeroRondaSiguiente: entrada.numeroRondaSiguiente ?? 1,
+    });
+    return { ok: false, folioId: clave, error: 'UPDATE no afectó ninguna fila' };
+  }
+
+  cacheFolios.set(clave, {
+    ...entrada,
+    numeroRondaSiguientePersistidoEnServidor: entrada.numeroRondaSiguiente ?? 1,
+  });
+
+  return { ok: true, folioId: clave };
 }
 
 export function crearFormularioCapturaMesaVacio() {
@@ -457,11 +516,34 @@ export function persistirCarritosMesas(carritos) {
   Object.entries(carritos || {}).forEach(([folioId, snapshot]) => {
     if (!folioId) return;
 
-    if (debeSuprimirPersistEco(snapshot)) {
+    const clave = String(folioId);
+    const anterior = cacheFolios.get(clave);
+    const suprimirEcoCarrito = debeSuprimirPersistEco(snapshot);
+    const contadorCambio = contadorRondaCambioEnSnapshot(snapshot, anterior);
+
+    if (suprimirEcoCarrito && !contadorCambio) {
       return;
     }
 
-    const anterior = cacheFolios.get(String(folioId));
+    if (suprimirEcoCarrito && contadorCambio && anterior) {
+      const entradaFinal = {
+        ...anterior,
+        numeroRondaSiguiente: snapshot.numeroRondaSiguiente,
+      };
+
+      if (entradaFinal.estado !== 'abierta') {
+        return;
+      }
+
+      cacheFolios.set(clave, entradaFinal);
+      if (entradaFinal.numeroMesa != null) {
+        folioAbiertoPorNumeroMesa.set(entradaFinal.numeroMesa, clave);
+      }
+
+      void flushFolioToSupabase(folioId);
+      return;
+    }
+
     const normalizado = normalizarSnapshotDesdeJson(
       snapshot,
       snapshot?.numeroRondaSiguiente ??
@@ -476,6 +558,10 @@ export function persistirCarritosMesas(carritos) {
         anterior?.numeroRondaSiguiente ??
         normalizado.numeroRondaSiguiente ??
         1,
+      numeroRondaSiguientePersistidoEnServidor:
+        anterior?.numeroRondaSiguientePersistidoEnServidor ??
+        anterior?.numeroRondaSiguiente ??
+        1,
       numeroMesa: anterior?.numeroMesa,
       estado: anterior?.estado ?? 'abierta',
       creadoPor: anterior?.creadoPor ?? null,
@@ -486,9 +572,9 @@ export function persistirCarritosMesas(carritos) {
       return;
     }
 
-    cacheFolios.set(String(folioId), entradaFinal);
+    cacheFolios.set(clave, entradaFinal);
     if (entradaFinal.numeroMesa != null) {
-      folioAbiertoPorNumeroMesa.set(entradaFinal.numeroMesa, String(folioId));
+      folioAbiertoPorNumeroMesa.set(entradaFinal.numeroMesa, clave);
     }
 
     void flushFolioToSupabase(folioId);

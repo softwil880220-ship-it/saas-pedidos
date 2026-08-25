@@ -633,7 +633,9 @@ export default function MesaCarritoPanel({
     });
 
     if (error) {
-      setErrorEnvioCocina('No se pudo enviar a cocina. Intenta de nuevo.');
+      setErrorEnvioCocina(
+        'No se pudo enviar a cocina. Los productos siguen en el carrito — puedes intentar de nuevo.'
+      );
       setEnviandoCocina(false);
       return;
     }
