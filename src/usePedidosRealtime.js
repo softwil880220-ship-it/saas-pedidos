@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { perteneceANegocio, queryConNegocio } from './tenantHelpers';
 
 const REALTIME_EVENTOS = ['INSERT', 'UPDATE', 'DELETE'];
+const CANAL_SUSCRITO_UMBRAL_MS = 30000;
 
 function ordenarPedidosDesc(pedidos) {
   return [...pedidos].sort(
@@ -134,21 +135,35 @@ function suscribirPostgresChanges(channel, { schema, table, handler }) {
   });
 }
 
-function crearHandlerRealtime({ filtrar, comparar, ordenarLista, setItems, negocioId }) {
-  return (payload) => {
-    setItems((prev) =>
-      sincronizarListaConEvento(prev, payload, {
-        filtrar,
-        comparar,
-        negocioId,
-        ordenar: ordenarLista
-          ? (lista) => ordenarLista(lista)
-          : comparar
-            ? (lista) => [...lista].sort(comparar)
-            : null,
-      })
-    );
+function crearOpcionesSincronizacion({ filtrar, comparar, ordenarLista, negocioId }) {
+  return {
+    filtrar,
+    comparar,
+    negocioId,
+    ordenar: ordenarLista
+      ? (lista) => ordenarLista(lista)
+      : comparar
+        ? (lista) => [...lista].sort(comparar)
+        : null,
   };
+}
+
+function replayBufferSobreBase(base, eventBuffer, syncOpts) {
+  return eventBuffer.reduce(
+    (acc, payload) => sincronizarListaConEvento(acc, payload, syncOpts),
+    base
+  );
+}
+
+function registrarErrorFetchRealtime(contexto, detalle) {
+  console.error('[realtime] fetch falló', {
+    ...contexto,
+    ...detalle,
+  });
+}
+
+function registrarErrorCanalRealtime(mensaje, detalle) {
+  console.error(`[realtime] ${mensaje}`, detalle);
 }
 
 function useSupabaseRealtime({
@@ -183,64 +198,295 @@ function useSupabaseRealtime({
 
     let activo = true;
     let channel = null;
+    let syncGeneration = 0;
+    let modo = 'buffering';
+    const eventBuffer = [];
+    let fetchCompletado = false;
+    let fetchResultado = null;
+    let canalSubscribed = false;
+    let canalDegradado = false;
+    let fetchEnVuelo = false;
+    let reconcilePendiente = false;
+    let bufferFinalizado = false;
+    let esArranqueInicial = true;
+    let ultimosItemsConocidos = [];
+    let subscribeTimeoutId = null;
+    let canalEstadoActual = null;
 
-    const cargarItems = async () => {
-      setCargando(true);
+    const contextoLog = { table, channelName, negocioId };
+    const syncOpts = crearOpcionesSincronizacion({
+      filtrar,
+      comparar,
+      ordenarLista,
+      negocioId,
+    });
+
+    const sesionValida = (generation) => activo && generation === syncGeneration;
+
+    const limpiarSubscribeTimeout = () => {
+      if (subscribeTimeoutId != null) {
+        clearTimeout(subscribeTimeoutId);
+        subscribeTimeoutId = null;
+      }
+    };
+
+    const construirBaseDesdeFetch = (resultado, esArranque) => {
+      if (resultado?.error) {
+        return esArranque ? [] : ultimosItemsConocidos;
+      }
+
+      if (Array.isArray(resultado?.data)) {
+        return aplicarFiltroYOrden(resultado.data);
+      }
+
+      return esArranque ? [] : ultimosItemsConocidos;
+    };
+
+    const aplicarBufferYLive = (base, generation) => {
+      if (!sesionValida(generation) || bufferFinalizado) {
+        return;
+      }
+
+      bufferFinalizado = true;
+      const merged = replayBufferSobreBase(base, eventBuffer, syncOpts);
+      eventBuffer.length = 0;
+      ultimosItemsConocidos = merged;
+      setItems(merged);
+      modo = 'live';
+
+      if (esArranqueInicial) {
+        setCargando(false);
+      }
+    };
+
+    const finalizarBufferSiListo = (generation, { requiereCanal = true } = {}) => {
+      if (!sesionValida(generation) || bufferFinalizado || modo !== 'buffering') {
+        return;
+      }
+
+      if (!fetchCompletado) {
+        return;
+      }
+
+      if (requiereCanal && !canalSubscribed) {
+        return;
+      }
+
+      const base = construirBaseDesdeFetch(fetchResultado, esArranqueInicial);
+      aplicarBufferYLive(base, generation);
+    };
+
+    const onEvento = (payload) => {
+      if (!activo) {
+        return;
+      }
+
+      if (modo === 'buffering') {
+        eventBuffer.push(payload);
+        return;
+      }
+
+      setItems((prev) => {
+        const next = sincronizarListaConEvento(prev, payload, syncOpts);
+        ultimosItemsConocidos = next;
+        return next;
+      });
+    };
+
+    const programarTimeoutSuscripcion = (generation) => {
+      limpiarSubscribeTimeout();
+      subscribeTimeoutId = setTimeout(() => {
+        if (!sesionValida(generation) || canalSubscribed || bufferFinalizado) {
+          return;
+        }
+
+        registrarErrorCanalRealtime('canal no suscrito a tiempo', {
+          channelName,
+          umbralMs: CANAL_SUSCRITO_UMBRAL_MS,
+        });
+        canalSubscribed = true;
+        finalizarBufferSiListo(generation);
+      }, CANAL_SUSCRITO_UMBRAL_MS);
+    };
+
+    const ejecutarFetch = async (generation, motivo, { esArranque = false } = {}) => {
+      if (fetchEnVuelo) {
+        reconcilePendiente = true;
+        return;
+      }
+
+      fetchEnVuelo = true;
+
       let query = supabase.from(table).select('*');
       if (table === 'pedidos') {
         query = query.is('deleted_at', null);
       }
+
       const { data, error } = await queryConNegocio(query, negocioId).order(
         ordenInicial.column,
         { ascending: ordenInicial.ascending }
       );
 
-      if (activo && !error && data) {
-        setItems(aplicarFiltroYOrden(data));
+      fetchEnVuelo = false;
+
+      if (!sesionValida(generation)) {
+        return;
       }
-      if (activo) setCargando(false);
+
+      fetchCompletado = true;
+      fetchResultado = { data, error };
+
+      if (error) {
+        registrarErrorFetchRealtime(contextoLog, {
+          motivo,
+          error,
+        });
+      }
+
+      finalizarBufferSiListo(generation, { requiereCanal: esArranque });
+
+      if (reconcilePendiente) {
+        reconcilePendiente = false;
+        void ejecutarReconcile(generation, 'coalesced');
+      }
     };
 
-    const conectarRealtime = () => {
+    const ejecutarReconcile = (generation, motivo) => {
+      if (!sesionValida(generation)) {
+        return;
+      }
+
+      if (fetchEnVuelo) {
+        reconcilePendiente = true;
+        return;
+      }
+
+      esArranqueInicial = false;
+      modo = 'buffering';
+      bufferFinalizado = false;
+      fetchCompletado = false;
+      fetchResultado = null;
+
+      void ejecutarFetch(generation, motivo, { esArranque: false });
+    };
+
+    const reconciliar = (motivo) => {
+      syncGeneration += 1;
+      const generation = syncGeneration;
+      ejecutarReconcile(generation, motivo);
+    };
+
+    const conectarRealtime = (generation) => {
       if (channel) {
         supabase.removeChannel(channel);
         channel = null;
       }
 
+      canalSubscribed = false;
+      canalEstadoActual = null;
+      limpiarSubscribeTimeout();
+
       channel = supabase.channel(channelName);
       suscribirPostgresChanges(channel, {
         schema: 'public',
         table,
-        handler: crearHandlerRealtime({
-          filtrar,
-          comparar,
-          ordenarLista,
-          setItems,
-          negocioId,
-        }),
+        handler: onEvento,
       });
-      channel.subscribe();
+
+      programarTimeoutSuscripcion(generation);
+
+      channel.subscribe((status, err) => {
+        if (!activo) {
+          return;
+        }
+
+        canalEstadoActual = status;
+
+        if (status === 'SUBSCRIBED') {
+          limpiarSubscribeTimeout();
+          const eraDegradado = canalDegradado;
+          canalSubscribed = true;
+
+          if (eraDegradado) {
+            canalDegradado = false;
+            reconciliar('canal_reconectado');
+            return;
+          }
+
+          finalizarBufferSiListo(generation);
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR') {
+          registrarErrorCanalRealtime('canal error', {
+            status,
+            channelName,
+            table,
+            err: err ?? null,
+          });
+          canalDegradado = true;
+          canalSubscribed = false;
+          return;
+        }
+
+        if (status === 'TIMED_OUT' || status === 'CLOSED') {
+          registrarErrorCanalRealtime('canal desconectado', {
+            status,
+            channelName,
+          });
+          canalDegradado = true;
+          canalSubscribed = false;
+        }
+      });
     };
 
-    const sincronizar = async () => {
-      await cargarItems();
-      if (activo) conectarRealtime();
+    const iniciarArranque = () => {
+      syncGeneration += 1;
+      const generation = syncGeneration;
+
+      esArranqueInicial = true;
+      modo = 'buffering';
+      bufferFinalizado = false;
+      fetchCompletado = false;
+      fetchResultado = null;
+      canalSubscribed = false;
+      canalDegradado = false;
+      eventBuffer.length = 0;
+      ultimosItemsConocidos = [];
+
+      setCargando(true);
+      conectarRealtime(generation);
+      void ejecutarFetch(generation, 'initial', { esArranque: true });
     };
 
-    sincronizar();
+    iniciarArranque();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && activo) {
-        sincronizar();
+      if (document.visibilityState !== 'visible' || !activo) {
+        return;
       }
+
+      const necesitaReconectar = canalEstadoActual !== 'SUBSCRIBED';
+
+      syncGeneration += 1;
+      const generation = syncGeneration;
+
+      if (necesitaReconectar) {
+        conectarRealtime(generation);
+      }
+
+      ejecutarReconcile(generation, 'visibility');
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       activo = false;
+      limpiarSubscribeTimeout();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [
     table,
