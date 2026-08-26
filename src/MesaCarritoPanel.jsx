@@ -155,11 +155,22 @@ export default function MesaCarritoPanel({
   const [revisionModalCobro, setRevisionModalCobro] = useState(0);
   const [errorCobroMesa, setErrorCobroMesa] = useState(null);
   const modalCobroAbiertoRef = useRef(modalCobroAbierto);
+  const folioIdAnteriorRef = useRef(folioId);
   const mesaBloqueadaPorJornadaCerrada = !jornadaAbierta?.id;
 
+  const actualizarModalCobroAbierto = useCallback((abierto) => {
+    modalCobroAbiertoRef.current = abierto;
+    setModalCobroAbierto(abierto);
+  }, []);
+
   useEffect(() => {
-    modalCobroAbiertoRef.current = modalCobroAbierto;
-  }, [modalCobroAbierto]);
+    const folioIdAnterior = folioIdAnteriorRef.current;
+    folioIdAnteriorRef.current = folioId;
+
+    if (!folioIdAnterior && folioId) {
+      setErrorCobroMesa(null);
+    }
+  }, [folioId]);
 
   const aplicarMensajeCierreModalSiCorresponde = useCallback(
     (motivo) => {
@@ -190,7 +201,7 @@ export default function MesaCarritoPanel({
 
     aplicarMensajeCierreModalSiCorresponde(motivo);
     setEstadoCobroPersistido(null);
-    setModalCobroAbierto(false);
+    actualizarModalCobroAbierto(false);
 
     if (folioIdSesionRef.current) {
       limpiarMarcaFolioCerradoPorCobro(folioIdSesionRef.current);
@@ -207,6 +218,7 @@ export default function MesaCarritoPanel({
     motivoCierreFolio,
     motivoCierreFolioRef,
     aplicarMensajeCierreModalSiCorresponde,
+    actualizarModalCobroAbierto,
   ]);
 
   useEffect(() => {
@@ -217,13 +229,13 @@ export default function MesaCarritoPanel({
     const guardado = cargarEstadoCobroMesa(folioId);
     if (guardado) {
       setEstadoCobroPersistido(guardado);
-      setModalCobroAbierto(Boolean(guardado.abierto));
+      actualizarModalCobroAbierto(Boolean(guardado.abierto));
       return;
     }
 
     setEstadoCobroPersistido(null);
-    setModalCobroAbierto(false);
-  }, [folioId]);
+    actualizarModalCobroAbierto(false);
+  }, [folioId, actualizarModalCobroAbierto]);
 
   const handlePersistirEstadoCobro = useCallback(
     (campos) => {
@@ -242,9 +254,9 @@ export default function MesaCarritoPanel({
   const handleCancelarCobroMesa = useCallback(() => {
     limpiarEstadoCobroMesa();
     setEstadoCobroPersistido(null);
-    setModalCobroAbierto(false);
+    actualizarModalCobroAbierto(false);
     setRevisionModalCobro((revision) => revision + 1);
-  }, []);
+  }, [actualizarModalCobroAbierto]);
 
   const handleRondasCambiadas = useCallback(() => {
     setRevisionMetadatosFolio((revision) => revision + 1);
@@ -703,6 +715,9 @@ export default function MesaCarritoPanel({
       throw new Error('No hay folio activo para cobrar.');
     }
 
+    actualizarModalCobroAbierto(false);
+    setErrorCobroMesa(null);
+
     await cerrarFolioMesa(folioId, datosCobro);
 
     limpiarEstadoCobroMesa();
@@ -717,8 +732,6 @@ export default function MesaCarritoPanel({
     carrito.reanudarPersistencia();
 
     setFolioIdLocal(null);
-    setModalCobroAbierto(false);
-    setErrorCobroMesa(null);
     onFolioCerrado?.();
   };
 
@@ -832,7 +845,7 @@ export default function MesaCarritoPanel({
                     }
 
                     setErrorCobroMesa(null);
-                    setModalCobroAbierto(true);
+                    actualizarModalCobroAbierto(true);
                   }}
                 >
                   Cobrar mesa
