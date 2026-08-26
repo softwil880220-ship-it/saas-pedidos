@@ -74,6 +74,127 @@ export default function MesaCobroModal({
   const [errorConfirmacion, setErrorConfirmacion] = useState(null);
   const [sesionCobroLista, setSesionCobroLista] = useState(false);
   const hidratacionAplicadaRef = useRef(false);
+  const scrollYAlAbrirRef = useRef(0);
+  const scrollXAlAbrirRef = useRef(0);
+  const overlayRef = useRef(null);
+  const modalRef = useRef(null);
+  const cuerpoRef = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) {
+      return undefined;
+    }
+
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+    scrollYAlAbrirRef.current = scrollY;
+    scrollXAlAbrirRef.current = scrollX;
+    const { body } = document;
+    const { documentElement } = document;
+
+    const estilosBodyAnteriores = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      width: body.style.width,
+    };
+    const overflowHtmlAnterior = documentElement.style.overflow;
+
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = `-${scrollX}px`;
+    body.style.width = '100%';
+    documentElement.style.overflow = 'hidden';
+
+    const resincronizarScrollLockAlResume = () => {
+      body.style.top = `-${scrollYAlAbrirRef.current}px`;
+      body.style.left = `-${scrollXAlAbrirRef.current}px`;
+      body.style.width = '100%';
+      documentElement.scrollLeft = 0;
+      body.scrollLeft = 0;
+
+      if (overlayRef.current) {
+        void overlayRef.current.offsetHeight;
+      }
+
+      if (modalRef.current) {
+        void modalRef.current.offsetHeight;
+      }
+    };
+
+    let resincronizarFrameId = null;
+
+    const programarResincronizarScrollLock = () => {
+      if (resincronizarFrameId != null) {
+        cancelAnimationFrame(resincronizarFrameId);
+      }
+
+      resincronizarFrameId = requestAnimationFrame(() => {
+        resincronizarFrameId = null;
+        resincronizarScrollLockAlResume();
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        programarResincronizarScrollLock();
+      }
+    };
+
+    const handlePageShow = () => {
+      programarResincronizarScrollLock();
+    };
+
+    const visualViewport = window.visualViewport;
+    const handleVisualViewportResize = () => {
+      programarResincronizarScrollLock();
+    };
+    const handleVisualViewportScroll = () => {
+      programarResincronizarScrollLock();
+    };
+
+    const cuerpoEl = cuerpoRef.current;
+    const opcionesScrollPasivo = { passive: true };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', handleVisualViewportResize);
+      visualViewport.addEventListener('scroll', handleVisualViewportScroll);
+    }
+
+    if (cuerpoEl) {
+      cuerpoEl.addEventListener('scroll', programarResincronizarScrollLock, opcionesScrollPasivo);
+    }
+
+    return () => {
+      if (resincronizarFrameId != null) {
+        cancelAnimationFrame(resincronizarFrameId);
+      }
+
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', handleVisualViewportResize);
+        visualViewport.removeEventListener('scroll', handleVisualViewportScroll);
+      }
+
+      if (cuerpoEl) {
+        cuerpoEl.removeEventListener('scroll', programarResincronizarScrollLock, opcionesScrollPasivo);
+      }
+      body.style.overflow = estilosBodyAnteriores.overflow;
+      body.style.position = estilosBodyAnteriores.position;
+      body.style.top = estilosBodyAnteriores.top;
+      body.style.left = estilosBodyAnteriores.left;
+      body.style.width = estilosBodyAnteriores.width;
+      documentElement.style.overflow = overflowHtmlAnterior;
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [abierto]);
 
   useEffect(() => {
     if (!abierto) {
@@ -282,6 +403,7 @@ export default function MesaCobroModal({
 
   return (
     <div
+      ref={overlayRef}
       className="mesa-cobro-modal-overlay"
       onClick={() => {
         if (!confirmando) {
@@ -290,16 +412,20 @@ export default function MesaCobroModal({
       }}
     >
       <div
+        ref={modalRef}
         className="mesa-cobro-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mesa-cobro-modal-titulo"
         onClick={(event) => event.stopPropagation()}
       >
-        <h3 id="mesa-cobro-modal-titulo" className="mesa-cobro-modal-titulo">
-          Cobro · Mesa {numeroMesa}
-        </h3>
+        <header className="mesa-cobro-modal-header">
+          <h3 id="mesa-cobro-modal-titulo" className="mesa-cobro-modal-titulo">
+            Cobro · Mesa {numeroMesa}
+          </h3>
+        </header>
 
+        <div ref={cuerpoRef} className="mesa-cobro-modal-cuerpo">
         <section className="mesa-cobro-modal-seccion" aria-label="Productos del folio">
           <h4 className="mesa-cobro-modal-seccion-titulo">Resumen de productos</h4>
 
@@ -527,36 +653,39 @@ export default function MesaCobroModal({
             <span>{formatearMoneda(totalCobrado)}</span>
           </div>
         </section>
-
-        <div className="mesa-cobro-modal-total-fila mesa-cobro-modal-total-final">
-          <span>Total a cobrar</span>
-          <strong>{formatearMoneda(totalCobrado)}</strong>
         </div>
 
-        {errorConfirmacion ? (
-          <p className="mesa-cobro-modal-error" role="alert">
-            {errorConfirmacion}
-          </p>
-        ) : null}
+        <footer className="mesa-cobro-modal-footer">
+          <div className="mesa-cobro-modal-total-fila mesa-cobro-modal-total-final">
+            <span>Total a cobrar</span>
+            <strong>{formatearMoneda(totalCobrado)}</strong>
+          </div>
 
-        <div className="mesa-cobro-modal-acciones">
-          <button
-            type="button"
-            className="mesa-cobro-modal-cancelar"
-            onClick={onCancelar}
-            disabled={confirmando}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="mesa-cobro-modal-confirmar"
-            onClick={() => void handleConfirmar()}
-            disabled={confirmando || cargando || subtotal <= 0 || !formaPago}
-          >
-            {confirmando ? 'Confirmando...' : 'Confirmar cobro'}
-          </button>
-        </div>
+          {errorConfirmacion ? (
+            <p className="mesa-cobro-modal-error" role="alert">
+              {errorConfirmacion}
+            </p>
+          ) : null}
+
+          <div className="mesa-cobro-modal-acciones">
+            <button
+              type="button"
+              className="mesa-cobro-modal-cancelar"
+              onClick={onCancelar}
+              disabled={confirmando}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="mesa-cobro-modal-confirmar"
+              onClick={() => void handleConfirmar()}
+              disabled={confirmando || cargando || subtotal <= 0 || !formaPago}
+            >
+              {confirmando ? 'Confirmando...' : 'Confirmar cobro'}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );
