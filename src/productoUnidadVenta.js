@@ -117,6 +117,17 @@ export function formatearCantidadProductoTexto(nombre, cantidad, unidadVenta, va
   return texto;
 }
 
+export function formatearDescripcionLineaPesoSinPrecio({ nombre, cantidad }) {
+  const nombreBase = String(nombre ?? '').trim() || 'Producto';
+  const gramos = parseGramosLinea(cantidad);
+
+  if (gramos <= 0) {
+    return nombreBase;
+  }
+
+  return `${nombreBase} — ${gramos}g`;
+}
+
 export function formatearLineaProductoVenta({
   nombre,
   cantidad,

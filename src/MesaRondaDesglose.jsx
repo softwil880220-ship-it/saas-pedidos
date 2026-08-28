@@ -3,6 +3,7 @@ import {
   obtenerDesgloseLineasPedido,
 } from './pedidoDesglose';
 import { formatearMoneda } from './pedidosShared';
+import { formatearDescripcionLineaPesoSinPrecio } from './productoUnidadVenta';
 import {
   ETIQUETAS_ESTADO_LINEA_MESA,
   ESTADO_LINEA_MESA,
@@ -10,7 +11,23 @@ import {
   obtenerLineasRondaMesaConEstado,
 } from './mesaRondaEstado';
 
-function formatearDescripcionLineaRondaMesa({ cantidad, nombre, precioLinea }) {
+function esCantidadEtiquetaPeso(cantidad) {
+  return /^\d+g$/i.test(String(cantidad ?? '').trim());
+}
+
+function esLineaPorPesoMesa(fila) {
+  return esCantidadEtiquetaPeso(fila?.cantidad);
+}
+
+function formatearDescripcionLineaRondaMesa(fila) {
+  if (esLineaPorPesoMesa(fila)) {
+    return formatearDescripcionLineaPesoSinPrecio({
+      nombre: fila.nombre,
+      cantidad: fila.cantidad,
+    });
+  }
+
+  const { cantidad, nombre, precioLinea } = fila;
   const cantidadNumerica = Number(cantidad);
   const nombreTexto = String(nombre ?? '').trim();
   const descripcionBase =
@@ -110,29 +127,17 @@ export default function MesaRondaDesglose({
         <div
           key={fila.key}
           className={`mesa-rondas-enviadas-linea${
-            fila.textoLinea ? ' mesa-rondas-enviadas-linea-peso' : ''
+            esLineaPorPesoMesa(fila) ? ' mesa-rondas-enviadas-linea-peso' : ''
           }${mostrarEstado ? '' : ' mesa-rondas-enviadas-linea-sin-estado'}`}
           role="listitem"
         >
-          {fila.textoLinea ? (
-            <>
-              <span className="mesa-rondas-enviadas-descripcion">{fila.textoLinea}</span>
-              <span className="mesa-rondas-enviadas-precio">
-                {formatearPrecioLineaRecibo(fila.precioLinea)}
-              </span>
-              {renderCeldaEstadoLinea(fila.estado, mostrarEstado)}
-            </>
-          ) : (
-            <>
-              <span className="mesa-rondas-enviadas-descripcion">
-                {formatearDescripcionLineaRondaMesa(fila)}
-              </span>
-              <span className="mesa-rondas-enviadas-precio">
-                {formatearPrecioLineaRecibo(fila.precioLinea)}
-              </span>
-              {renderCeldaEstadoLinea(fila.estado, mostrarEstado)}
-            </>
-          )}
+          <span className="mesa-rondas-enviadas-descripcion">
+            {formatearDescripcionLineaRondaMesa(fila)}
+          </span>
+          <span className="mesa-rondas-enviadas-precio">
+            {formatearPrecioLineaRecibo(fila.precioLinea)}
+          </span>
+          {renderCeldaEstadoLinea(fila.estado, mostrarEstado)}
         </div>
       ))}
     </div>

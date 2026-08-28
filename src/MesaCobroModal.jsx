@@ -443,11 +443,9 @@ export default function MesaCobroModal({
                         ? grupo.textoLinea
                         : `${grupo.cantidad}x ${grupo.nombre} (${formatearMoneda(grupo.precioUnitario)} c/u)`}
                     </span>
-                    {!grupo.textoLinea ? (
-                      <span className="mesa-cobro-modal-producto-subtotal">
-                        {formatearMoneda(grupo.subtotalBase)}
-                      </span>
-                    ) : null}
+                    <span className="mesa-cobro-modal-producto-subtotal">
+                      {formatearMoneda(grupo.subtotalBase)}
+                    </span>
                   </div>
                   {(grupo.extrasLineas || []).map((extra) => (
                     <div

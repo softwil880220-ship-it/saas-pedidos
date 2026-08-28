@@ -3,7 +3,7 @@ import {
   UNIDAD_VENTA_PESO,
   calcularSubtotalPorUnidadVenta,
   esProductoPorPeso,
-  formatearLineaProductoVenta,
+  formatearDescripcionLineaPesoSinPrecio,
   normalizarUnidadVenta,
   parseCantidadPieza,
   parseGramosLinea,
@@ -85,11 +85,9 @@ function normalizarLineaDetalleCobro(linea) {
       subtotalExtras,
       etiquetaVariantes,
       tieneVariantes: extras > 0,
-      textoLinea: formatearLineaProductoVenta({
+      textoLinea: formatearDescripcionLineaPesoSinPrecio({
         nombre,
         cantidad,
-        unidadVenta,
-        subtotal,
       }),
     };
   }
@@ -150,11 +148,9 @@ export function consolidarProductosRondasMesa(rondas) {
             subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
             subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
             textoLinea: esProductoPorPeso(linea)
-              ? formatearLineaProductoVenta({
+              ? formatearDescripcionLineaPesoSinPrecio({
                   nombre: linea.nombre,
                   cantidad: existente.cantidad + linea.cantidad,
-                  unidadVenta: linea.unidad_venta,
-                  subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
                 })
               : existente.textoLinea,
             extrasLineas: [
@@ -198,11 +194,9 @@ export function consolidarProductosRondasMesa(rondas) {
           subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
           subtotalBase: redondearMoneda(existente.subtotalBase + linea.subtotalBase),
           textoLinea: esProductoPorPeso(linea)
-            ? formatearLineaProductoVenta({
+            ? formatearDescripcionLineaPesoSinPrecio({
                 nombre: linea.nombre,
                 cantidad: existente.cantidad + linea.cantidad,
-                unidadVenta: linea.unidad_venta,
-                subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
               })
             : existente.textoLinea,
         });
