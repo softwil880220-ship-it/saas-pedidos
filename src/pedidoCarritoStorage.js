@@ -108,13 +108,24 @@ function normalizarLineaGuardada(linea, index) {
   };
 }
 
-function calcularNextLineaId(lineas) {
-  const maxId = lineas.reduce(
-    (maximo, linea) => Math.max(maximo, Number(linea.id) || 0),
-    1
-  );
+function calcularNextLineaId(lineas, nextLineaIdFallback = 2) {
+  let max = 1;
+  let tieneIdNumerico = false;
 
-  return maxId + 1;
+  for (const linea of lineas || []) {
+    const n = Number(linea?.id);
+    if (Number.isFinite(n)) {
+      tieneIdNumerico = true;
+      max = Math.max(max, n);
+    }
+  }
+
+  if (tieneIdNumerico) {
+    return max + 1;
+  }
+
+  const fallback = Number(nextLineaIdFallback);
+  return Number.isFinite(fallback) && fallback >= 2 ? fallback : 2;
 }
 
 function lineaEstaVacia(linea) {
@@ -442,7 +453,7 @@ export {
   cerrarFolioMesa,
   configurarContextoMesas,
   crearFormularioCapturaMesaVacio,
-  decrementarNumeroRondaSiguienteFolio,
+  sincronizarNumeroRondaSiguienteFolio,
   eliminarFolioMesa,
   ERROR_CODIGO_FOLIO_SIN_FILAS_AFECTADAS,
   folioCarritoEnmascaradoParaUsuarioActual,

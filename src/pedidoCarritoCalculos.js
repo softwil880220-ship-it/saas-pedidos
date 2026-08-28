@@ -100,15 +100,24 @@ export function idEstableLineaCarrito(linea, ctx) {
   return `pieza:${claveConsolidacionLineaCarrito(linea, ctx)}`;
 }
 
-export function calcularNextLineaIdDesdeLineas(lineas) {
+export function calcularNextLineaIdDesdeLineas(lineas, nextLineaIdFallback = 2) {
   let max = 1;
+  let tieneIdNumerico = false;
 
   for (const linea of lineas || []) {
     const n = Number(linea?.id);
-    if (Number.isFinite(n)) max = Math.max(max, n);
+    if (Number.isFinite(n)) {
+      tieneIdNumerico = true;
+      max = Math.max(max, n);
+    }
   }
 
-  return max + 1;
+  if (tieneIdNumerico) {
+    return max + 1;
+  }
+
+  const fallback = Number(nextLineaIdFallback);
+  return Number.isFinite(fallback) && fallback >= 2 ? fallback : 2;
 }
 
 export function aplicarConsolidacionCarrito(lineas, ctx) {

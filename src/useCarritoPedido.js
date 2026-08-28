@@ -178,7 +178,9 @@ function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folio
     return {
       form,
       pagoRecibido: snapshotInicial.pagoRecibido ?? '',
-      nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
+      nextLineaId:
+        snapshotInicial.nextLineaId ??
+        calcularNextLineaIdDesdeLineas(form.lineas, 2),
     };
   }
 
@@ -190,7 +192,9 @@ function resolverEstadoInicial(snapshotInicial, modoCaptura, variantesCtx, folio
       return {
         form,
         pagoRecibido: restaurado.pagoRecibido ?? '',
-        nextLineaId: calcularNextLineaIdDesdeLineas(form.lineas),
+        nextLineaId:
+          restaurado.nextLineaId ??
+          calcularNextLineaIdDesdeLineas(form.lineas, 2),
       };
     }
   }
@@ -306,16 +310,25 @@ export default function useCarritoPedido({
     persistirSnapshotActual();
   }, [persistirSnapshotActual]);
 
-  const aplicarSnapshot = useCallback(({ form: formRestaurado, pagoRecibido: pagoRestaurado }) => {
-    const formNormalizado = normalizarFormLineasCarrito(
-      formRestaurado,
-      ctxConsolidacion
-    );
+  const aplicarSnapshot = useCallback(
+    ({
+      form: formRestaurado,
+      pagoRecibido: pagoRestaurado,
+      nextLineaId: nextId,
+      normalizarLineas = true,
+    }) => {
+      const formFinal = normalizarLineas
+        ? normalizarFormLineasCarrito(formRestaurado, ctxConsolidacion)
+        : formRestaurado;
 
-    setForm(formNormalizado);
-    setPagoRecibido(pagoRestaurado ?? '');
-    nextLineaId.current = calcularNextLineaIdDesdeLineas(formNormalizado?.lineas);
-  }, [ctxConsolidacion]);
+      setForm(formFinal);
+      setPagoRecibido(pagoRestaurado ?? '');
+      nextLineaId.current =
+        nextId ??
+        calcularNextLineaIdDesdeLineas(formFinal?.lineas, nextLineaId.current);
+    },
+    [ctxConsolidacion]
+  );
 
   const pausarPersistencia = useCallback(() => {
     persistenciaPausadaRef.current = true;

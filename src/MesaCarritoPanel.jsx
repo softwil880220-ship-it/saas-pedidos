@@ -27,6 +27,7 @@ import {
   setUltimoSnapshotRemotoAplicado,
 } from './pedidoCarritoStorage';
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
+import { calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
 
 const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
 const MENSAJE_JORNADA_CERRADA_COBRAR_MESA = 'Abre una jornada para cobrar mesas';
@@ -267,12 +268,16 @@ export default function MesaCarritoPanel({
     setFolioIdLocal(folioIdProp ?? null);
   }, [folioIdProp]);
 
-  const aplicarSnapshotExternoDesdeCache = (folioId, carritoRef) => {
+  const aplicarSnapshotExternoDesdeCache = (
+    folioId,
+    carritoRef,
+    { normalizarLineas = true } = {}
+  ) => {
     const snapshot = construirSnapshotDesdeCache(folioId);
 
     syncSnapshotExternoEnCursoRef.current = true;
     carritoRef.pausarPersistencia();
-    carritoRef.aplicarSnapshot(snapshot);
+    carritoRef.aplicarSnapshot({ ...snapshot, normalizarLineas });
     asignarUltimoSnapshotRemoto(ultimoSnapshotRemotoAplicadoRef, snapshot);
   };
 
@@ -355,7 +360,9 @@ export default function MesaCarritoPanel({
       return;
     }
 
-    aplicarSnapshotExternoDesdeCache(folioIdProp, carrito);
+    aplicarSnapshotExternoDesdeCache(folioIdProp, carrito, {
+      normalizarLineas: false,
+    });
   }, [
     folioIdProp,
     folioCacheActualizado,
@@ -625,7 +632,7 @@ export default function MesaCarritoPanel({
       return;
     }
 
-    const { numeroRondaSiguiente } = obtenerMetadatosMesa(folioId);
+    const numeroRonda = calcularNumeroRondaSiguienteDesdePedidos(pedidosFolioMesa);
     const resumen = carrito.obtenerResumenProductos();
 
     setEnviandoCocina(true);
@@ -637,7 +644,7 @@ export default function MesaCarritoPanel({
       detallePedido,
       resumen,
       numeroMesa,
-      numeroRonda: numeroRondaSiguiente,
+      numeroRonda,
       productos,
       jornadaId: jornadaAbierta?.id ?? null,
     });
@@ -664,7 +671,7 @@ export default function MesaCarritoPanel({
         form: formularioVacio,
         pagoRecibido: '',
         nextLineaId: 2,
-        numeroRondaSiguiente: numeroRondaSiguiente + 1,
+        numeroRondaSiguiente: numeroRonda + 1,
       },
     });
 

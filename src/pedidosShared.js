@@ -625,6 +625,24 @@ export function extraerNumeroRondaMesa(referencia) {
   return coincidencia ? Number(coincidencia[1]) : null;
 }
 
+export function calcularMaxNumeroRondaMesaDesdePedidos(pedidos) {
+  let max = 0;
+
+  for (const pedido of pedidos || []) {
+    const numero = extraerNumeroRondaMesa(pedido?.referencia);
+    if (Number.isFinite(numero)) {
+      max = Math.max(max, numero);
+    }
+  }
+
+  return max;
+}
+
+export function calcularNumeroRondaSiguienteDesdePedidos(pedidos) {
+  const max = calcularMaxNumeroRondaMesaDesdePedidos(pedidos);
+  return max > 0 ? max + 1 : 1;
+}
+
 export function formatearEtiquetaFolioMesa(folio) {
   if (!folio) return null;
 

@@ -1,4 +1,4 @@
-import { TIPOS_ENTREGA } from './pedidosShared';
+import { TIPOS_ENTREGA, calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
 import { supabase } from './supabase';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
@@ -90,13 +90,24 @@ function normalizarLineaGuardada(linea, index) {
   };
 }
 
-function calcularNextLineaId(lineas) {
-  const maxId = lineas.reduce(
-    (maximo, linea) => Math.max(maximo, Number(linea.id) || 0),
-    1
-  );
+function calcularNextLineaId(lineas, nextLineaIdFallback = 2) {
+  let max = 1;
+  let tieneIdNumerico = false;
 
-  return maxId + 1;
+  for (const linea of lineas || []) {
+    const n = Number(linea?.id);
+    if (Number.isFinite(n)) {
+      tieneIdNumerico = true;
+      max = Math.max(max, n);
+    }
+  }
+
+  if (tieneIdNumerico) {
+    return max + 1;
+  }
+
+  const fallback = Number(nextLineaIdFallback);
+  return Number.isFinite(fallback) && fallback >= 2 ? fallback : 2;
 }
 
 function crearCarritoSnapshotVacio() {
@@ -165,8 +176,8 @@ function registrarErrorFlushFolio(folioId, detalle) {
   });
 }
 
-function registrarErrorDecrementoContador(folioId, detalle) {
-  console.error('[mesas_folios] decrementarNumeroRondaSiguienteFolio falló', {
+function registrarErrorSincronizacionContador(folioId, detalle) {
+  console.error('[mesas_folios] sincronizarNumeroRondaSiguienteFolio falló', {
     folioId: String(folioId),
     ...detalle,
   });
@@ -376,40 +387,31 @@ export function obtenerMetadatosMesa(folioId) {
   };
 }
 
-export function decrementarNumeroRondaSiguienteFolio(folioId) {
+export function sincronizarNumeroRondaSiguienteFolio(folioId, pedidosActivos) {
   const clave = String(folioId);
   const entrada = cacheFolios.get(clave);
 
   if (!entrada) {
-    registrarErrorDecrementoContador(clave, { motivo: 'sin_entrada_en_cache' });
+    registrarErrorSincronizacionContador(clave, { motivo: 'sin_entrada_en_cache' });
     return false;
   }
 
   if (entrada.estado !== 'abierta') {
-    registrarErrorDecrementoContador(clave, {
+    registrarErrorSincronizacionContador(clave, {
       motivo: 'folio_no_abierta',
       estado: entrada.estado ?? null,
     });
     return false;
   }
 
-  const actual = entrada.numeroRondaSiguiente ?? 1;
-  const nuevo = Math.max(1, actual - 1);
-
-  if (nuevo === actual) {
-    registrarErrorDecrementoContador(clave, {
-      motivo: 'contador_ya_en_minimo',
-      numeroRondaSiguiente: actual,
-    });
-    return false;
-  }
+  const numeroRondaSiguiente = calcularNumeroRondaSiguienteDesdePedidos(pedidosActivos);
 
   persistirCarritosMesas({
     [clave]: {
       form: entrada.form,
       pagoRecibido: entrada.pagoRecibido ?? '',
       nextLineaId: entrada.nextLineaId ?? 2,
-      numeroRondaSiguiente: nuevo,
+      numeroRondaSiguiente,
     },
   });
 

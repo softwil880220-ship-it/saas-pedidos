@@ -7,7 +7,8 @@ import {
   formatearFechaHoraCocina,
 } from './pedidosShared';
 import { tituloAutorizacionPinPedido } from './pedidoEdicionHelpers';
-import { decrementarNumeroRondaSiguienteFolio } from './pedidoCarritoStorage';
+import { calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
+import { sincronizarNumeroRondaSiguienteFolio } from './pedidoCarritoStorage';
 import { queryConNegocio } from './tenantHelpers';
 import { supabase } from './supabase';
 import { useRondasMesaEnviadas } from './useRondasMesaEnviadas';
@@ -112,15 +113,18 @@ export default function MesaRondasEnviadas({
 
     if (!error) {
       if (!folioId) {
-        console.error('[mesas_folios] no se decrementó contador tras eliminar ronda', {
+        console.error('[mesas_folios] no se sincronizó contador tras eliminar ronda', {
           motivo: 'sin_folio_id_al_eliminar_ronda',
           rondaId: ronda.id,
         });
-      } else if (!decrementarNumeroRondaSiguienteFolio(folioId)) {
-        console.error('[mesas_folios] no se decrementó contador tras eliminar ronda', {
-          folioId,
-          rondaId: ronda.id,
-        });
+      } else {
+        const rondasRestantes = rondas.filter((item) => item.id !== ronda.id);
+        if (!sincronizarNumeroRondaSiguienteFolio(folioId, rondasRestantes)) {
+          console.error('[mesas_folios] no se sincronizó contador tras eliminar ronda', {
+            folioId,
+            rondaId: ronda.id,
+          });
+        }
       }
 
       onRondasCambiadas?.();
