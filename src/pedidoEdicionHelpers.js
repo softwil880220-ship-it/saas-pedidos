@@ -176,7 +176,7 @@ export function construirSnapshotCarritoDesdePedido(pedido, productos, variantes
       colonia: pedido?.colonia || '',
       municipio: pedido?.municipio || '',
       zona_id: pedido?.zona_id || '',
-      formaPago: pedido?.forma_pago || 'efectivo',
+      formaPago: pedido?.forma_pago || '',
       referencia: pedido?.referencia || '',
       status: pedido?.status || 'en-cocina',
       lineas,
