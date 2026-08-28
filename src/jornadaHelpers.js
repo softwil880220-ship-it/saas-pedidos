@@ -39,14 +39,22 @@ export function pedidoPerteneceJornada(pedido, jornada) {
   );
 }
 
+export function normalizarMeridianoHoraEs(texto) {
+  return String(texto ?? '')
+    .replace(/\s*a\.?\s*m\.?\.?/gi, ' a.m.')
+    .replace(/\s*p\.?\s*m\.?\.?/gi, ' p.m.');
+}
+
 export function formatearHoraJornada(iso) {
   if (!iso) return '—';
 
-  return new Date(iso).toLocaleTimeString('es-MX', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return normalizarMeridianoHoraEs(
+    new Date(iso).toLocaleTimeString('es-MX', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  );
 }
 
 export function esErrorJornadaDuplicada(error) {

@@ -6,6 +6,7 @@ import {
   resolverProductoDeLinea,
 } from './categoriaFrecuenciaPedidos';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
+import { normalizarMeridianoHoraEs } from './jornadaHelpers';
 import {
   esProductoPorPeso,
   formatearLineaDetalleGuardada,
@@ -483,11 +484,13 @@ export function formatearEncabezadoGrupoFecha(fecha) {
 export function formatearHoraPedidoLista(createdAt) {
   if (!createdAt) return '—';
 
-  return new Date(createdAt).toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return normalizarMeridianoHoraEs(
+    new Date(createdAt).toLocaleTimeString('es-MX', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  );
 }
 
 export function agruparPedidosPorDia(pedidos) {
@@ -522,16 +525,27 @@ export function agruparPedidosPorDia(pedidos) {
     }));
 }
 
+function capitalizarMesEnFechaJornada(texto) {
+  return String(texto ?? '').replace(
+    /(\d{1,2})\s+([a-záéíóúñ]+)\s+(\d{4})/i,
+    (_, dia, mes, anio) => `${dia} ${mes.charAt(0).toUpperCase()}${mes.slice(1)} ${anio}`
+  );
+}
+
 function formatearFechaHoraJornadaReporte(iso) {
   if (!iso) return '—';
 
-  return new Date(iso).toLocaleString('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return capitalizarMesEnFechaJornada(
+    normalizarMeridianoHoraEs(
+      new Date(iso).toLocaleString('es-MX', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    )
+  );
 }
 
 export function formatearEncabezadoGrupoJornada(jornada) {

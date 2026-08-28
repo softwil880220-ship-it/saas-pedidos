@@ -1,4 +1,4 @@
-import { pedidoPerteneceJornada } from './jornadaHelpers';
+import { normalizarMeridianoHoraEs, pedidoPerteneceJornada } from './jornadaHelpers';
 import {
   STATUS_PENDIENTE_REPARTIDOR,
   TIPOS_ENTREGA,
@@ -227,13 +227,13 @@ export function formatearHoraPedidoRecoger(createdAt) {
   if (!createdAt) return '';
 
   const fecha = new Date(createdAt);
-  const hora = fecha.toLocaleTimeString('es-MX', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-
-  return hora.replace(/\s*a\.?\s*m\.?\.?/i, ' a.m.').replace(/\s*p\.?\s*m\.?\.?/i, ' p.m.');
+  return normalizarMeridianoHoraEs(
+    fecha.toLocaleTimeString('es-MX', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  );
 }
 
 const FORMAS_PAGO_VALIDAS = new Set(['efectivo', 'tarjeta', 'transferencia', 'link_pago']);

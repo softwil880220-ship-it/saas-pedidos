@@ -86,6 +86,7 @@ import {
   formatearHoraJornada,
   jornadaEstaCerrada,
   MENSAJE_JORNADA_YA_ABIERTA,
+  normalizarMeridianoHoraEs,
   pedidoPerteneceJornada,
   puedeGestionarJornada,
 } from './jornadaHelpers';
@@ -847,11 +848,13 @@ function esMismoDia(fechaA, fechaB) {
 }
 
 function formatearHora(fecha) {
-  return fecha.toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return normalizarMeridianoHoraEs(
+    fecha.toLocaleTimeString('es-MX', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  );
 }
 
 function formatearHoraPedido(createdAt) {
@@ -3181,9 +3184,7 @@ function Dashboard() {
                     aria-hidden="true"
                   />
                   <p className="header-jornada-texto">
-                    {jornadaAbierta
-                      ? `Jornada abierta desde ${formatearHoraJornada(jornadaAbierta.abierta_en)}`
-                      : 'Jornada cerrada'}
+                    {jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada'}
                   </p>
                 </div>
                 {puedeGestionarJornadaDashboard ? (
