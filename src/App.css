@@ -3621,6 +3621,13 @@
   width: 100%;
 }
 
+.vista-repartidor-entrega-prometida {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #92400e;
+}
+
 .vista-repartidor-acciones .vista-operativa-btn {
   flex: 1;
   width: auto;

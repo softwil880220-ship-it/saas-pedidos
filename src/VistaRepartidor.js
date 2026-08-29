@@ -8,6 +8,10 @@ import {
   esPedidoWhatsapp,
   siguienteStatus,
 } from './pedidosShared';
+import {
+  esPedidoProgramado,
+  formatearProgramadoParaRepartidor,
+} from './pedidosProgramadosHelpers';
 import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime } from './usePedidosRealtime';
@@ -112,6 +116,11 @@ export default function VistaRepartidor() {
                 {pedido.telefono?.trim() && (
                   <p className="vista-operativa-telefono">{pedido.telefono.trim()}</p>
                 )}
+                {esPedidoProgramado(pedido) ? (
+                  <p className="vista-repartidor-entrega-prometida">
+                    {formatearProgramadoParaRepartidor(pedido.programado_para)}
+                  </p>
+                ) : null}
                 <p className="vista-operativa-direccion">
                   {pedido.direccion?.trim() || 'Sin dirección registrada'}
                 </p>

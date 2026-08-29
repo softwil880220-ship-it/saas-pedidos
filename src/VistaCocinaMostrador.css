@@ -39,6 +39,42 @@
   grid-template-columns: 1fr;
 }
 
+.vista-cocina-columna-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vista-cocina-columna-tab {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--borde-suave, #d1d5db);
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vista-cocina-columna-tab.activo {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+.vista-cocina-badge-programado {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .vista-operativa-canal-texto {
   background: transparent;
   color: inherit;

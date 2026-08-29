@@ -131,3 +131,50 @@
   border-radius: 8px;
 }
 
+.recoger-domicilio-fila-tipo-programar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.recoger-domicilio-programar-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.recoger-domicilio-programado-campo {
+  min-width: 16rem;
+}
+
+.recoger-domicilio-fila-cliente-buscador {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.recoger-domicilio-cliente-telefono {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .recoger-domicilio-fila-cliente-buscador {
+    grid-template-columns: 1fr;
+  }
+
+  .recoger-domicilio-cliente-telefono {
+    grid-template-columns: 1fr;
+  }
+}
+

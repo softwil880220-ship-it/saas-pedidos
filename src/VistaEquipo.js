@@ -6,10 +6,12 @@ import DashboardNav from './DashboardNav';
 import PanelCajeros from './PanelCajeros';
 import PanelPinSeguridad from './PanelPinSeguridad';
 import PanelAjustesMostrador from './PanelAjustesMostrador';
+import PanelAjustesRecogerDomicilio from './PanelAjustesRecogerDomicilio';
 import { useAuth } from './AuthContext';
 
 const ROLES_PIN_SEGURIDAD = ['dueno', 'administrador'];
 const ROLES_AJUSTES_MOSTRADOR = ['dueno', 'administrador'];
+const ROLES_AJUSTES_RECOGER_DOMICILIO = ['dueno', 'administrador'];
 
 export default function VistaEquipo() {
   const { negocioId, rol } = useAuth();
@@ -17,6 +19,7 @@ export default function VistaEquipo() {
 
   const puedeConfigurarPin = ROLES_PIN_SEGURIDAD.includes(rol);
   const puedeConfigurarMostrador = ROLES_AJUSTES_MOSTRADOR.includes(rol);
+  const puedeConfigurarRecogerDomicilio = ROLES_AJUSTES_RECOGER_DOMICILIO.includes(rol);
 
   const tabsEquipo = useMemo(() => {
     const tabs = [{ value: 'usuarios', label: 'Usuarios' }];
@@ -26,8 +29,11 @@ export default function VistaEquipo() {
     if (puedeConfigurarMostrador) {
       tabs.push({ value: 'ajustes-mostrador', label: 'Ajustes de Mostrador' });
     }
+    if (puedeConfigurarRecogerDomicilio) {
+      tabs.push({ value: 'ajustes-recoger-domicilio', label: 'Ajustes de Recoger/Domicilio' });
+    }
     return tabs;
-  }, [puedeConfigurarPin, puedeConfigurarMostrador]);
+  }, [puedeConfigurarPin, puedeConfigurarMostrador, puedeConfigurarRecogerDomicilio]);
 
   const tabActivo = tabsEquipo.some((tab) => tab.value === tabEquipo)
     ? tabEquipo
@@ -59,6 +65,9 @@ export default function VistaEquipo() {
         {tabActivo === 'pin-seguridad' && puedeConfigurarPin ? <PanelPinSeguridad /> : null}
         {tabActivo === 'ajustes-mostrador' && puedeConfigurarMostrador ? (
           <PanelAjustesMostrador negocioId={negocioId} />
+        ) : null}
+        {tabActivo === 'ajustes-recoger-domicilio' && puedeConfigurarRecogerDomicilio ? (
+          <PanelAjustesRecogerDomicilio negocioId={negocioId} />
         ) : null}
       </main>
     </div>

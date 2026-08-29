@@ -62,6 +62,8 @@ export function crearFormularioPedidoDefault(modoActual, tipoEntrega = TIPO_ENTR
     municipio: '',
     zona_id: '',
     formaPago: esPresencial || esMostrador ? FORMA_PAGO_DEFAULT_CAJA : '',
+    programarPedido: false,
+    programadoPara: '',
     referencia: '',
     lineas: [crearLineaPedidoVacia(1)],
     status: esPresencial ? 'por-aceptar' : STATUS_DEFAULT_WHATSAPP,

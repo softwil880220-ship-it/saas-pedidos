@@ -381,3 +381,46 @@
     margin-bottom: 0.15rem;
   }
 }
+
+.cliente-busqueda-whatsapp-colapsada {
+  margin-top: 0;
+}
+
+.cliente-busqueda-seleccion-resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cliente-busqueda-seleccion-texto {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cliente-busqueda-cambiar-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.cliente-busqueda-limpiar-btn {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.cliente-busqueda-limpiar-btn-inline {
+  align-self: flex-end;
+}

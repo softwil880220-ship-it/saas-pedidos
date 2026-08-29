@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import './VistaCocinaMostrador.css';
 import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
+import { cargarJornadaAbierta } from './jornadaHelpers';
+import {
+  esPedidoProgramado,
+  formatearProgramadoParaBadge,
+  INTERVALO_REASIGNACION_JORNADA_MS,
+  MINUTOS_ANTICIPACION_COCINA_DEFAULT,
+  normalizarMinutosAnticipacionCocina,
+  pedidosProgramadosPendientesReasignacion,
+  pedidoWhatsappEnTabProgramadosCocina,
+  pedidoWhatsappEnTabTiempoRealCocina,
+} from './pedidosProgramadosHelpers';
 import useVariantesCtx from './useVariantesCtx';
 import {
   DesgloseProductosPedido,
@@ -25,6 +36,11 @@ import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 
+const TABS_COLUMNA_DERECHA = [
+  { value: 'tiempo-real', label: 'Tiempo real' },
+  { value: 'programados', label: 'Programados' },
+];
+
 function pedidoPermaneceEnCocinaTrasUpdate(pedido, update, mostradorFlujoCocina) {
   return (
     esPedidoMostrador(pedido) &&
@@ -41,6 +57,7 @@ function TarjetaPedidoCocina({
   mostradorFlujoCocina,
   actualizandoId,
   variantesCtx,
+  badgeProgramado,
   onMarcarEnPreparacion,
   onMarcarListo,
   onMarcarEntregado,
@@ -63,6 +80,9 @@ function TarjetaPedidoCocina({
             <span className="vista-operativa-canal vista-operativa-canal-texto">
               {ETIQUETA_CANAL_MOSTRADOR}
             </span>
+          ) : null}
+          {badgeProgramado ? (
+            <span className="vista-cocina-badge-programado">{badgeProgramado}</span>
           ) : null}
         </div>
         <div className="vista-operativa-tarjeta-meta">
@@ -141,7 +161,7 @@ function TarjetaPedidoCocina({
   );
 }
 
-function ColumnaCocina({ titulo, pedidos, vacioMensaje, ...tarjetaProps }) {
+function ColumnaCocina({ titulo, pedidos, vacioMensaje, resolverBadgeProgramado, ...tarjetaProps }) {
   return (
     <section className="vista-cocina-columna">
       <header className="vista-cocina-columna-cabecera">
@@ -168,6 +188,129 @@ function ColumnaCocina({ titulo, pedidos, vacioMensaje, ...tarjetaProps }) {
                 pedido={pedido}
                 pedidoEnriquecido={pedidoEnriquecido}
                 nombreCaptura={nombreCaptura}
+                badgeProgramado={resolverBadgeProgramado?.(pedido) ?? null}
+                {...tarjetaProps}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ColumnaCocinaDerecha({
+  pedidosMostrador,
+  pedidosWhatsapp,
+  tabActivo,
+  onTabChange,
+  conteosTabs,
+  jornadaAbiertaId,
+  minutosAnticipacion,
+  relojCocina,
+  ...tarjetaProps
+}) {
+  const pedidosFiltrados = useMemo(() => {
+    if (tabActivo === 'programados') {
+      return pedidosWhatsapp.filter((pedido) =>
+        pedidoWhatsappEnTabProgramadosCocina(
+          pedido,
+          jornadaAbiertaId,
+          minutosAnticipacion,
+          relojCocina
+        )
+      );
+    }
+
+    const whatsappTiempoReal = pedidosWhatsapp.filter((pedido) =>
+      pedidoWhatsappEnTabTiempoRealCocina(
+        pedido,
+        jornadaAbiertaId,
+        minutosAnticipacion,
+        relojCocina
+      )
+    );
+
+    return [...pedidosMostrador, ...whatsappTiempoReal];
+  }, [
+    tabActivo,
+    pedidosMostrador,
+    pedidosWhatsapp,
+    jornadaAbiertaId,
+    minutosAnticipacion,
+    relojCocina,
+  ]);
+
+  const resolverBadgeProgramado = useCallback(
+    (pedido) => {
+      if (!esPedidoWhatsapp(pedido) || !esPedidoProgramado(pedido)) return null;
+
+      if (tabActivo === 'programados') {
+        return formatearProgramadoParaBadge(pedido.programado_para);
+      }
+
+      if (
+        pedidoWhatsappEnTabTiempoRealCocina(
+          pedido,
+          jornadaAbiertaId,
+          minutosAnticipacion,
+          relojCocina
+        )
+      ) {
+        return formatearProgramadoParaBadge(pedido.programado_para);
+      }
+
+      return null;
+    },
+    [tabActivo, jornadaAbiertaId, minutosAnticipacion, relojCocina]
+  );
+
+  const vacioMensaje =
+    tabActivo === 'programados'
+      ? 'No hay pedidos programados en cola'
+      : 'No hay pedidos de mostrador ni recoger/domicilio en cola';
+
+  return (
+    <section className="vista-cocina-columna vista-cocina-columna-derecha">
+      <nav className="vista-cocina-columna-tabs" aria-label="Filtro de pedidos programados">
+        {TABS_COLUMNA_DERECHA.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className={`vista-cocina-columna-tab${tabActivo === value ? ' activo' : ''}`}
+            onClick={() => onTabChange(value)}
+          >
+            {label} ({conteosTabs[value] ?? 0})
+          </button>
+        ))}
+      </nav>
+
+      <header className="vista-cocina-columna-cabecera">
+        <h2 className="vista-cocina-columna-titulo">Mostrador y recoger/domicilio</h2>
+        <span className="vista-cocina-columna-contador">{pedidosFiltrados.length} en cola</span>
+      </header>
+
+      {pedidosFiltrados.length === 0 ? (
+        <p className="vista-operativa-vacio vista-cocina-columna-vacio">{vacioMensaje}</p>
+      ) : (
+        <div className="vista-operativa-grid vista-cocina-columna-grid">
+          {pedidosFiltrados.map((pedido) => {
+            const pedidoEnriquecido = enriquecerLineasDetalleCocina(
+              pedido,
+              tarjetaProps.productos
+            );
+            const nombreCaptura = resolverNombreCapturaPedido(
+              pedido,
+              tarjetaProps.nombresCapturaPorId
+            );
+
+            return (
+              <TarjetaPedidoCocina
+                key={pedido.id}
+                pedido={pedido}
+                pedidoEnriquecido={pedidoEnriquecido}
+                nombreCaptura={nombreCaptura}
+                badgeProgramado={resolverBadgeProgramado(pedido)}
                 {...tarjetaProps}
               />
             );
@@ -187,6 +330,13 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
   const { variantesCtx } = useVariantesCtx(negocioId, productos);
   const [nombresCapturaPorId, setNombresCapturaPorId] = useState({});
   const [mostradorFlujoCocina, setMostradorFlujoCocina] = useState(0);
+  const [minutosAnticipacion, setMinutosAnticipacion] = useState(
+    MINUTOS_ANTICIPACION_COCINA_DEFAULT
+  );
+  const [jornadaAbierta, setJornadaAbierta] = useState(null);
+  const [tabColumnaDerecha, setTabColumnaDerecha] = useState('tiempo-real');
+  const [relojCocina, setRelojCocina] = useState(() => new Date());
+  const pedidosRef = useRef([]);
 
   const filtrarPedidos = useCallback(
     (pedido) =>
@@ -211,18 +361,21 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
   });
   const [actualizandoId, setActualizandoId] = useState(null);
 
+  pedidosRef.current = pedidos;
+
   useEffect(() => {
     if (!negocioId) {
       setMostradorFlujoCocina(0);
+      setMinutosAnticipacion(MINUTOS_ANTICIPACION_COCINA_DEFAULT);
       return;
     }
 
     let activo = true;
 
-    const cargarFlujoMostrador = async () => {
+    const cargarConfigNegocio = async () => {
       const { data, error } = await supabase
         .from('negocios')
-        .select('mostrador_flujo_cocina')
+        .select('mostrador_flujo_cocina, minutos_anticipacion_cocina')
         .eq('id', negocioId)
         .maybeSingle();
 
@@ -232,14 +385,29 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
       setMostradorFlujoCocina(
         Number.isFinite(flujo) && flujo >= 0 && flujo <= 3 ? flujo : 0
       );
+      setMinutosAnticipacion(normalizarMinutosAnticipacionCocina(data?.minutos_anticipacion_cocina));
     };
 
-    void cargarFlujoMostrador();
+    void cargarConfigNegocio();
 
     return () => {
       activo = false;
     };
   }, [negocioId]);
+
+  const recargarJornadaAbierta = useCallback(async () => {
+    if (!negocioId) {
+      setJornadaAbierta(null);
+      return;
+    }
+
+    const { data } = await cargarJornadaAbierta(supabase, negocioId);
+    setJornadaAbierta(data);
+  }, [negocioId]);
+
+  useEffect(() => {
+    void recargarJornadaAbierta();
+  }, [recargarJornadaAbierta]);
 
   useEffect(() => {
     if (!negocioId) {
@@ -270,6 +438,56 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
       activo = false;
     };
   }, [negocioId]);
+
+  const reasignarJornadasProgramadas = useCallback(async () => {
+    const jornadaId = jornadaAbierta?.id;
+    if (!negocioId || !jornadaId) return;
+
+    const ahora = new Date();
+    const pendientes = pedidosProgramadosPendientesReasignacion(
+      pedidosRef.current,
+      jornadaId,
+      minutosAnticipacion,
+      ahora
+    );
+
+    if (pendientes.length === 0) return;
+
+    await Promise.all(
+      pendientes.map(async (pedido) => {
+        const { error } = await queryConNegocio(
+          supabase
+            .from('pedidos')
+            .update({ jornada_id: jornadaId })
+            .eq('id', pedido.id),
+          negocioId
+        );
+
+        if (!error) {
+          setPedidos((prev) =>
+            prev.map((item) =>
+              item.id === pedido.id ? { ...item, jornada_id: jornadaId } : item
+            )
+          );
+        }
+      })
+    );
+  }, [negocioId, jornadaAbierta?.id, minutosAnticipacion, setPedidos]);
+
+  useEffect(() => {
+    if (!negocioId) return undefined;
+
+    const tick = () => {
+      setRelojCocina(new Date());
+      void recargarJornadaAbierta();
+      void reasignarJornadasProgramadas();
+    };
+
+    tick();
+    const intervaloId = setInterval(tick, INTERVALO_REASIGNACION_JORNADA_MS);
+
+    return () => clearInterval(intervaloId);
+  }, [negocioId, recargarJornadaAbierta, reasignarJornadasProgramadas]);
 
   const aplicarUpdatePedido = useCallback(
     (pedido, update) => {
@@ -329,13 +547,56 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     [pedidos]
   );
 
-  const pedidosColumnaDerecha = useMemo(
+  const pedidosDerechaBase = useMemo(
     () =>
       pedidos.filter((pedido) =>
         pedidoVisibleEnCocinaColumnaDerecha(pedido, mostradorFlujoCocina)
       ),
     [pedidos, mostradorFlujoCocina]
   );
+
+  const pedidosMostradorDerecha = useMemo(
+    () => pedidosDerechaBase.filter((pedido) => esPedidoMostrador(pedido)),
+    [pedidosDerechaBase]
+  );
+
+  const pedidosWhatsappDerecha = useMemo(
+    () => pedidosDerechaBase.filter((pedido) => esPedidoWhatsapp(pedido)),
+    [pedidosDerechaBase]
+  );
+
+  const conteosTabsColumnaDerecha = useMemo(() => {
+    const jornadaId = jornadaAbierta?.id ?? null;
+
+    const programados = pedidosWhatsappDerecha.filter((pedido) =>
+      pedidoWhatsappEnTabProgramadosCocina(
+        pedido,
+        jornadaId,
+        minutosAnticipacion,
+        relojCocina
+      )
+    ).length;
+
+    const whatsappTiempoReal = pedidosWhatsappDerecha.filter((pedido) =>
+      pedidoWhatsappEnTabTiempoRealCocina(
+        pedido,
+        jornadaId,
+        minutosAnticipacion,
+        relojCocina
+      )
+    ).length;
+
+    return {
+      'tiempo-real': pedidosMostradorDerecha.length + whatsappTiempoReal,
+      programados,
+    };
+  }, [
+    pedidosMostradorDerecha,
+    pedidosWhatsappDerecha,
+    jornadaAbierta?.id,
+    minutosAnticipacion,
+    relojCocina,
+  ]);
 
   const tarjetaProps = {
     cocina,
@@ -374,10 +635,15 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
             vacioMensaje="No hay pedidos de mesas en cola"
             {...tarjetaProps}
           />
-          <ColumnaCocina
-            titulo="Mostrador y recoger/domicilio"
-            pedidos={pedidosColumnaDerecha}
-            vacioMensaje="No hay pedidos de mostrador ni recoger/domicilio en cola"
+          <ColumnaCocinaDerecha
+            pedidosMostrador={pedidosMostradorDerecha}
+            pedidosWhatsapp={pedidosWhatsappDerecha}
+            tabActivo={tabColumnaDerecha}
+            onTabChange={setTabColumnaDerecha}
+            conteosTabs={conteosTabsColumnaDerecha}
+            jornadaAbiertaId={jornadaAbierta?.id ?? null}
+            minutosAnticipacion={minutosAnticipacion}
+            relojCocina={relojCocina}
             {...tarjetaProps}
           />
         </div>

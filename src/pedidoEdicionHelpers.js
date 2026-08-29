@@ -1,5 +1,10 @@
 import { buscarProductoPorId } from './pedidoCarritoCalculos';
 import { payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
+import {
+  datetimeLocalDesdeIso,
+  esPedidoProgramado,
+  programadoParaDesdeForm,
+} from './pedidosProgramadosHelpers';
 import { CLIENTE_MOSTRADOR } from './pedidoCarritoStorage';
 import {
   TIPOS_ENTREGA,
@@ -177,6 +182,8 @@ export function construirSnapshotCarritoDesdePedido(pedido, productos, variantes
       municipio: pedido?.municipio || '',
       zona_id: pedido?.zona_id || '',
       formaPago: pedido?.forma_pago || '',
+      programarPedido: esPedidoProgramado(pedido),
+      programadoPara: datetimeLocalDesdeIso(pedido?.programado_para),
       referencia: pedido?.referencia || '',
       status: pedido?.status || 'en-cocina',
       lineas,
@@ -427,6 +434,7 @@ export function construirPayloadEdicionRecogerDomicilio({
     status,
     status_cocina1,
     status_cocina2,
+    programado_para: programadoParaDesdeForm(form.programarPedido, form.programadoPara),
   };
 }
 

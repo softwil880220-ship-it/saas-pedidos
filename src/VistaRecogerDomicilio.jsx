@@ -47,6 +47,10 @@ import {
   normalizarTipoEntrega,
   obtenerFlujoStatus,
 } from './pedidosShared';
+import {
+  programadoParaDesdeForm,
+  validarProgramadoParaFuturo,
+} from './pedidosProgramadosHelpers';
 import { supabase } from './supabase';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
@@ -257,9 +261,18 @@ export default function VistaRecogerDomicilio({
       return;
     }
 
+    const form = carrito.form;
+
+    if (form.programarPedido) {
+      const validacionProgramado = validarProgramadoParaFuturo(form.programadoPara);
+      if (!validacionProgramado.valido) {
+        setErrorGuardar(validacionProgramado.mensaje);
+        return;
+      }
+    }
+
     const detallePedido = carrito.obtenerDetallePedido();
     const resumen = carrito.obtenerResumenProductos();
-    const form = carrito.form;
     const direccionPayload = payloadDireccionDomicilioDesdeForm(form);
 
     const payload = {
@@ -277,6 +290,7 @@ export default function VistaRecogerDomicilio({
       jornada_id: jornadaAbierta?.id ?? null,
       repartidor_usuario_id: null,
       repartidor_externo: false,
+      programado_para: programadoParaDesdeForm(form.programarPedido, form.programadoPara),
     };
 
     const optimisticId = crearIdOptimisticoPedidoRecogerDomicilio();
@@ -460,6 +474,14 @@ export default function VistaRecogerDomicilio({
     }
 
     if (carrito.totalPedido <= 0) return;
+
+    if (carrito.form.programarPedido) {
+      const validacionProgramado = validarProgramadoParaFuturo(carrito.form.programadoPara);
+      if (!validacionProgramado.valido) {
+        setErrorGuardar(validacionProgramado.mensaje);
+        return;
+      }
+    }
 
     const pedidoOriginal = pedidos.find((item) => item.id === editandoPedidoId);
     if (!pedidoOriginal) return;
@@ -647,58 +669,93 @@ export default function VistaRecogerDomicilio({
             onSubmit={enModoEdicion ? guardarEdicionPedido : guardarPedido}
           >
             <div className="formulario formulario-cabecera">
-              <div className="formulario-campo">
-                <label htmlFor="cliente">Cliente</label>
-                <input
-                  id="cliente"
-                  name="cliente"
-                  type="text"
-                  value={carrito.form.cliente}
-                  onChange={(evento) =>
-                    carrito.setCampoCaptura('cliente', evento.target.value)
-                  }
-                  required
-                />
+              <div className="recoger-domicilio-fila-tipo-programar">
+                <div className="formulario-campo">
+                  <label htmlFor="tipoEntrega">Tipo de entrega</label>
+                  <select
+                    id="tipoEntrega"
+                    name="tipoEntrega"
+                    value={carrito.form.tipoEntrega}
+                    onChange={(evento) =>
+                      carrito.setCampoCaptura('tipoEntrega', evento.target.value)
+                    }
+                    required
+                  >
+                    <option value="">Seleccionar tipo de entrega…</option>
+                    {TIPOS_ENTREGA_OPCIONES.map((opcion) => (
+                      <option key={opcion.value} value={opcion.value}>
+                        {opcion.icono} {opcion.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label className="recoger-domicilio-programar-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(carrito.form.programarPedido)}
+                    onChange={(evento) => {
+                      carrito.setCampoCaptura('programarPedido', evento.target.checked);
+                      if (!evento.target.checked) {
+                        carrito.setCampoCaptura('programadoPara', '');
+                      }
+                    }}
+                  />
+                  <span>Programar pedido</span>
+                </label>
+                {carrito.form.programarPedido ? (
+                  <div className="formulario-campo recoger-domicilio-programado-campo">
+                    <label htmlFor="programadoPara">Fecha y hora programada</label>
+                    <input
+                      id="programadoPara"
+                      name="programadoPara"
+                      type="datetime-local"
+                      value={carrito.form.programadoPara || ''}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('programadoPara', evento.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                ) : null}
               </div>
-              {mostrarBuscadorClientes ? (
-                <ClienteBusquedaWhatsapp
-                  negocioId={negocioId}
-                  onSeleccionarCliente={aplicarSeleccionCliente}
-                />
-              ) : null}
-              <div className="formulario-campo">
-                <label htmlFor="telefono">Teléfono</label>
-                <input
-                  id="telefono"
-                  name="telefono"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="10 dígitos o con lada"
-                  value={carrito.form.telefono}
-                  onChange={(evento) =>
-                    carrito.setCampoCaptura('telefono', evento.target.value)
-                  }
-                />
-              </div>
-              <div className="formulario-campo">
-                <label htmlFor="tipoEntrega">Tipo de entrega</label>
-                <select
-                  id="tipoEntrega"
-                  name="tipoEntrega"
-                  value={carrito.form.tipoEntrega}
-                  onChange={(evento) =>
-                    carrito.setCampoCaptura('tipoEntrega', evento.target.value)
-                  }
-                  required
-                >
-                  <option value="">Seleccionar tipo de entrega…</option>
-                  {TIPOS_ENTREGA_OPCIONES.map((opcion) => (
-                    <option key={opcion.value} value={opcion.value}>
-                      {opcion.icono} {opcion.label}
-                    </option>
-                  ))}
-                </select>
+
+              <div className="recoger-domicilio-fila-cliente-buscador">
+                <div className="recoger-domicilio-cliente-telefono">
+                  <div className="formulario-campo">
+                    <label htmlFor="cliente">Cliente</label>
+                    <input
+                      id="cliente"
+                      name="cliente"
+                      type="text"
+                      value={carrito.form.cliente}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('cliente', evento.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="formulario-campo">
+                    <label htmlFor="telefono">Teléfono</label>
+                    <input
+                      id="telefono"
+                      name="telefono"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="10 dígitos o con lada"
+                      value={carrito.form.telefono}
+                      onChange={(evento) =>
+                        carrito.setCampoCaptura('telefono', evento.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+                {mostrarBuscadorClientes ? (
+                  <ClienteBusquedaWhatsapp
+                    negocioId={negocioId}
+                    onSeleccionarCliente={aplicarSeleccionCliente}
+                  />
+                ) : null}
               </div>
               {carrito.form.tipoEntrega === TIPOS_ENTREGA.DOMICILIO ? (
                 <div className="formulario-direccion-domicilio">
