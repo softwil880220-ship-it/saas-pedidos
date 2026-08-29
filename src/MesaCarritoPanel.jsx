@@ -27,7 +27,6 @@ import {
   setUltimoSnapshotRemotoAplicado,
 } from './pedidoCarritoStorage';
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
-import { calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
 
 const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
 const MENSAJE_JORNADA_CERRADA_COBRAR_MESA = 'Abre una jornada para cobrar mesas';
@@ -632,19 +631,18 @@ export default function MesaCarritoPanel({
       return;
     }
 
-    const numeroRonda = calcularNumeroRondaSiguienteDesdePedidos(pedidosFolioMesa);
     const resumen = carrito.obtenerResumenProductos();
 
     setEnviandoCocina(true);
     setErrorEnvioCocina(null);
 
-    const { error } = await ejecutarEnvioCocina({
+    const { error, numeroRondaSiguiente } = await ejecutarEnvioCocina({
       negocioId,
       usuarioId,
+      folioId,
       detallePedido,
       resumen,
       numeroMesa,
-      numeroRonda,
       productos,
       jornadaId: jornadaAbierta?.id ?? null,
     });
@@ -671,7 +669,7 @@ export default function MesaCarritoPanel({
         form: formularioVacio,
         pagoRecibido: '',
         nextLineaId: 2,
-        numeroRondaSiguiente: numeroRonda + 1,
+        numeroRondaSiguiente: numeroRondaSiguiente ?? 2,
       },
     });
 

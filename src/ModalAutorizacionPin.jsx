@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabase';
+import {
+  MENSAJE_PIN_INCORRECTO,
+  clasificarErrorAutorizacionPin,
+  invocarAutorizacionPinConTimeout,
+} from './pinAutorizacionHelpers';
 import './ModalAutorizacionPin.css';
 
 const TITULO_DEFAULT = 'Ingresa el PIN de autorización';
@@ -93,26 +98,37 @@ export default function ModalAutorizacionPin({
       return;
     }
 
-    if (!negocioId) {
-      setError('PIN incorrecto');
-      return;
-    }
-
     setVerificando(true);
 
-    const { data, error: errorInvoke } = await supabase.functions.invoke('panel-pin-autorizacion', {
-      body: {
-        action: 'verificar',
-        negocio_id: negocioId,
-        pin: pinIngresado,
-      },
-    });
+    let data = null;
+    let errorInvoke = null;
+
+    try {
+      const resultado = await invocarAutorizacionPinConTimeout(() =>
+        supabase.functions.invoke('panel-pin-autorizacion', {
+          body: {
+            action: 'verificar',
+            negocio_id: negocioId,
+            pin: pinIngresado,
+          },
+        })
+      );
+      data = resultado.data;
+      errorInvoke = resultado.error;
+    } catch (error) {
+      errorInvoke = error;
+    }
 
     setVerificando(false);
 
     if (errorInvoke || data?.success === false) {
+      const clasificacion = clasificarErrorAutorizacionPin({
+        errorInvoke,
+        data,
+        negocioId,
+      });
       setPin('');
-      setError('PIN incorrecto');
+      setError(clasificacion.mensaje);
       return;
     }
 
@@ -143,7 +159,7 @@ export default function ModalAutorizacionPin({
     }
 
     setPin('');
-    setError('PIN incorrecto');
+    setError(MENSAJE_PIN_INCORRECTO);
   };
 
   return (

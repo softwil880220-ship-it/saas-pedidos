@@ -35,6 +35,11 @@ import {
 import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
+import {
+  ejecutarConTimeout,
+  esErrorRed,
+  mensajeErrorOperacionRed,
+} from './networkHelpers';
 
 const TABS_COLUMNA_DERECHA = [
   { value: 'tiempo-real', label: 'Tiempo real' },
@@ -360,8 +365,16 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
     comparar: compararPedidos,
   });
   const [actualizandoId, setActualizandoId] = useState(null);
+  const [errorActualizacion, setErrorActualizacion] = useState(null);
 
   pedidosRef.current = pedidos;
+
+  useEffect(() => {
+    if (!errorActualizacion) return undefined;
+
+    const timeoutId = setTimeout(() => setErrorActualizacion(null), 8000);
+    return () => clearTimeout(timeoutId);
+  }, [errorActualizacion]);
 
   useEffect(() => {
     if (!negocioId) {
@@ -494,14 +507,26 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
       if (!update) return;
 
       setActualizandoId(pedido.id);
+      setErrorActualizacion(null);
 
       void (async () => {
-        const { error } = await queryConNegocio(
-          supabase.from('pedidos').update(update).eq('id', pedido.id),
-          negocioId
-        );
+        try {
+          const { error } = await ejecutarConTimeout(
+            queryConNegocio(
+              supabase.from('pedidos').update(update).eq('id', pedido.id),
+              negocioId
+            )
+          );
 
-        if (!error) {
+          if (error) {
+            setErrorActualizacion(
+              esErrorRed(error)
+                ? mensajeErrorOperacionRed(error)
+                : 'No se pudo guardar. El pedido sigue en cola — intenta de nuevo.'
+            );
+            return;
+          }
+
           setPedidos((prev) => {
             if (pedidoPermaneceEnCocinaTrasUpdate(pedido, update, mostradorFlujoCocina)) {
               return prev.map((item) =>
@@ -510,9 +535,11 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
             }
             return prev.filter((item) => item.id !== pedido.id);
           });
+        } catch (error) {
+          setErrorActualizacion(mensajeErrorOperacionRed(error));
+        } finally {
+          setActualizandoId(null);
         }
-
-        setActualizandoId(null);
       })();
     },
     [negocioId, mostradorFlujoCocina, setPedidos]
@@ -622,6 +649,12 @@ export default function VistaCocinaBase({ cocina, titulo, channelName, claseVist
         </div>
         <BotonCerrarSesion />
       </header>
+
+      {errorActualizacion ? (
+        <p className="formulario-error-guardar vista-cocina-error-actualizacion" role="alert">
+          {errorActualizacion}
+        </p>
+      ) : null}
 
       {cargando ? (
         <p className="vista-operativa-vacio">Cargando pedidos...</p>

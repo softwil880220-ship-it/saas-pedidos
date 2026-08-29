@@ -481,8 +481,10 @@ export {
   persistirCarritosMesas,
   persistirEstadoCobroMesa,
   persistirMesaActiva,
+  reservarNumeroRondaMesa,
   serializarSnapshotParaComparacion,
   setUltimoSnapshotRemotoAplicado,
+  sincronizarNumeroRondaSiguienteLocal,
   debeSuprimirPersistEco,
   sincronizarFilaDesdeRealtime,
 } from './mesasFoliosStorage';

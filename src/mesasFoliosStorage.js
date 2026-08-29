@@ -387,6 +387,54 @@ export function obtenerMetadatosMesa(folioId) {
   };
 }
 
+export function sincronizarNumeroRondaSiguienteLocal(folioId, numeroRondaSiguiente) {
+  const clave = String(folioId);
+  const entrada = cacheFolios.get(clave);
+
+  if (!entrada || entrada.estado !== 'abierta') {
+    return false;
+  }
+
+  persistirCarritosMesas({
+    [clave]: {
+      form: entrada.form,
+      pagoRecibido: entrada.pagoRecibido ?? '',
+      nextLineaId: entrada.nextLineaId ?? 2,
+      numeroRondaSiguiente,
+    },
+  });
+
+  return true;
+}
+
+export async function reservarNumeroRondaMesa(folioId) {
+  if (!folioId) {
+    return { numeroRonda: null, numeroRondaSiguiente: null, error: new Error('Folio inválido') };
+  }
+
+  const { data, error } = await supabase.rpc('reservar_numero_ronda_mesa', {
+    p_folio_id: folioId,
+  });
+
+  if (error) {
+    return { numeroRonda: null, numeroRondaSiguiente: null, error };
+  }
+
+  const numeroRonda = Number(data);
+  if (!Number.isFinite(numeroRonda) || numeroRonda < 1) {
+    return {
+      numeroRonda: null,
+      numeroRondaSiguiente: null,
+      error: new Error('Respuesta inválida al reservar número de ronda'),
+    };
+  }
+
+  const numeroRondaSiguiente = numeroRonda + 1;
+  sincronizarNumeroRondaSiguienteLocal(folioId, numeroRondaSiguiente);
+
+  return { numeroRonda, numeroRondaSiguiente, error: null };
+}
+
 export function sincronizarNumeroRondaSiguienteFolio(folioId, pedidosActivos) {
   const clave = String(folioId);
   const entrada = cacheFolios.get(clave);

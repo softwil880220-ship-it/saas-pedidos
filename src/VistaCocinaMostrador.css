@@ -30,6 +30,10 @@
   color: var(--texto-secundario, #6b7280);
 }
 
+.vista-cocina-error-actualizacion {
+  margin: 0 0 1rem;
+}
+
 .vista-cocina-columna-vacio {
   margin: 0;
   padding: 1rem 0;
