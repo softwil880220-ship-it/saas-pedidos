@@ -13,6 +13,7 @@ import {
   formatearProgramadoParaRepartidor,
 } from './pedidosProgramadosHelpers';
 import { supabase } from './supabase';
+import { formatearDireccionPedido } from './clientesHelpers';
 import { queryConNegocio } from './tenantHelpers';
 import { usePedidosRealtime } from './usePedidosRealtime';
 
@@ -122,7 +123,7 @@ export default function VistaRepartidor() {
                   </p>
                 ) : null}
                 <p className="vista-operativa-direccion">
-                  {pedido.direccion?.trim() || 'Sin dirección registrada'}
+                  {formatearDireccionPedido(pedido)}
                 </p>
                 <DesgloseProductosPedido pedido={pedido} mostrarTotal={false} />
                 <div className="vista-repartidor-acciones">

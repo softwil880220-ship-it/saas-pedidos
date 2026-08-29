@@ -7,6 +7,27 @@ function formatearCalleConNumero(direccion) {
   return calle || (numero ? `#${numero}` : '');
 }
 
+function etiquetaVisibleEnResumen(etiqueta) {
+  const valor = (etiqueta || '').trim();
+  if (!valor || valor.toLowerCase() === 'sin etiqueta') return '';
+  return valor;
+}
+
+function quitarPrefijoEtiquetaSinValor(texto) {
+  const valor = (texto || '').trim();
+  if (!valor) return '';
+
+  const indice = valor.indexOf(':');
+  if (indice <= 0) return valor;
+
+  const posibleEtiqueta = valor.slice(0, indice).trim();
+  if (posibleEtiqueta.toLowerCase() === 'sin etiqueta') {
+    return valor.slice(indice + 1).trim();
+  }
+
+  return valor;
+}
+
 export function formatearDireccionResumen(direccion) {
   if (!direccion) return '—';
 
@@ -25,8 +46,37 @@ export function formatearDireccionResumen(direccion) {
   const base = partes.length > 0 ? partes.join(', ') : 'Sin detalle';
   const referencia = (direccion.referencia || '').trim();
   const conReferencia = referencia ? `${base} — Ref: ${referencia}` : base;
-  const etiqueta = direccion.etiqueta?.trim();
+  const etiqueta = etiquetaVisibleEnResumen(direccion.etiqueta);
   return etiqueta ? `${etiqueta}: ${conReferencia}` : conReferencia;
+}
+
+export function formatearDireccionPedido(pedido) {
+  if (!pedido) return 'Sin dirección registrada';
+
+  const hayEstructurada = [
+    pedido.calle,
+    pedido.numero,
+    pedido.entre_calles,
+    pedido.direccion_referencia,
+    pedido.colonia,
+    pedido.municipio,
+  ].some((valor) => (valor || '').trim());
+
+  if (hayEstructurada) {
+    const resumen = formatearDireccionResumen({
+      etiqueta: pedido.etiqueta || '',
+      calle: pedido.calle || '',
+      numero: pedido.numero || '',
+      entre_calles: pedido.entre_calles || '',
+      referencia: pedido.direccion_referencia || '',
+      colonia: pedido.colonia || '',
+      municipio: pedido.municipio || '',
+    });
+    return resumen === '—' ? 'Sin dirección registrada' : resumen;
+  }
+
+  const direccion = quitarPrefijoEtiquetaSinValor(pedido.direccion);
+  return direccion || 'Sin dirección registrada';
 }
 
 export function formatearZonaConTarifa(zona) {
@@ -79,6 +129,7 @@ export function telefonoVacio(esPrincipal = false) {
 
 const CAMPOS_DIRECCION_DOMCILIO_VACIOS = {
   direccion: null,
+  etiqueta: null,
   calle: null,
   numero: null,
   entre_calles: null,
@@ -95,7 +146,7 @@ function telefonoPrincipalFormulario(cliente) {
 
 export function direccionClienteADireccionForm(direccion) {
   return {
-    etiqueta: direccion?.etiqueta?.trim() || 'Casa',
+    etiqueta: direccion?.etiqueta?.trim() || '',
     calle: direccion?.calle || '',
     numero: direccion?.numero || '',
     entre_calles: direccion?.entre_calles || '',
@@ -125,7 +176,7 @@ export function payloadDireccionDomicilioDesdeForm(form) {
     return { ...CAMPOS_DIRECCION_DOMCILIO_VACIOS };
   }
 
-  const etiqueta = form.etiqueta?.trim() || 'Casa';
+  const etiqueta = etiquetaVisibleEnResumen(form.etiqueta);
   const calle = form.calle?.trim() || null;
   const numero = form.numero?.trim() || null;
   const entre_calles = form.entre_calles?.trim() || null;
@@ -157,6 +208,7 @@ export function payloadDireccionDomicilioDesdeForm(form) {
 
   return {
     direccion,
+    etiqueta: etiqueta || null,
     calle,
     numero,
     entre_calles,

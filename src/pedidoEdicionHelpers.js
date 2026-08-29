@@ -173,7 +173,7 @@ export function construirSnapshotCarritoDesdePedido(pedido, productos, variantes
       telefono: pedido?.telefono || '',
       tipoEntrega: pedido?.tipo_entrega || TIPOS_ENTREGA.SUCURSAL,
       direccion: pedido?.direccion || '',
-      etiqueta: '',
+      etiqueta: pedido?.etiqueta?.trim() || '',
       calle: pedido?.calle || '',
       numero: pedido?.numero || '',
       entre_calles: pedido?.entre_calles || '',

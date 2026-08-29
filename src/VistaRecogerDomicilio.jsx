@@ -149,7 +149,7 @@ export default function VistaRecogerDomicilio({
         formActualizado.telefono = seleccion.telefono;
       }
       if (seleccion.etiqueta !== undefined) {
-        formActualizado.etiqueta = seleccion.etiqueta || 'Casa';
+        formActualizado.etiqueta = seleccion.etiqueta;
       }
       if (seleccion.calle !== undefined) {
         formActualizado.calle = seleccion.calle || '';
@@ -766,7 +766,8 @@ export default function VistaRecogerDomicilio({
                       name="etiqueta"
                       type="text"
                       placeholder="Casa, trabajo..."
-                      value={carrito.form.etiqueta || 'Casa'}
+                      autoComplete="off"
+                      value={carrito.form.etiqueta}
                       onChange={(evento) =>
                         carrito.setCampoCaptura('etiqueta', evento.target.value)
                       }
