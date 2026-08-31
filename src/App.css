@@ -3614,11 +3614,19 @@
 }
 
 .vista-repartidor-acciones {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-top: auto;
   width: 100%;
+  align-items: stretch;
+}
+
+.vista-repartidor-contacto-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 
 .vista-repartidor-entrega-prometida {
@@ -3761,15 +3769,50 @@
 }
 
 .vista-repartidor-acciones .vista-operativa-btn {
-  flex: 1;
-  width: auto;
+  width: 100%;
+  flex: none;
   margin-top: 0;
-  min-height: 3rem;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+.vista-repartidor-acciones > .entregado-btn {
+  height: 100%;
+  align-self: stretch;
 }
 
 .repartidor-whatsapp-btn {
   background: #25d366;
   font-size: 1.05rem;
+}
+
+.repartidor-llamar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.repartidor-llamar-btn:hover:not(.repartidor-llamar-btn-deshabilitado) {
+  background: #1d4ed8;
+}
+
+.repartidor-llamar-btn-deshabilitado {
+  background: #94a3b8;
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.repartidor-llamar-btn-icono {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
 }
 
 .vista-operativa-btn {
