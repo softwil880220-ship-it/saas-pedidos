@@ -36,6 +36,21 @@ function etiquetaFormaPago(valor) {
   return mapa[valor] || null;
 }
 
+function etiquetaRepartidorPedido(pedido, repartidores) {
+  const repartidorUsuarioId = pedido?.repartidor_usuario_id;
+  if (repartidorUsuarioId) {
+    const nombre = repartidores?.find((repartidor) => repartidor.id === repartidorUsuarioId)
+      ?.nombre;
+    return nombre ? `Repartidor: ${nombre}` : null;
+  }
+
+  if (pedido?.repartidor_externo === true) {
+    return 'Repartidor: Repartidor externo';
+  }
+
+  return null;
+}
+
 function fechaReferenciaPedidoRecoger(pedido) {
   if (pedido?.status === 'entregado') {
     return pedido.updated_at || pedido.created_at;
@@ -74,6 +89,7 @@ export default function TarjetaPedidoRecogerDomicilio({
     obtenerMensajeWhatsAppPedidoRecoger(pedido)
   );
   const fechaReferencia = fechaReferenciaPedidoRecoger(pedido);
+  const etiquetaRepartidor = etiquetaRepartidorPedido(pedido, repartidores);
 
   const badgeClass =
     pedido.status === 'por-aceptar'
@@ -126,6 +142,10 @@ export default function TarjetaPedidoRecogerDomicilio({
         <p className="recoger-domicilio-recibo-meta">
           Forma de pago: {etiquetaFormaPago(pedido.forma_pago)}
         </p>
+      ) : null}
+
+      {etiquetaRepartidor ? (
+        <p className="recoger-domicilio-recibo-meta">{etiquetaRepartidor}</p>
       ) : null}
 
       <div className="mostrador-recibo-lineas" role="list">
