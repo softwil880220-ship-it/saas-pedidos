@@ -1,166 +1,248 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
+import './VistaCocinaMostrador.css';
 import BotonCerrarSesion from './BotonCerrarSesion';
 import { useAuth } from './AuthContext';
+import { cargarJornadaAbierta } from './jornadaHelpers';
+import { cargarTabRepartidor, persistirTabRepartidor } from './pedidoCarritoStorage';
+import { formatearMoneda, siguienteStatus } from './pedidosShared';
+import { formatearEncabezadoGrupoJornada } from './reportesHelpers';
 import {
-  construirUrlWhatsApp,
-  DesgloseProductosPedido,
-  esPedidoWhatsapp,
-  siguienteStatus,
-} from './pedidosShared';
-import {
-  esPedidoProgramado,
-  formatearProgramadoParaRepartidor,
-} from './pedidosProgramadosHelpers';
+  TABS_REPARTIDOR,
+  concentradoCobrosPorFormaPago,
+  filtrarPedidosRepartidorPorTab,
+  filtrarPedidosRepartidorRealtime,
+  resumenEntregadosRepartidor,
+} from './repartidorHelpers';
 import { supabase } from './supabase';
-import { formatearDireccionPedido } from './clientesHelpers';
+import TarjetaPedidoRepartidor from './TarjetaPedidoRepartidor';
 import { queryConNegocio } from './tenantHelpers';
-import { usePedidosRealtime } from './usePedidosRealtime';
+import useVariantesCtx from './useVariantesCtx';
+import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 
-function formatearHora(createdAt) {
-  if (!createdAt) return '';
-  return new Date(createdAt).toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+const compararPedidosPorEntregar = (a, b) => {
+  const fechaA = new Date(a.created_at || 0);
+  const fechaB = new Date(b.created_at || 0);
+  return fechaA - fechaB;
+};
 
-const filtrarPedidosRepartidor = (pedido) =>
-  esPedidoWhatsapp(pedido) && pedido.status === 'enviado';
-
-const compararPedidosRepartidor = (a, b) =>
-  new Date(a.created_at || 0) - new Date(b.created_at || 0);
+const compararPedidosEntregados = (a, b) => {
+  const fechaA = new Date(a.entregado_en || a.created_at || 0);
+  const fechaB = new Date(b.entregado_en || b.created_at || 0);
+  return fechaB - fechaA;
+};
 
 export default function VistaRepartidor() {
-  const { negocioId } = useAuth();
+  const { negocioId, usuario, rol } = useAuth();
+  const [tabActivo, setTabActivo] = useState(() => cargarTabRepartidor());
+  const [jornadaAbierta, setJornadaAbierta] = useState(null);
+  const [cargandoJornada, setCargandoJornada] = useState(true);
+  const [actualizandoId, setActualizandoId] = useState(null);
+
+  const contextoVisibilidad = useMemo(
+    () => ({
+      usuarioId: usuario?.id ?? null,
+      rol: rol ?? null,
+    }),
+    [usuario?.id, rol]
+  );
+
   const { pedidos, setPedidos, cargando } = usePedidosRealtime({
     channelName: 'repartidor-pedidos',
     negocioId,
-    filtrar: filtrarPedidosRepartidor,
-    comparar: compararPedidosRepartidor,
+    filtrar: filtrarPedidosRepartidorRealtime,
   });
-  const [actualizandoId, setActualizandoId] = useState(null);
+
+  const { productos } = useProductosRealtime({ negocioId });
+  const variantesCtx = useVariantesCtx();
+
+  useEffect(() => {
+    persistirTabRepartidor(tabActivo);
+  }, [tabActivo]);
+
+  const recargarJornadaAbierta = useCallback(async () => {
+    if (!negocioId) {
+      setJornadaAbierta(null);
+      setCargandoJornada(false);
+      return;
+    }
+
+    setCargandoJornada(true);
+    const { data } = await cargarJornadaAbierta(supabase, negocioId);
+    setJornadaAbierta(data);
+    setCargandoJornada(false);
+  }, [negocioId]);
+
+  useEffect(() => {
+    void recargarJornadaAbierta();
+  }, [recargarJornadaAbierta]);
+
+  const pedidosPorEntregar = useMemo(() => {
+    const filtrados = filtrarPedidosRepartidorPorTab(
+      pedidos,
+      'por-entregar',
+      jornadaAbierta,
+      contextoVisibilidad
+    );
+    return [...filtrados].sort(compararPedidosPorEntregar);
+  }, [pedidos, jornadaAbierta, contextoVisibilidad]);
+
+  const pedidosEntregados = useMemo(() => {
+    const filtrados = filtrarPedidosRepartidorPorTab(
+      pedidos,
+      'entregados',
+      jornadaAbierta,
+      contextoVisibilidad
+    );
+    return [...filtrados].sort(compararPedidosEntregados);
+  }, [pedidos, jornadaAbierta, contextoVisibilidad]);
+
+  const conteosTabs = useMemo(
+    () => ({
+      'por-entregar': pedidosPorEntregar.length,
+      entregados: pedidosEntregados.length,
+    }),
+    [pedidosPorEntregar.length, pedidosEntregados.length]
+  );
+
+  const resumenEntregados = useMemo(
+    () => resumenEntregadosRepartidor(pedidosEntregados),
+    [pedidosEntregados]
+  );
+
+  const concentradoCobros = useMemo(
+    () => concentradoCobrosPorFormaPago(pedidosEntregados),
+    [pedidosEntregados]
+  );
 
   const marcarEntregado = async (pedido) => {
     const nuevoStatus = siguienteStatus(pedido.status, pedido.tipo_entrega);
     if (nuevoStatus === pedido.status) return;
 
+    const entregadoEn = new Date().toISOString();
+
     setActualizandoId(pedido.id);
     const { error } = await queryConNegocio(
-      supabase.from('pedidos').update({ status: nuevoStatus }).eq('id', pedido.id),
+      supabase
+        .from('pedidos')
+        .update({ status: nuevoStatus, entregado_en: entregadoEn })
+        .eq('id', pedido.id),
       negocioId
     );
 
     if (!error) {
-      setPedidos((prev) => prev.filter((item) => item.id !== pedido.id));
+      setPedidos((prev) =>
+        prev.map((item) =>
+          item.id === pedido.id
+            ? { ...item, status: nuevoStatus, entregado_en: entregadoEn }
+            : item
+        )
+      );
     }
     setActualizandoId(null);
   };
+
+  const pedidosVisibles = tabActivo === 'entregados' ? pedidosEntregados : pedidosPorEntregar;
+  const subtitulo =
+    tabActivo === 'entregados'
+      ? 'Entregas completadas en la jornada activa'
+      : 'Pedidos en camino · actualización en tiempo real';
 
   return (
     <div className="vista-operativa vista-repartidor">
       <header className="vista-operativa-header vista-operativa-header-con-acciones">
         <div className="vista-operativa-header-contenido">
           <h1>Repartidor</h1>
-          <p className="vista-operativa-subtitulo">
-            Pedidos en camino · actualización en tiempo real
-          </p>
-          <span className="vista-operativa-contador">{pedidos.length} pendientes</span>
+          <p className="vista-operativa-subtitulo">{subtitulo}</p>
+          {cargandoJornada ? (
+            <p className="vista-repartidor-jornada">Cargando jornada...</p>
+          ) : jornadaAbierta ? (
+            <p className="vista-repartidor-jornada header-stat-fecha">
+              {formatearEncabezadoGrupoJornada(jornadaAbierta)}
+            </p>
+          ) : (
+            <p className="vista-repartidor-jornada vista-repartidor-jornada-inactiva">
+              Sin jornada activa
+            </p>
+          )}
         </div>
         <BotonCerrarSesion />
       </header>
 
+      <nav className="vista-cocina-columna-tabs vista-repartidor-tabs" aria-label="Entregas">
+        {TABS_REPARTIDOR.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className={`vista-cocina-columna-tab${tabActivo === value ? ' activo' : ''}`}
+            onClick={() => setTabActivo(value)}
+          >
+            {label} ({conteosTabs[value] ?? 0})
+          </button>
+        ))}
+      </nav>
+
+      {tabActivo === 'entregados' ? (
+        <section className="vista-repartidor-resumen-entregados" aria-label="Resumen de entregas">
+          {!jornadaAbierta?.id ? (
+            <p className="vista-operativa-vacio">No hay jornada activa</p>
+          ) : (
+            <>
+              <div className="vista-repartidor-resumen-totales">
+                <p>
+                  <strong>{resumenEntregados.cantidad}</strong> pedido
+                  {resumenEntregados.cantidad === 1 ? '' : 's'} entregado
+                  {resumenEntregados.cantidad === 1 ? '' : 's'}
+                </p>
+                <p className="vista-repartidor-resumen-monto">
+                  Total entregado: {formatearMoneda(resumenEntregados.suma)}
+                </p>
+              </div>
+              {concentradoCobros.length > 0 ? (
+                <div className="vista-repartidor-concentrado-cobros">
+                  <h2 className="vista-repartidor-concentrado-titulo">Concentrado de cobros</h2>
+                  <ul className="vista-repartidor-concentrado-lista">
+                    {concentradoCobros.map((item) => (
+                      <li key={item.forma} className="vista-repartidor-concentrado-fila">
+                        <span>
+                          {item.etiqueta}: {formatearMoneda(item.total)}
+                        </span>
+                        <span className="vista-repartidor-concentrado-cantidad">
+                          {item.cantidad} pedido{item.cantidad === 1 ? '' : 's'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : null}
+
       {cargando ? (
         <p className="vista-operativa-vacio">Cargando pedidos...</p>
-      ) : pedidos.length === 0 ? (
-        <p className="vista-operativa-vacio">No hay pedidos enviados</p>
+      ) : pedidosVisibles.length === 0 ? (
+        <p className="vista-operativa-vacio">
+          {tabActivo === 'entregados'
+            ? jornadaAbierta?.id
+              ? 'No hay entregas en esta jornada'
+              : 'No hay jornada activa'
+            : 'No hay pedidos por entregar'}
+        </p>
       ) : (
         <div className="vista-operativa-grid">
-          {pedidos.map((pedido) => {
-            const urlWhatsApp = construirUrlWhatsApp(pedido.telefono);
-
-            return (
-              <article key={pedido.id} className="vista-operativa-tarjeta">
-                <div className="vista-operativa-tarjeta-cabecera">
-                  <h2 className="vista-operativa-cliente">{pedido.cliente}</h2>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      flexShrink: 0,
-                      gap: '0.15rem',
-                    }}
-                  >
-                    {pedido.folio !== null && (
-                      <span
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 500,
-                          color: '#64748b',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pedido.folio}
-                      </span>
-                    )}
-                    {pedido.created_at && (
-                      <time
-                        className="vista-operativa-hora"
-                        dateTime={pedido.created_at}
-                      >
-                        {formatearHora(pedido.created_at)}
-                      </time>
-                    )}
-                  </div>
-                </div>
-                {pedido.telefono?.trim() && (
-                  <p className="vista-operativa-telefono">{pedido.telefono.trim()}</p>
-                )}
-                {esPedidoProgramado(pedido) ? (
-                  <p className="vista-repartidor-entrega-prometida">
-                    {formatearProgramadoParaRepartidor(pedido.programado_para)}
-                  </p>
-                ) : null}
-                <p className="vista-operativa-direccion">
-                  {formatearDireccionPedido(pedido)}
-                </p>
-                <DesgloseProductosPedido pedido={pedido} mostrarTotal={false} />
-                <div className="vista-repartidor-acciones">
-                  <a
-                    className={`vista-operativa-btn whatsapp-btn repartidor-whatsapp-btn${
-                      urlWhatsApp ? '' : ' whatsapp-btn-deshabilitado'
-                    }`}
-                    href={urlWhatsApp || '#whatsapp'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-disabled={!urlWhatsApp}
-                    title={
-                      urlWhatsApp
-                        ? 'Abrir chat de WhatsApp con el cliente'
-                        : 'Este pedido no tiene teléfono registrado'
-                    }
-                    onClick={(e) => {
-                      if (!urlWhatsApp) e.preventDefault();
-                    }}
-                  >
-                    <span className="whatsapp-btn-icono" aria-hidden="true">
-                      💬
-                    </span>
-                    WhatsApp
-                  </a>
-                  <button
-                    type="button"
-                    className="vista-operativa-btn entregado-btn"
-                    disabled={actualizandoId === pedido.id}
-                    onClick={() => marcarEntregado(pedido)}
-                  >
-                    {actualizandoId === pedido.id ? 'Guardando...' : 'Entregado'}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+          {pedidosVisibles.map((pedido) => (
+            <TarjetaPedidoRepartidor
+              key={pedido.id}
+              pedido={pedido}
+              modo={tabActivo === 'entregados' ? 'entregado' : 'por-entregar'}
+              productos={productos}
+              variantesCtx={variantesCtx}
+              actualizandoId={actualizandoId}
+              onMarcarEntregado={marcarEntregado}
+            />
+          ))}
         </div>
       )}
     </div>

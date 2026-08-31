@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   TAB_MOSTRADOR: 'pos_tab_mostrador',
   TAB_MESAS: 'pos_tab_mesas',
   TAB_RECOGER_DOMICILIO: 'pos_tab_recoger_domicilio',
+  TAB_REPARTIDOR: 'pos_tab_repartidor',
 };
 
 const TABS_MOSTRADOR_VALIDOS = new Set(['nuevo', 'pendientes', 'entregados']);
@@ -21,6 +22,8 @@ const TABS_RECOGER_DOMICILIO_VALIDOS = new Set([
   'pendientes',
   'entregados',
 ]);
+
+const TABS_REPARTIDOR_VALIDOS = new Set(['por-entregar', 'entregados']);
 
 export const CLIENTE_MOSTRADOR = 'Mostrador';
 
@@ -427,6 +430,29 @@ export function cargarTabRecogerDomicilio() {
     return TABS_RECOGER_DOMICILIO_VALIDOS.has(tab) ? tab : 'nuevo';
   } catch {
     return 'nuevo';
+  }
+}
+
+export function persistirTabRepartidor(tab) {
+  if (typeof window === 'undefined' || !TABS_REPARTIDOR_VALIDOS.has(tab)) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.TAB_REPARTIDOR, tab);
+  } catch {
+    // Ignorar errores de almacenamiento local.
+  }
+}
+
+export function cargarTabRepartidor() {
+  if (typeof window === 'undefined') return 'por-entregar';
+
+  try {
+    const tab = window.localStorage.getItem(STORAGE_KEYS.TAB_REPARTIDOR);
+    return TABS_REPARTIDOR_VALIDOS.has(tab) ? tab : 'por-entregar';
+  } catch {
+    return 'por-entregar';
   }
 }
 

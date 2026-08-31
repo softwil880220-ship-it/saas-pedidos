@@ -93,6 +93,7 @@ describe('recogerDomicilioHelpers', () => {
         status: 'enviado',
         repartidor_externo: true,
         repartidor_usuario_id: null,
+        repartidor_asignado_en: expect.any(String),
       })
     );
   });

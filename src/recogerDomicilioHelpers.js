@@ -157,6 +157,7 @@ export function construirPayloadAsignacionRepartidor(
     status: 'enviado',
     repartidor_usuario_id: repartidorExterno ? null : repartidorUsuarioId,
     repartidor_externo: Boolean(repartidorExterno),
+    repartidor_asignado_en: new Date().toISOString(),
     ...payloadStatusCocinasParaStatusGlobal(pedido, 'enviado'),
   };
 }
