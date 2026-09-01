@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   buscarProductoPorId,
   calcularSubtotal,
+  keyRenderLineaCarrito,
   redondearMoneda,
 } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
@@ -79,6 +80,8 @@ export default function PedidoLineasCarrito({
             const subtotal = calcularSubtotal(linea, productos, variantesCtx);
             const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));
             const esPorPeso = esProductoPorPeso(productoSeleccionado);
+            const ctxRender = { ...variantesCtx, productos };
+            const keyRender = keyRenderLineaCarrito(linea, ctxRender, indice);
             const textoLinea =
               esPorPeso && subtotal > 0
                 ? formatearLineaProductoVenta({
@@ -90,7 +93,7 @@ export default function PedidoLineasCarrito({
                 : null;
 
             return (
-              <div key={linea.id} className="pedido-linea-contenedor">
+              <div key={keyRender} className="pedido-linea-contenedor">
                 <div className="pedido-linea-cabecera">
                   <div className="pedido-linea-numero">#{indice + 1}</div>
                   <button
@@ -123,7 +126,7 @@ export default function PedidoLineasCarrito({
                         onActualizarCantidad?.(linea.id, valor)
                       }
                       productoNombre={productoSeleccionado.nombre}
-                      idBase={`cantidad-${linea.id}`}
+                      idBase={`cantidad-${keyRender}`}
                     />
                   ) : (
                     <>
@@ -172,7 +175,7 @@ export default function PedidoLineasCarrito({
                 </div>
                 {onCambiarVariante && productoSeleccionado ? (
                   <VariantesPedido
-                    key={`variantes-${linea.id}-${linea.productoId}`}
+                    key={`variantes-${keyRender}-${linea.productoId}`}
                     linea={linea}
                     producto={productoSeleccionado}
                     variantesCtx={variantesCtx}

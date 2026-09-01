@@ -1,4 +1,8 @@
-import { aplicarConsolidacionCarrito } from './pedidoCarritoCalculos';
+import {
+  aplicarConsolidacionCarrito,
+  idEstableLineaCarrito,
+  keyRenderLineaCarrito,
+} from './pedidoCarritoCalculos';
 
 const productos = [
   {
@@ -6,6 +10,16 @@ const productos = [
     nombre: 'Pizza',
     precio: 100,
     unidad_venta: 'pieza',
+    cocina: 'cocina1',
+  },
+];
+
+const productosPeso = [
+  {
+    id: 'jam',
+    nombre: 'Jamón',
+    precio: 200,
+    unidad_venta: 'peso',
     cocina: 'cocina1',
   },
 ];
@@ -22,6 +36,74 @@ const variantesCtx = {
 };
 
 const ctx = { ...variantesCtx, productos };
+const ctxPeso = { ...variantesCtx, productos: productosPeso };
+
+describe('keyRenderLineaCarrito', () => {
+  test('permanece estable al cambiar cantidad en producto por peso', () => {
+    const lineaVacia = {
+      id: 'peso:jam:cat1::',
+      productoId: 'jam',
+      cantidad: '',
+      variantes: {},
+    };
+    const lineaConGramos = { ...lineaVacia, cantidad: '500' };
+
+    const keyVacia = keyRenderLineaCarrito(lineaVacia, ctxPeso, 0);
+    const keyConGramos = keyRenderLineaCarrito(lineaConGramos, ctxPeso, 0);
+
+    expect(keyVacia).toBe(keyConGramos);
+    expect(idEstableLineaCarrito(lineaVacia, ctxPeso)).not.toBe(
+      idEstableLineaCarrito(lineaConGramos, ctxPeso)
+    );
+  });
+
+  test('cambia cuando cambian las variantes en producto por peso', () => {
+    const sinVariantes = {
+      id: 'peso:jam:cat1::500',
+      productoId: 'jam',
+      cantidad: '500',
+      variantes: {},
+    };
+    const conVariantes = {
+      ...sinVariantes,
+      variantes: { cat1: ['v1'] },
+    };
+
+    expect(keyRenderLineaCarrito(sinVariantes, ctxPeso, 0)).not.toBe(
+      keyRenderLineaCarrito(conVariantes, ctxPeso, 0)
+    );
+  });
+
+  test('devuelve linea.id para productos por pieza', () => {
+    const linea = {
+      id: 'pieza:p1|cat1:v1',
+      productoId: 'p1',
+      cantidad: '2',
+      variantes: { cat1: ['v1'] },
+    };
+
+    expect(keyRenderLineaCarrito(linea, ctx, 0)).toBe(linea.id);
+  });
+
+  test('distingue dos líneas por peso con mismo producto y huella por índice', () => {
+    const lineaA = {
+      id: 'peso:jam:cat1::500',
+      productoId: 'jam',
+      cantidad: '500',
+      variantes: {},
+    };
+    const lineaB = {
+      id: 'peso:jam:cat1::300',
+      productoId: 'jam',
+      cantidad: '300',
+      variantes: {},
+    };
+
+    expect(keyRenderLineaCarrito(lineaA, ctxPeso, 0)).not.toBe(
+      keyRenderLineaCarrito(lineaB, ctxPeso, 1)
+    );
+  });
+});
 
 describe('aplicarConsolidacionCarrito', () => {
   test('asigna ids únicos cuando dos líneas del mismo producto tienen ids duplicados y distinta huella', () => {

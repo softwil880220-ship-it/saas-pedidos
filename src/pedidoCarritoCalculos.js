@@ -88,6 +88,19 @@ export function consolidarLineasPorProducto(lineas, ctx) {
   return orden.map((clave) => map.get(clave));
 }
 
+/** Key de render React: estable al editar gramos/monto; no incluye cantidad. */
+export function keyRenderLineaCarrito(linea, ctx, indice = 0) {
+  const productoId = String(linea?.productoId ?? '');
+  const producto = buscarProductoPorId(ctx?.productos || [], productoId);
+
+  if (!esProductoPorPeso(producto)) {
+    return String(linea?.id ?? indice);
+  }
+
+  const huella = huellaVariantesLineaCarrito(linea, ctx);
+  return `peso-render:${productoId}:${huella}:${indice}`;
+}
+
 /** Id estable para React/handlers: una clave de consolidación → un id único. */
 export function idEstableLineaCarrito(linea, ctx) {
   const productoId = String(linea.productoId);
