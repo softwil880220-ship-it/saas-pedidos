@@ -512,6 +512,9 @@ export {
   setUltimoSnapshotRemotoAplicado,
   sincronizarNumeroRondaSiguienteLocal,
   debeSuprimirPersistEco,
+  debeIgnorarActualizacionRemotaCarrito,
+  obtenerSnapshotCarritoDesdeCache,
+  registrarSnapshotLocalActivo,
   sincronizarFilaDesdeRealtime,
 } from './mesasFoliosStorage';
 

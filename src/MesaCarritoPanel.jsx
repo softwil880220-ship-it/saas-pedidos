@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ejecutarEnvioCocina } from './ejecutarEnvioCocina';
 import useCarritoPedido from './useCarritoPedido';
+import { aplicarConsolidacionCarrito } from './pedidoCarritoCalculos';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import MesaRondasEnviadas from './MesaRondasEnviadas.jsx';
@@ -25,6 +26,8 @@ import {
   persistirEstadoCobroMesa,
   serializarSnapshotParaComparacion,
   setUltimoSnapshotRemotoAplicado,
+  debeIgnorarActualizacionRemotaCarrito,
+  registrarSnapshotLocalActivo,
 } from './pedidoCarritoStorage';
 import { usePedidosFolioMesa } from './usePedidosFolioMesa';
 
@@ -146,6 +149,16 @@ export default function MesaCarritoPanel({
     productos,
     variantesCtx,
   });
+
+  const ctxConsolidacion = useMemo(
+    () => ({ ...variantesCtx, productos }),
+    [variantesCtx, productos]
+  );
+
+  if (folioIdProp && !folioAjenoEnmascarado) {
+    registrarSnapshotLocalActivo(folioIdProp, carrito.snapshot);
+  }
+
   const [enviandoCocina, setEnviandoCocina] = useState(false);
   const [errorEnvioCocina, setErrorEnvioCocina] = useState(null);
   const [errorCreacionFolio, setErrorCreacionFolio] = useState(null);
@@ -157,6 +170,42 @@ export default function MesaCarritoPanel({
   const modalCobroAbiertoRef = useRef(modalCobroAbierto);
   const folioIdAnteriorRef = useRef(folioId);
   const mesaBloqueadaPorJornadaCerrada = !jornadaAbierta?.id;
+
+  const actualizarCantidadLineaMesa = useCallback(
+    (lineaId, valor) => {
+      if (mesaBloqueadaPorJornadaCerrada) {
+        setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS);
+        return;
+      }
+
+      if (folioIdProp && !folioAjenoEnmascarado) {
+        const snapshotProyectado = {
+          ...carrito.snapshot,
+          form: {
+            ...carrito.snapshot.form,
+            lineas: aplicarConsolidacionCarrito(
+              (carrito.snapshot.form?.lineas || []).map((linea) =>
+                linea.id === lineaId ? { ...linea, cantidad: valor } : linea
+              ),
+              ctxConsolidacion
+            ),
+          },
+        };
+
+        registrarSnapshotLocalActivo(folioIdProp, snapshotProyectado);
+      }
+
+      carrito.actualizarCantidadLinea(lineaId, valor);
+    },
+    [
+      mesaBloqueadaPorJornadaCerrada,
+      folioIdProp,
+      folioAjenoEnmascarado,
+      carrito.snapshot,
+      carrito.actualizarCantidadLinea,
+      ctxConsolidacion,
+    ]
+  );
 
   const actualizarModalCobroAbierto = useCallback((abierto) => {
     modalCobroAbiertoRef.current = abierto;
@@ -359,6 +408,13 @@ export default function MesaCarritoPanel({
       return;
     }
 
+    const entrante = construirSnapshotDesdeCache(folioIdProp);
+    const localSerActual = serializarSnapshotParaComparacion(carrito.snapshot);
+
+    if (debeIgnorarActualizacionRemotaCarrito(folioIdProp, entrante, localSerActual)) {
+      return;
+    }
+
     aplicarSnapshotExternoDesdeCache(folioIdProp, carrito, {
       normalizarLineas: false,
     });
@@ -367,6 +423,7 @@ export default function MesaCarritoPanel({
     folioCacheActualizado,
     carrito.pausarPersistencia,
     carrito.aplicarSnapshot,
+    carrito.snapshot,
   ]);
 
   useEffect(() => {
@@ -816,7 +873,7 @@ export default function MesaCarritoPanel({
             onActualizarCantidad={
               mesaBloqueadaPorJornadaCerrada
                 ? () => setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_OPERAR_MESAS)
-                : carrito.actualizarCantidadLinea
+                : actualizarCantidadLineaMesa
             }
             onEliminarLinea={
               mesaBloqueadaPorJornadaCerrada

@@ -12,6 +12,8 @@ import {
   obtenerNumerosMesaOcupados,
   persistirMesaActiva,
   persistirTabMesas,
+  debeIgnorarActualizacionRemotaCarrito,
+  obtenerSnapshotCarritoDesdeCache,
   MOTIVO_CIERRE_FOLIO_MESA,
   resolverMotivoCierreFolioDesdeRealtime,
   verificarFolioAbiertoEnServidor,
@@ -145,6 +147,12 @@ export default function VistaMesas({
       void sincronizarOcupacion();
 
       if (detalle?.folioId && detalle.eventType === 'UPDATE') {
+        const entrante = obtenerSnapshotCarritoDesdeCache(detalle.folioId);
+
+        if (entrante && debeIgnorarActualizacionRemotaCarrito(detalle.folioId, entrante)) {
+          return;
+        }
+
         setFolioCacheActualizado((prev) => ({
           revision: prev.revision + 1,
           folioId: String(detalle.folioId),

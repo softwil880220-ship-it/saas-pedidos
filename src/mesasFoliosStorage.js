@@ -1,3 +1,4 @@
+import { parseCantidadPieza, parseGramosLinea } from './productoUnidadVenta';
 import { TIPOS_ENTREGA, calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
 import { supabase } from './supabase';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
@@ -23,6 +24,11 @@ let negocioIdCache = null;
 let usuarioIdCache = null;
 let rolCache = null;
 let ultimoSnapshotRemotoAplicadoSerializado = null;
+
+const MAX_ECO_FLUSH_PROPIOS = 5;
+const ecosFlushPropioPorFolio = new Map();
+const ecosPesoFlushPropioPorFolio = new Map();
+const snapshotLocalActivoPorFolio = new Map();
 
 const ROLES_CON_ACCESO_CARRITO_MESA = new Set(['dueno', 'administrador']);
 
@@ -146,6 +152,309 @@ export function debeSuprimirPersistEco(snapshot) {
   return (
     serializarSnapshotParaComparacion(snapshot) === ultimoSnapshotRemotoAplicadoSerializado
   );
+}
+
+function lineasConProductoId(snapshot) {
+  return (snapshot?.form?.lineas || []).filter((linea) => linea?.productoId);
+}
+
+function huellaVariantesDesdeLinea(linea) {
+  const variantes = linea?.variantes;
+
+  if (!variantes || typeof variantes !== 'object') {
+    return '';
+  }
+
+  return Object.keys(variantes)
+    .map(String)
+    .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    .map((categoriaId) => {
+      const ids = [...(variantes[categoriaId] || [])]
+        .map(String)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+
+      return `${categoriaId}:${ids.join(',')}`;
+    })
+    .join(';');
+}
+
+function idEsLineaPesoPorPrefijo(linea) {
+  return String(linea?.id ?? '').startsWith('peso:');
+}
+
+function lineKeyPeso(linea) {
+  return `${String(linea.productoId)}|${huellaVariantesDesdeLinea(linea)}`;
+}
+
+function lineKeyPieza(linea) {
+  return `${String(linea.productoId)}|${huellaVariantesDesdeLinea(linea)}|${parseCantidadPieza(linea.cantidad)}`;
+}
+
+function normalizarGramosPeso(cantidad) {
+  const gramos = parseGramosLinea(cantidad);
+  return gramos > 0 ? String(gramos) : '';
+}
+
+function construirPesoKeysParaPar(snapshotA, snapshotB) {
+  const pesoKeys = new Set();
+
+  for (const snapshot of [snapshotA, snapshotB]) {
+    for (const linea of lineasConProductoId(snapshot)) {
+      if (idEsLineaPesoPorPrefijo(linea)) {
+        pesoKeys.add(lineKeyPeso(linea));
+      }
+    }
+  }
+
+  return pesoKeys;
+}
+
+function esLineaPesoParaComparacion(linea, pesoKeys) {
+  if (idEsLineaPesoPorPrefijo(linea)) {
+    return true;
+  }
+
+  return pesoKeys.has(lineKeyPeso(linea));
+}
+
+function esLineaPesoEnSnapshotFlush(linea) {
+  if (idEsLineaPesoPorPrefijo(linea)) {
+    return true;
+  }
+
+  return normalizarGramosPeso(linea?.cantidad) !== '';
+}
+
+function snapshotAObjeto(snapshotOrSer) {
+  if (typeof snapshotOrSer === 'string') {
+    return JSON.parse(snapshotOrSer);
+  }
+
+  return snapshotOrSer;
+}
+
+function extraerFirmasSemantica(snapshot, pesoKeys) {
+  const peso = new Map();
+  const pieza = new Map();
+
+  for (const linea of lineasConProductoId(snapshot)) {
+    if (esLineaPesoParaComparacion(linea, pesoKeys)) {
+      peso.set(lineKeyPeso(linea), normalizarGramosPeso(linea.cantidad));
+      continue;
+    }
+
+    pieza.set(lineKeyPieza(linea), parseCantidadPieza(linea.cantidad));
+  }
+
+  return {
+    pagoRecibido: snapshot?.pagoRecibido ?? '',
+    peso,
+    pieza,
+  };
+}
+
+function mapasSemanticaIguales(mapA, mapB) {
+  if (mapA.size !== mapB.size) {
+    return false;
+  }
+
+  for (const [clave, valor] of mapA) {
+    if (mapB.get(clave) !== valor) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function snapshotsSemanticallyEquivalent(snapshotA, snapshotB) {
+  const pesoKeys = construirPesoKeysParaPar(snapshotA, snapshotB);
+  const firmaA = extraerFirmasSemantica(snapshotA, pesoKeys);
+  const firmaB = extraerFirmasSemantica(snapshotB, pesoKeys);
+
+  if (firmaA.pagoRecibido !== firmaB.pagoRecibido) {
+    return false;
+  }
+
+  if (!mapasSemanticaIguales(firmaA.pieza, firmaB.pieza)) {
+    return false;
+  }
+
+  return mapasSemanticaIguales(firmaA.peso, firmaB.peso);
+}
+
+function esEcoPesoObsoletoPropio(folioId, incoming, local) {
+  if (snapshotsSemanticallyEquivalent(incoming, local)) {
+    return false;
+  }
+
+  const pesoKeys = construirPesoKeysParaPar(incoming, local);
+  const firmaIncoming = extraerFirmasSemantica(incoming, pesoKeys);
+  const firmaLocal = extraerFirmasSemantica(local, pesoKeys);
+
+  if (firmaIncoming.pagoRecibido !== firmaLocal.pagoRecibido) {
+    return false;
+  }
+
+  if (!mapasSemanticaIguales(firmaIncoming.pieza, firmaLocal.pieza)) {
+    return false;
+  }
+
+  const clavesPesoIncoming = [...firmaIncoming.peso.keys()].sort((a, b) =>
+    a.localeCompare(b, 'es', { numeric: true })
+  );
+  const clavesPesoLocal = [...firmaLocal.peso.keys()].sort((a, b) =>
+    a.localeCompare(b, 'es', { numeric: true })
+  );
+
+  if (clavesPesoIncoming.length !== clavesPesoLocal.length) {
+    return false;
+  }
+
+  if (clavesPesoIncoming.join('\0') !== clavesPesoLocal.join('\0')) {
+    return false;
+  }
+
+  const anillos = ecosPesoFlushPropioPorFolio.get(String(folioId));
+  if (!anillos) {
+    return false;
+  }
+
+  let hayDiferenciaPeso = false;
+
+  for (const lineKey of clavesPesoIncoming) {
+    const gramoIncoming = firmaIncoming.peso.get(lineKey);
+    const gramoLocal = firmaLocal.peso.get(lineKey);
+
+    if (gramoIncoming === gramoLocal) {
+      continue;
+    }
+
+    hayDiferenciaPeso = true;
+
+    const historial = anillos.get(lineKey);
+    if (!historial?.includes(gramoIncoming)) {
+      return false;
+    }
+  }
+
+  return hayDiferenciaPeso;
+}
+
+function registrarPesoFlushPropio(folioId, snapshot) {
+  const clave = String(folioId);
+  const map = ecosPesoFlushPropioPorFolio.get(clave) ?? new Map();
+
+  for (const linea of lineasConProductoId(snapshot)) {
+    if (!esLineaPesoEnSnapshotFlush(linea)) {
+      continue;
+    }
+
+    const lineKey = lineKeyPeso(linea);
+    const gramo = normalizarGramosPeso(linea.cantidad);
+
+    if (!gramo) {
+      continue;
+    }
+
+    const anillo = map.get(lineKey) ?? [];
+    const sinDuplicadoReciente = anillo.filter((valor) => valor !== gramo);
+    map.set(lineKey, [...sinDuplicadoReciente, gramo].slice(-MAX_ECO_FLUSH_PROPIOS));
+  }
+
+  if (map.size > 0) {
+    ecosPesoFlushPropioPorFolio.set(clave, map);
+  }
+}
+
+function encolarEcoFlushPropio(folioId, serializado) {
+  const clave = String(folioId);
+  const cola = ecosFlushPropioPorFolio.get(clave) ?? [];
+  const sinDuplicadoReciente = cola.filter((item) => item !== serializado);
+  const actualizada = [...sinDuplicadoReciente, serializado].slice(-MAX_ECO_FLUSH_PROPIOS);
+  ecosFlushPropioPorFolio.set(clave, actualizada);
+}
+
+export function registrarSnapshotFlushPropio(folioId, snapshot) {
+  if (!folioId || !snapshot) return;
+
+  encolarEcoFlushPropio(folioId, serializarSnapshotParaComparacion(snapshot));
+  registrarPesoFlushPropio(folioId, snapshot);
+}
+
+export function esEcoFlushPropio(folioId, serializadoEntrante) {
+  if (!folioId || !serializadoEntrante) return false;
+
+  const cola = ecosFlushPropioPorFolio.get(String(folioId)) ?? [];
+  return cola.includes(serializadoEntrante);
+}
+
+export function registrarSnapshotLocalActivo(folioId, snapshot) {
+  if (!folioId || !snapshot) return;
+
+  snapshotLocalActivoPorFolio.set(
+    String(folioId),
+    typeof snapshot === 'string' ? snapshot : serializarSnapshotParaComparacion(snapshot)
+  );
+}
+
+export function obtenerSnapshotLocalActivo(folioId) {
+  if (!folioId) return null;
+
+  return snapshotLocalActivoPorFolio.get(String(folioId)) ?? null;
+}
+
+export function obtenerSnapshotCarritoDesdeCache(folioId) {
+  const entrada = cacheFolios.get(String(folioId));
+
+  if (!entrada?.form) {
+    return null;
+  }
+
+  return {
+    form: entrada.form,
+    pagoRecibido: entrada.pagoRecibido ?? '',
+    nextLineaId: entrada.nextLineaId ?? 2,
+  };
+}
+
+export function debeIgnorarActualizacionRemotaCarrito(
+  folioId,
+  snapshotEntrante,
+  localSerOverride = null
+) {
+  if (!folioId || !snapshotEntrante) return false;
+
+  const incoming = snapshotAObjeto(snapshotEntrante);
+  const local =
+    localSerOverride != null
+      ? snapshotAObjeto(localSerOverride)
+      : snapshotAObjeto(obtenerSnapshotLocalActivo(folioId));
+
+  if (!local) return false;
+
+  if (snapshotsSemanticallyEquivalent(incoming, local)) {
+    return true;
+  }
+
+  const incomingSer = serializarSnapshotParaComparacion(incoming);
+  const localSer = serializarSnapshotParaComparacion(local);
+
+  if (esEcoFlushPropio(folioId, incomingSer) && incomingSer !== localSer) {
+    return true;
+  }
+
+  if (esEcoPesoObsoletoPropio(folioId, incoming, local)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function resetEstadoEcoCarritoMesasParaTests() {
+  ecosFlushPropioPorFolio.clear();
+  ecosPesoFlushPropioPorFolio.clear();
+  snapshotLocalActivoPorFolio.clear();
 }
 
 function contadorRondaCambioEnSnapshot(snapshot, anterior) {
@@ -610,6 +919,11 @@ export function persistirCarritosMesas(carritos) {
         folioAbiertoPorNumeroMesa.set(entradaFinal.numeroMesa, clave);
       }
 
+      registrarSnapshotFlushPropio(clave, {
+        form: entradaFinal.form,
+        pagoRecibido: entradaFinal.pagoRecibido,
+        nextLineaId: entradaFinal.nextLineaId,
+      });
       void flushFolioToSupabase(folioId);
       return;
     }
@@ -647,6 +961,11 @@ export function persistirCarritosMesas(carritos) {
       folioAbiertoPorNumeroMesa.set(entradaFinal.numeroMesa, clave);
     }
 
+    registrarSnapshotFlushPropio(clave, {
+      form: entradaFinal.form,
+      pagoRecibido: entradaFinal.pagoRecibido,
+      nextLineaId: entradaFinal.nextLineaId,
+    });
     void flushFolioToSupabase(folioId);
   });
 }
