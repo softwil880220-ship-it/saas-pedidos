@@ -1,4 +1,4 @@
-import { obtenerDesgloseLineasPedido } from './pedidoDesglose';
+import { contarArticulosLineasDetalle, obtenerDesgloseLineasPedido } from './pedidoDesglose';
 
 const productos = [
   {
@@ -6,6 +6,12 @@ const productos = [
     nombre: 'Elote (por Kg)',
     precio: 250,
     unidad_venta: 'peso',
+  },
+  {
+    id: '2',
+    nombre: 'Elote',
+    precio: 20,
+    unidad_venta: 'pieza',
   },
 ];
 
@@ -78,5 +84,66 @@ describe('obtenerDesgloseLineasPedido', () => {
       precioLinea: 25,
     });
     expect(total).toBe(25);
+  });
+});
+
+describe('contarArticulosLineasDetalle', () => {
+  test('producto simple por pieza cuenta 1 artículo', () => {
+    const lineas = [
+      {
+        productoId: '2',
+        nombre: 'Elote',
+        cantidad: '1',
+      },
+    ];
+
+    expect(contarArticulosLineasDetalle(lineas, productos)).toBe(1);
+  });
+
+  test('producto por peso con extra cuenta 1 artículo, no el extra', () => {
+    const lineas = [
+      {
+        productoId: '1',
+        nombre: 'Elote (por Kg)',
+        cantidad: 100,
+        unidad_venta: 'peso',
+        extras: 5,
+        variantes: { '10': ['100'] },
+      },
+    ];
+
+    expect(contarArticulosLineasDetalle(lineas, productos)).toBe(1);
+  });
+
+  test('combinación pieza + peso con extra cuenta 2 artículos', () => {
+    const lineas = [
+      {
+        productoId: '2',
+        nombre: 'Elote',
+        cantidad: '1',
+      },
+      {
+        productoId: '1',
+        nombre: 'Elote (por Kg)',
+        cantidad: 100,
+        unidad_venta: 'peso',
+        extras: 5,
+        variantes: { '10': ['100'] },
+      },
+    ];
+
+    expect(contarArticulosLineasDetalle(lineas, productos)).toBe(2);
+  });
+
+  test('producto por pieza con cantidad mayor a 1 suma la cantidad', () => {
+    const lineas = [
+      {
+        productoId: '2',
+        nombre: 'Elote',
+        cantidad: '3',
+      },
+    ];
+
+    expect(contarArticulosLineasDetalle(lineas, productos)).toBe(3);
   });
 });

@@ -11,6 +11,7 @@ import {
 } from './pedidosShared';
 import {
   formatearPrecioLineaRecibo,
+  contarArticulosLineasDetalle,
   obtenerDesgloseLineasPedido,
 } from './pedidoDesglose';
 import { etiquetaFormaPagoRepartidor } from './repartidorHelpers';
@@ -29,6 +30,10 @@ function construirUrlLlamada(telefono) {
   return `tel:+${numero}`;
 }
 
+function etiquetaCantidadArticulos(cantidad) {
+  return `${cantidad} artículo${cantidad === 1 ? '' : 's'}`;
+}
+
 function TarjetaPedidoRepartidorPorEntregar({
   pedido,
   productos,
@@ -40,6 +45,7 @@ function TarjetaPedidoRepartidorPorEntregar({
   const urlLlamada = construirUrlLlamada(pedido.telefono);
   const desglose = obtenerDesgloseLineasPedido(pedido, productos, variantesCtx);
   const etiquetaFormaPago = etiquetaFormaPagoRepartidor(pedido.forma_pago);
+  const cantidadArticulos = contarArticulosLineasDetalle(pedido.lineas_detalle, productos);
 
   return (
     <article className="vista-operativa-tarjeta">
@@ -66,6 +72,8 @@ function TarjetaPedidoRepartidorPorEntregar({
       {etiquetaFormaPago ? (
         <p className="vista-repartidor-forma-pago">Forma de pago: {etiquetaFormaPago}</p>
       ) : null}
+
+      <p className="vista-repartidor-articulos">{etiquetaCantidadArticulos(cantidadArticulos)}</p>
 
       <div className="mostrador-recibo-lineas vista-repartidor-lineas-entregadas" role="list">
         {desglose.lineas.map((linea, index) => (
@@ -157,7 +165,7 @@ function TarjetaPedidoRepartidorEntregado({ pedido, productos, variantesCtx }) {
   const desglose = obtenerDesgloseLineasPedido(pedido, productos, variantesCtx);
   const horaEntrega = pedido.entregado_en || pedido.updated_at || pedido.created_at;
   const etiquetaFormaPago = etiquetaFormaPagoRepartidor(pedido.forma_pago);
-  const cantidadArticulos = desglose.lineas.length;
+  const cantidadArticulos = contarArticulosLineasDetalle(pedido.lineas_detalle, productos);
 
   return (
     <article className="vista-operativa-tarjeta vista-repartidor-tarjeta-entregada">
@@ -180,7 +188,7 @@ function TarjetaPedidoRepartidorEntregado({ pedido, productos, variantesCtx }) {
       ) : null}
 
       <p className="vista-repartidor-articulos">
-        {cantidadArticulos} artículo{cantidadArticulos === 1 ? '' : 's'}
+        {etiquetaCantidadArticulos(cantidadArticulos)}
       </p>
 
       <div className="mostrador-recibo-lineas vista-repartidor-lineas-entregadas" role="list">

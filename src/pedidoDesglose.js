@@ -1,4 +1,4 @@
-import { redondearMoneda } from './pedidoCarritoCalculos';
+import { buscarProductoPorId, redondearMoneda } from './pedidoCarritoCalculos';
 import { formatearMoneda } from './pedidosShared';
 import {
   UNIDAD_VENTA_PESO,
@@ -268,6 +268,22 @@ function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
 
   filas.push(...extrasItems);
   return filas;
+}
+
+export function contarArticulosLineasDetalle(lineasDetalle, productos) {
+  return (lineasDetalle || []).reduce((total, linea) => {
+    if (!linea?.productoId) {
+      return total;
+    }
+
+    const producto = buscarProductoPorId(productos, linea.productoId);
+
+    if (esProductoPorPeso(producto)) {
+      return total + 1;
+    }
+
+    return total + parseCantidadPieza(linea.cantidad);
+  }, 0);
 }
 
 export function obtenerDesgloseLineasPedido(pedido, productos, variantesCtx) {

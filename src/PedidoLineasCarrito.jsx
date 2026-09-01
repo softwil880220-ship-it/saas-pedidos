@@ -13,20 +13,9 @@ import {
   parseCantidadPieza,
 } from './productoUnidadVenta';
 import { calcularExtrasLinea } from './variantesDinamicas';
+import { contarArticulosLineasDetalle } from './pedidoDesglose';
 import VariantesPedido from './VariantesPedido.jsx';
 import EntradaPesoMonto from './EntradaPesoMonto.jsx';
-
-function contarUnidadesFisicasCarrito(lineas, productos) {
-  return lineas.reduce((total, linea) => {
-    const producto = buscarProductoPorId(productos, linea.productoId);
-
-    if (esProductoPorPeso(producto)) {
-      return total + 1;
-    }
-
-    return total + parseCantidadPieza(linea.cantidad);
-  }, 0);
-}
 
 function etiquetaResumenLineas(cantidad, totalPedido) {
   const etiquetaCantidad =
@@ -51,7 +40,7 @@ export default function PedidoLineasCarrito({
   const [expandido, setExpandido] = useState(!colapsablePorDefecto);
   const resumenColapsado =
     etiquetaResumenColapsado ??
-    etiquetaResumenLineas(contarUnidadesFisicasCarrito(lineas, productos), totalPedido);
+    etiquetaResumenLineas(contarArticulosLineasDetalle(lineas, productos), totalPedido);
 
   return (
     <>
