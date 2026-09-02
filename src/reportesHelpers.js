@@ -6,7 +6,18 @@ import {
   resolverProductoDeLinea,
 } from './categoriaFrecuenciaPedidos';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
-import { normalizarMeridianoHoraEs } from './jornadaHelpers';
+import {
+  cargarJornadaAbierta,
+  JORNADA_ESTADO_CERRADA,
+  normalizarMeridianoHoraEs,
+} from './jornadaHelpers';
+import {
+  concentradoCobrosPorFormaPago,
+  pedidoEntregadoEnJornadaRepartidor,
+  pedidoEsDomicilioRepartidor,
+  pedidoRepartidorExterno,
+} from './repartidorHelpers';
+import { queryConNegocio } from './tenantHelpers';
 import {
   esProductoPorPeso,
   formatearLineaDetalleGuardada,
@@ -63,6 +74,159 @@ function obtenerLunesSemanaActual(fecha = new Date()) {
 
 export function rangoPersonalizadoActivo(fechaDesde, fechaHasta) {
   return Boolean(fechaDesde?.trim() && fechaHasta?.trim());
+}
+
+export const MODOS_FILTRO_ENTREGAS = {
+  RANGO: 'rango',
+  JORNADA: 'jornada',
+};
+
+export function deriveModoFiltroEntregas({
+  jornadaFocoId = null,
+  usaRangoPersonalizado = false,
+}) {
+  if (jornadaFocoId) {
+    return MODOS_FILTRO_ENTREGAS.JORNADA;
+  }
+
+  if (usaRangoPersonalizado) {
+    return MODOS_FILTRO_ENTREGAS.RANGO;
+  }
+
+  return null;
+}
+
+export function entregasReportePeriodoActivo({ jornadaFocoId = null, usaRangoPersonalizado = false }) {
+  return Boolean(jornadaFocoId || usaRangoPersonalizado);
+}
+
+export const ESTADOS_VISTA_ENTREGAS_REPORTE = {
+  PENDIENTE_MODO: 'pendiente_modo',
+  RANGO_INVALIDO: 'rango_invalido',
+  CARGANDO: 'cargando',
+  ERROR: 'error',
+  SIN_RESULTADOS: 'sin_resultados',
+  DATOS: 'datos',
+};
+
+export function resolverEstadoVistaEntregasReporte({
+  entregasPeriodoActivo = false,
+  rangoInvalido = false,
+  cargandoEntregas = false,
+  errorEntregas = null,
+  cantidadPedidosVisibles = 0,
+}) {
+  if (!entregasPeriodoActivo) {
+    return ESTADOS_VISTA_ENTREGAS_REPORTE.PENDIENTE_MODO;
+  }
+
+  if (rangoInvalido) {
+    return ESTADOS_VISTA_ENTREGAS_REPORTE.RANGO_INVALIDO;
+  }
+
+  if (cargandoEntregas) {
+    return ESTADOS_VISTA_ENTREGAS_REPORTE.CARGANDO;
+  }
+
+  if (errorEntregas) {
+    return ESTADOS_VISTA_ENTREGAS_REPORTE.ERROR;
+  }
+
+  if (cantidadPedidosVisibles === 0) {
+    return ESTADOS_VISTA_ENTREGAS_REPORTE.SIN_RESULTADOS;
+  }
+
+  return ESTADOS_VISTA_ENTREGAS_REPORTE.DATOS;
+}
+
+export function timestampEntregaParaReporte(pedido) {
+  if (pedido?.entregado_en) {
+    return new Date(pedido.entregado_en);
+  }
+
+  if (pedido?.updated_at) {
+    return new Date(pedido.updated_at);
+  }
+
+  if (pedido?.created_at) {
+    return new Date(pedido.created_at);
+  }
+
+  return null;
+}
+
+export function pedidoEntregadoEnVentanaReporte(pedido, inicio, fin) {
+  const timestamp = timestampEntregaParaReporte(pedido);
+  if (!timestamp || !inicio || !fin) return false;
+  if (!Number.isFinite(timestamp.getTime())) return false;
+  return timestamp >= inicio && timestamp <= fin;
+}
+
+export function etiquetaPeriodoEntregasPdf({ jornadaFoco, jornadaFocoOrigen, configPeriodo }) {
+  if (jornadaFoco) {
+    return formatearEtiquetaJornadaFocoReporte(jornadaFoco, jornadaFocoOrigen);
+  }
+
+  if (rangoPersonalizadoActivo(configPeriodo?.fechaDesde, configPeriodo?.fechaHasta)) {
+    return etiquetaPeriodoReporte(configPeriodo);
+  }
+
+  return 'Sin período seleccionado';
+}
+
+export async function consultarPedidosEntregadosEnVentana(
+  supabase,
+  negocioId,
+  inicio,
+  fin
+) {
+  if (!negocioId || !inicio || !fin) {
+    return { data: [], error: null };
+  }
+
+  const isoInicio = inicio.toISOString();
+  const isoFin = fin.toISOString();
+
+  const consultaBase = () =>
+    supabase
+      .from('pedidos')
+      .select('*')
+      .is('deleted_at', null)
+      .eq('status', 'entregado');
+
+  const [conEntregadoEn, sinEntregadoEn] = await Promise.all([
+    queryConNegocio(
+      consultaBase().gte('entregado_en', isoInicio).lte('entregado_en', isoFin),
+      negocioId
+    ).order('entregado_en', { ascending: false }),
+    queryConNegocio(
+      consultaBase()
+        .is('entregado_en', null)
+        .gte('updated_at', isoInicio)
+        .lte('updated_at', isoFin),
+      negocioId
+    ).order('updated_at', { ascending: false }),
+  ]);
+
+  const error = conEntregadoEn.error || sinEntregadoEn.error;
+  if (error) {
+    return { data: [], error };
+  }
+
+  const porId = new Map();
+  [...(conEntregadoEn.data || []), ...(sinEntregadoEn.data || [])].forEach((pedido) => {
+    if (pedido?.id) {
+      porId.set(pedido.id, pedido);
+    }
+  });
+
+  const data = Array.from(porId.values()).sort(
+    (a, b) =>
+      new Date(b.entregado_en || b.updated_at || 0) -
+      new Date(a.entregado_en || a.updated_at || 0)
+  );
+
+  return { data, error: null };
 }
 
 export function rangoFechasInvalido(fechaDesde, fechaHasta) {
@@ -548,6 +712,15 @@ function formatearFechaHoraJornadaReporte(iso) {
   );
 }
 
+export const ORIGEN_JORNADA_FOCO_ABIERTA = 'abierta';
+export const ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA = 'ultima_cerrada';
+
+export function jornadaEstaCerrada(jornada) {
+  if (!jornada) return false;
+  if (jornada.estado === JORNADA_ESTADO_CERRADA) return true;
+  return Boolean(jornada.cerrada_en);
+}
+
 export function formatearEncabezadoGrupoJornada(jornada) {
   if (!jornada?.abierta_en) {
     return 'Jornada';
@@ -555,12 +728,35 @@ export function formatearEncabezadoGrupoJornada(jornada) {
 
   const apertura = formatearFechaHoraJornadaReporte(jornada.abierta_en);
 
-  if (jornada.cerrada_en) {
-    const cierre = formatearFechaHoraJornadaReporte(jornada.cerrada_en);
-    return `Jornada: ${apertura} — ${cierre}`;
+  if (jornadaEstaCerrada(jornada)) {
+    if (jornada.cerrada_en) {
+      const cierre = formatearFechaHoraJornadaReporte(jornada.cerrada_en);
+      return `Jornada: ${apertura} — ${cierre}`;
+    }
+
+    return `Jornada: ${apertura} — Cerrada`;
   }
 
   return `Jornada: ${apertura} — Abierta`;
+}
+
+export function formatearEtiquetaJornadaFocoReporte(jornada, origen) {
+  if (!jornada?.abierta_en) {
+    return 'Jornada';
+  }
+
+  const apertura = formatearFechaHoraJornadaReporte(jornada.abierta_en);
+
+  if (origen === ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA || jornadaEstaCerrada(jornada)) {
+    if (jornada.cerrada_en) {
+      const cierre = formatearFechaHoraJornadaReporte(jornada.cerrada_en);
+      return `Última jornada cerrada: ${apertura} — ${cierre}`;
+    }
+
+    return `Última jornada cerrada: ${apertura} — Cerrada`;
+  }
+
+  return `Jornada en curso: ${apertura} — Abierta`;
 }
 
 function construirGrupoPedidosReporte({ clave, jornadaId, fecha, pedidos, jornadasPorId }) {
@@ -646,6 +842,225 @@ export function agruparPedidosPorJornada(pedidos, jornadasPorId = {}) {
         jornadasPorId,
       })
     );
+}
+
+export const CLAVE_REPARTIDOR_SIN_ASIGNAR = '__sin_asignar__';
+export const CLAVE_REPARTIDOR_EXTERNO = '__externo__';
+
+function claveRepartidorPedidoEntrega(pedido) {
+  if (pedidoRepartidorExterno(pedido)) return CLAVE_REPARTIDOR_EXTERNO;
+  if (pedido?.repartidor_usuario_id) return pedido.repartidor_usuario_id;
+  return CLAVE_REPARTIDOR_SIN_ASIGNAR;
+}
+
+export function etiquetaRepartidorEntrega(claveRepartidor, repartidoresPorId = {}) {
+  if (claveRepartidor === CLAVE_REPARTIDOR_EXTERNO) return 'Repartidor externo';
+  if (claveRepartidor === CLAVE_REPARTIDOR_SIN_ASIGNAR) return 'Sin asignar';
+  return repartidoresPorId[claveRepartidor]?.nombre || 'Repartidor desconocido';
+}
+
+export function pedidoEntregadoElegibleReporte(pedido) {
+  return pedidoEsDomicilioRepartidor(pedido) && pedido?.status === 'entregado';
+}
+
+export function filtrarPedidosEntregadosReporte(
+  pedidos,
+  configPeriodo,
+  jornadaId = null,
+  jornadasPorId = {}
+) {
+  const elegibles = (pedidos || []).filter(pedidoEntregadoElegibleReporte);
+
+  if (jornadaId && jornadasPorId[jornadaId]) {
+    const jornada = jornadasPorId[jornadaId];
+    return elegibles
+      .filter((pedido) => pedidoEntregadoEnJornadaRepartidor(pedido, jornada))
+      .sort(
+        (a, b) =>
+          new Date(b.entregado_en || b.updated_at || 0) -
+          new Date(a.entregado_en || a.updated_at || 0)
+      );
+  }
+
+  if (!rangoPersonalizadoActivo(configPeriodo.fechaDesde, configPeriodo.fechaHasta)) {
+    return [];
+  }
+
+  if (rangoFechasInvalido(configPeriodo.fechaDesde, configPeriodo.fechaHasta)) {
+    return [];
+  }
+
+  const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+  if (!inicio || !fin) return [];
+
+  return elegibles
+    .filter((pedido) => pedidoEntregadoEnVentanaReporte(pedido, inicio, fin))
+    .sort(
+      (a, b) =>
+        new Date(b.entregado_en || b.updated_at || 0) -
+        new Date(a.entregado_en || a.updated_at || 0)
+    );
+}
+
+export function filtrarPedidosEntregadosPorRepartidor(pedidos, claveRepartidor = '') {
+  if (!claveRepartidor) {
+    return pedidos || [];
+  }
+
+  return (pedidos || []).filter(
+    (pedido) => claveRepartidorPedidoEntrega(pedido) === claveRepartidor
+  );
+}
+
+export function agruparEntregasPorRepartidor(pedidos, repartidoresPorId = {}) {
+  const grupos = new Map();
+
+  (pedidos || []).forEach((pedido) => {
+    const clave = claveRepartidorPedidoEntrega(pedido);
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        claveRepartidor: clave,
+        etiqueta: etiquetaRepartidorEntrega(clave, repartidoresPorId),
+        pedidos: [],
+      });
+    }
+
+    grupos.get(clave).pedidos.push(pedido);
+  });
+
+  return Array.from(grupos.values())
+    .map((grupo) => ({
+      ...grupo,
+      resumen: calcularResumenReporte(grupo.pedidos),
+    }))
+    .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es'));
+}
+
+export function agruparEntregasPorJornada(pedidos, jornadasPorId = {}) {
+  return agruparPedidosPorJornada(pedidos, jornadasPorId);
+}
+
+export function enriquecerEntregasPorJornada(
+  grupos = [],
+  repartidoresPorId = {},
+  { incluirRepartidor = true } = {}
+) {
+  return (grupos || []).map((grupo) => ({
+    ...grupo,
+    cobrosPorFormaPago: concentradoCobrosPorFormaPago(grupo.pedidos),
+    entregasPorRepartidor: incluirRepartidor
+      ? agruparEntregasPorRepartidor(grupo.pedidos, repartidoresPorId)
+      : [],
+  }));
+}
+
+export function enriquecerEntregasPorJornadaConCobros(grupos = []) {
+  return enriquecerEntregasPorJornada(grupos, {}, { incluirRepartidor: false });
+}
+
+export function sufijoRepartidorInlineEntregasJornada(entregasPorRepartidor) {
+  if (!Array.isArray(entregasPorRepartidor) || entregasPorRepartidor.length !== 1) {
+    return '';
+  }
+
+  return ` · ${entregasPorRepartidor[0].etiqueta}`;
+}
+
+export function sufijoFormaPagoInlineEntregasJornada(cobrosPorFormaPago) {
+  if (!Array.isArray(cobrosPorFormaPago) || cobrosPorFormaPago.length !== 1) {
+    return '';
+  }
+
+  return ` · ${cobrosPorFormaPago[0].etiqueta}`;
+}
+
+export function etiquetaPedidosEntregasJornadaPdf(grupo) {
+  const cantidad = grupo.pedidos?.length ?? 0;
+  const partes = [String(cantidad)];
+
+  const repartidores = grupo.entregasPorRepartidor;
+  if (Array.isArray(repartidores) && repartidores.length === 1) {
+    partes.push(repartidores[0].etiqueta);
+  }
+
+  const cobros = grupo.cobrosPorFormaPago;
+  if (Array.isArray(cobros) && cobros.length === 1) {
+    partes.push(cobros[0].etiqueta);
+  }
+
+  return partes.length === 1 ? partes[0] : partes.join(' · ');
+}
+
+export function construirFilasEntregasPorJornadaPdf(grupos = []) {
+  return (grupos || []).flatMap((grupo) => {
+    const filas = [
+      [
+        grupo.etiqueta,
+        etiquetaPedidosEntregasJornadaPdf(grupo),
+        formatearMoneda(grupo.totalDelDia),
+      ],
+    ];
+
+    const repartidores = grupo.entregasPorRepartidor;
+    if (Array.isArray(repartidores) && repartidores.length > 1) {
+      repartidores.forEach((fila) => {
+        filas.push([
+          `  ${fila.etiqueta}`,
+          String(fila.resumen.totalPedidos),
+          formatearMoneda(fila.resumen.montoAcumulado),
+        ]);
+      });
+    }
+
+    const cobros = grupo.cobrosPorFormaPago;
+    if (Array.isArray(cobros) && cobros.length > 1) {
+      cobros.forEach((cobro) => {
+        filas.push([`  ${cobro.etiqueta}`, String(cobro.cantidad), formatearMoneda(cobro.total)]);
+      });
+    }
+
+    return filas;
+  });
+}
+
+export async function resolverJornadaActualParaReporte(supabase, negocioId) {
+  if (!negocioId) {
+    return { jornada: null, origen: null, error: null };
+  }
+
+  const { data: abierta, error: errorAbierta } = await cargarJornadaAbierta(
+    supabase,
+    negocioId
+  );
+
+  if (errorAbierta) {
+    return { jornada: null, origen: null, error: errorAbierta };
+  }
+
+  if (abierta) {
+    return {
+      jornada: abierta,
+      origen: ORIGEN_JORNADA_FOCO_ABIERTA,
+      error: null,
+    };
+  }
+
+  const { data, error } = await queryConNegocio(
+    supabase
+      .from('jornadas')
+      .select('id, negocio_id, estado, abierta_en, cerrada_en')
+      .order('abierta_en', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    negocioId
+  );
+
+  return {
+    jornada: data ?? null,
+    origen: data ? ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA : null,
+    error: error ?? null,
+  };
 }
 
 export function agruparRetirosPorDia(retiros) {
@@ -1076,4 +1491,119 @@ export function exportarFondosFijosPdf({ configPeriodo, arqueos }) {
     personalizado: 'personalizado',
   };
   doc.save(`reporte-fondos-fijos-${sufijos[tipo] || 'reporte'}.pdf`);
+}
+
+export function exportarEntregasPdf({
+  configPeriodo,
+  resumen,
+  porRepartidor = [],
+  porFormaPago = [],
+  porJornada = [],
+  jornadaFoco = null,
+  jornadaFocoOrigen = null,
+  repartidorEtiqueta = null,
+}) {
+  const doc = new jsPDF();
+  const tituloPeriodo = etiquetaPeriodoEntregasPdf({
+    jornadaFoco,
+    jornadaFocoOrigen,
+    configPeriodo,
+  });
+
+  doc.setFontSize(16);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte de entregas', 14, 18);
+
+  doc.setFontSize(10);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Período: ${tituloPeriodo}`, 14, 26);
+  if (repartidorEtiqueta) {
+    doc.text(`Repartidor: ${repartidorEtiqueta}`, 14, 32);
+  }
+  doc.text(`Pedidos entregados: ${resumen.totalPedidos}`, 14, repartidorEtiqueta ? 38 : 34);
+  doc.text(
+    `Total cobrado: ${formatearMoneda(resumen.montoAcumulado)}`,
+    14,
+    repartidorEtiqueta ? 44 : 40
+  );
+
+  const inicioTablaRepartidor = repartidorEtiqueta ? 52 : 48;
+
+  if (!repartidorEtiqueta) {
+    doc.setFontSize(11);
+    doc.setTextColor(20, 83, 45);
+    doc.text('Entregas por repartidor', 14, inicioTablaRepartidor);
+
+    autoTable(doc, {
+      startY: inicioTablaRepartidor + 4,
+      head: [['Repartidor', 'Pedidos', 'Total cobrado']],
+      body: porRepartidor.length
+        ? porRepartidor.map((fila) => [
+            fila.etiqueta,
+            String(fila.resumen.totalPedidos),
+            formatearMoneda(fila.resumen.montoAcumulado),
+          ])
+        : [['—', '0', '—']],
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+      alternateRowStyles: { fillColor: [236, 253, 245] },
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+      },
+    });
+  }
+
+  let startYCobros = (doc.lastAutoTable?.finalY ?? inicioTablaRepartidor) + 8;
+
+  if (porFormaPago.length > 0) {
+    doc.setFontSize(11);
+    doc.setTextColor(20, 83, 45);
+    doc.text('Cobros por forma de pago', 14, startYCobros);
+
+    autoTable(doc, {
+      startY: startYCobros + 4,
+      head: [['Forma de pago', 'Pedidos', 'Total cobrado']],
+      body: porFormaPago.map((fila) => [
+        fila.etiqueta,
+        String(fila.cantidad),
+        formatearMoneda(fila.total),
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+      alternateRowStyles: { fillColor: [236, 253, 245] },
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+      },
+    });
+  }
+
+  if (porJornada.length > 1) {
+    let startYJornadas = (doc.lastAutoTable?.finalY ?? startYCobros) + 8;
+
+    doc.setFontSize(11);
+    doc.setTextColor(20, 83, 45);
+    doc.text('Entregas por jornada', 14, startYJornadas);
+
+    autoTable(doc, {
+      startY: startYJornadas + 4,
+      head: [['Jornada', 'Pedidos', 'Total cobrado']],
+      body: construirFilasEntregasPorJornadaPdf(porJornada),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+      alternateRowStyles: { fillColor: [236, 253, 245] },
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+      },
+    });
+  }
+
+  const sufijoPdf = jornadaFoco
+    ? 'jornada'
+    : rangoPersonalizadoActivo(configPeriodo?.fechaDesde, configPeriodo?.fechaHasta)
+      ? 'rango'
+      : 'reporte';
+  doc.save(`reporte-entregas-${sufijoPdf}.pdf`);
 }

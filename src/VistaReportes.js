@@ -2,21 +2,40 @@ import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
+import SelectorRepartidorPedido, {
+  MODO_SELECTOR_REPARTIDOR_REPORTE,
+} from './SelectorRepartidorPedido';
 import {
+  agruparEntregasPorJornada,
+  agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
   agruparRetirosPorDia,
   agruparRetirosPorJornadaId,
   calcularReportePorCategoria,
   calcularReportePorProducto,
+  enriquecerEntregasPorJornada,
+  enriquecerEntregasPorJornadaConCobros,
   calcularResumenReporte,
+  sufijoRepartidorInlineEntregasJornada,
+  sufijoFormaPagoInlineEntregasJornada,
+  consultarPedidosEntregadosEnVentana,
   descripcionPeriodoTarjeta,
+  deriveModoFiltroEntregas,
+  entregasReportePeriodoActivo,
   etiquetaFiltroVentaReporte,
+  ESTADOS_VISTA_ENTREGAS_REPORTE,
+  resolverEstadoVistaEntregasReporte,
+  etiquetaRepartidorEntrega,
   etiquetaTipoEntregaReporte,
   exportarArqueosPdf,
+  exportarEntregasPdf,
   exportarFondosFijosPdf,
   exportarReportePdf,
   exportarRetirosPdf,
   fechasPeriodoTarjeta,
+  filtrarPedidosEntregadosPorRepartidor,
+  filtrarPedidosEntregadosReporte,
+  formatearEtiquetaJornadaFocoReporte,
   FILTROS_VENTA_REPORTE,
   filtrarArqueosReporte,
   filtrarPedidosReporte,
@@ -26,13 +45,18 @@ import {
   formatearHoraPedidoLista,
   formatearProductosReporte,
   obtenerRangoReporte,
+  ORIGEN_JORNADA_FOCO_ABIERTA,
+  ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA,
   PERIODOS_REPORTE,
   periodoMultiplesDias,
   rangoFechasInvalido,
   rangoPersonalizadoActivo,
+  resolverJornadaActualParaReporte,
   resolverRetirosParaArqueo,
 } from './reportesHelpers';
 import { formatearMoneda } from './pedidosShared';
+import { concentradoCobrosPorFormaPago } from './repartidorHelpers';
+import useRepartidoresNegocio from './useRepartidoresNegocio';
 import { supabase } from './supabase';
 import { useAuth } from './AuthContext';
 import { queryConNegocio } from './tenantHelpers';
@@ -44,6 +68,7 @@ import {
 
 const REPORTES_TABS = [
   { value: 'ventas', label: 'Ventas' },
+  { value: 'entregas', label: 'Entregas' },
   { value: 'arqueos', label: 'Arqueos de caja' },
   { value: 'retiros', label: 'Retiros de efectivo' },
   { value: 'fondos-fijos', label: 'Fondos fijos' },
@@ -154,6 +179,17 @@ export default function VistaReportes() {
   const [fondosFijosArqueos, setFondosFijosArqueos] = useState([]);
   const [cargandoFondosFijos, setCargandoFondosFijos] = useState(false);
   const [errorFondosFijos, setErrorFondosFijos] = useState(null);
+  const [pedidosEntregados, setPedidosEntregados] = useState([]);
+  const [cargandoEntregas, setCargandoEntregas] = useState(false);
+  const [errorEntregas, setErrorEntregas] = useState(null);
+  const [jornadaFocoId, setJornadaFocoId] = useState(null);
+  const [jornadaFocoOrigen, setJornadaFocoOrigen] = useState(null);
+  const [filtroRepartidorEntregas, setFiltroRepartidorEntregas] = useState('');
+  const [activandoJornadaActual, setActivandoJornadaActual] = useState(false);
+
+  const { repartidores } = useRepartidoresNegocio(
+    tabReportes === 'entregas' ? negocioId : null
+  );
 
   const configPeriodo = useMemo(
     () => ({ periodo, fechaDesde, fechaHasta }),
@@ -185,6 +221,7 @@ export default function VistaReportes() {
     if (
       !negocioId ||
       (tabReportes !== 'ventas' &&
+        tabReportes !== 'entregas' &&
         tabReportes !== 'arqueos' &&
         tabReportes !== 'retiros')
     ) {
@@ -427,6 +464,94 @@ export default function VistaReportes() {
     };
   }, [tabReportes, negocioId]);
 
+  useEffect(() => {
+    let activo = true;
+
+    if (tabReportes !== 'entregas' || !negocioId) {
+      return undefined;
+    }
+
+    if (!entregasReportePeriodoActivo({ jornadaFocoId, usaRangoPersonalizado })) {
+      setCargandoEntregas(false);
+      setErrorEntregas(null);
+      setPedidosEntregados([]);
+      return undefined;
+    }
+
+    if (rangoInvalido && !jornadaFocoId) {
+      setCargandoEntregas(false);
+      setErrorEntregas(null);
+      setPedidosEntregados([]);
+      return undefined;
+    }
+
+    const jornadaFoco = jornadaFocoId ? jornadasPorId[jornadaFocoId] : null;
+
+    if (jornadaFocoId && !jornadaFoco) {
+      return undefined;
+    }
+
+    const cargarPedidosEntregados = async () => {
+      setCargandoEntregas(true);
+      setErrorEntregas(null);
+
+      let inicio;
+      let fin;
+
+      if (jornadaFoco?.abierta_en) {
+        inicio = new Date(jornadaFoco.abierta_en);
+        fin = jornadaFoco.cerrada_en ? new Date(jornadaFoco.cerrada_en) : new Date();
+      } else if (usaRangoPersonalizado) {
+        const rango = obtenerRangoReporte(configPeriodo);
+        inicio = rango.inicio;
+        fin = rango.fin;
+      } else {
+        inicio = null;
+        fin = null;
+      }
+
+      if (!inicio || !fin) {
+        if (activo) {
+          setPedidosEntregados([]);
+          setCargandoEntregas(false);
+        }
+        return;
+      }
+
+      const { data, error: errorConsulta } = await consultarPedidosEntregadosEnVentana(
+        supabase,
+        negocioId,
+        inicio,
+        fin
+      );
+
+      if (!activo) return;
+
+      if (errorConsulta) {
+        setErrorEntregas('No se pudieron cargar las entregas.');
+        setPedidosEntregados([]);
+      } else {
+        setPedidosEntregados(data || []);
+      }
+
+      setCargandoEntregas(false);
+    };
+
+    void cargarPedidosEntregados();
+
+    return () => {
+      activo = false;
+    };
+  }, [
+    tabReportes,
+    negocioId,
+    configPeriodo,
+    rangoInvalido,
+    jornadaFocoId,
+    jornadasPorId,
+    usaRangoPersonalizado,
+  ]);
+
   const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
   const retirosPorJornadaId = useMemo(
     () => agruparRetirosPorJornadaId(retiros),
@@ -477,16 +602,127 @@ export default function VistaReportes() {
     [multiplesDias, pedidosFiltrados, jornadasPorId]
   );
 
+  const repartidoresPorId = useMemo(() => {
+    const mapa = {};
+    (repartidores || []).forEach((repartidor) => {
+      mapa[repartidor.id] = repartidor;
+    });
+    return mapa;
+  }, [repartidores]);
+
+  const jornadaFoco = jornadaFocoId ? jornadasPorId[jornadaFocoId] : null;
+
+  const pedidosEntregadosFiltrados = useMemo(
+    () =>
+      filtrarPedidosEntregadosReporte(
+        pedidosEntregados,
+        configPeriodo,
+        jornadaFocoId,
+        jornadasPorId
+      ),
+    [pedidosEntregados, configPeriodo, jornadaFocoId, jornadasPorId]
+  );
+
+  const pedidosEntregasVisibles = useMemo(
+    () =>
+      filtrarPedidosEntregadosPorRepartidor(
+        pedidosEntregadosFiltrados,
+        filtroRepartidorEntregas
+      ),
+    [pedidosEntregadosFiltrados, filtroRepartidorEntregas]
+  );
+
+  const repartidorEntregasEtiqueta = useMemo(() => {
+    if (!filtroRepartidorEntregas) return null;
+    return etiquetaRepartidorEntrega(filtroRepartidorEntregas, repartidoresPorId);
+  }, [filtroRepartidorEntregas, repartidoresPorId]);
+
+  const resumenEntregas = useMemo(
+    () => calcularResumenReporte(pedidosEntregasVisibles),
+    [pedidosEntregasVisibles]
+  );
+
+  const entregasPorRepartidor = useMemo(
+    () => agruparEntregasPorRepartidor(pedidosEntregadosFiltrados, repartidoresPorId),
+    [pedidosEntregadosFiltrados, repartidoresPorId]
+  );
+
+  const cobrosEntregasPorFormaPago = useMemo(
+    () => concentradoCobrosPorFormaPago(pedidosEntregasVisibles),
+    [pedidosEntregasVisibles]
+  );
+
+  const multiplesDiasEntregas =
+    !jornadaFocoId && usaRangoPersonalizado && periodoMultiplesDias(configPeriodo);
+
+  const entregasPeriodoActivo = entregasReportePeriodoActivo({
+    jornadaFocoId,
+    usaRangoPersonalizado,
+  });
+
+  const estadoVistaEntregas = resolverEstadoVistaEntregasReporte({
+    entregasPeriodoActivo,
+    rangoInvalido,
+    cargandoEntregas,
+    errorEntregas,
+    cantidadPedidosVisibles: pedidosEntregasVisibles.length,
+  });
+
+  const modoFiltroEntregas = useMemo(
+    () =>
+      deriveModoFiltroEntregas({
+        jornadaFocoId,
+        usaRangoPersonalizado,
+      }),
+    [jornadaFocoId, usaRangoPersonalizado]
+  );
+
+  const entregasAgrupadasPorJornada = useMemo(
+    () =>
+      multiplesDiasEntregas
+        ? enriquecerEntregasPorJornada(
+            agruparEntregasPorJornada(pedidosEntregasVisibles, jornadasPorId),
+            repartidoresPorId,
+            { incluirRepartidor: !filtroRepartidorEntregas }
+          )
+        : [],
+    [
+      multiplesDiasEntregas,
+      pedidosEntregasVisibles,
+      jornadasPorId,
+      repartidoresPorId,
+      filtroRepartidorEntregas,
+    ]
+  );
+
+  const etiquetaJornadaFocoEntregas = jornadaFoco
+    ? formatearEtiquetaJornadaFocoReporte(jornadaFoco, jornadaFocoOrigen)
+    : null;
+
+  const etiquetaBotonJornadaEntregas =
+    jornadaFocoOrigen === ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA
+      ? 'Última jornada'
+      : 'Jornada actual';
+
+  const etiquetaBannerJornadaEntregas =
+    jornadaFocoOrigen === ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA
+      ? 'Última jornada cerrada:'
+      : 'Jornada en curso:';
+
   const seleccionarSemana = () => {
     setPeriodo(PERIODOS_REPORTE.SEMANA);
     setFechaDesde('');
     setFechaHasta('');
+    setJornadaFocoId(null);
+    setJornadaFocoOrigen(null);
   };
 
   const seleccionarMes = () => {
     setPeriodo(PERIODOS_REPORTE.MES);
     setFechaDesde('');
     setFechaHasta('');
+    setJornadaFocoId(null);
+    setJornadaFocoOrigen(null);
   };
 
   const exportarPdf = () => {
@@ -519,6 +755,55 @@ export default function VistaReportes() {
       configPeriodo,
       arqueos: fondosFijosArqueos,
     });
+  };
+
+  const exportarPdfEntregas = () => {
+    exportarEntregasPdf({
+      configPeriodo,
+      resumen: resumenEntregas,
+      porRepartidor: entregasPorRepartidor,
+      porFormaPago: cobrosEntregasPorFormaPago,
+      porJornada: entregasAgrupadasPorJornada,
+      jornadaFoco,
+      jornadaFocoOrigen,
+      repartidorEtiqueta: repartidorEntregasEtiqueta,
+    });
+  };
+
+  const activarJornadaActualEntregas = async () => {
+    if (!negocioId || activandoJornadaActual) return;
+
+    setActivandoJornadaActual(true);
+
+    const { jornada, origen, error: errorJornada } = await resolverJornadaActualParaReporte(
+      supabase,
+      negocioId
+    );
+
+    setActivandoJornadaActual(false);
+
+    if (errorJornada) {
+      setErrorEntregas('No se pudo cargar la jornada actual.');
+      return;
+    }
+
+    if (jornada?.id) {
+      setJornadasPorId((prev) => ({
+        ...prev,
+        [jornada.id]: {
+          ...(prev[jornada.id] || {}),
+          ...jornada,
+        },
+      }));
+      setFechaDesde('');
+      setFechaHasta('');
+      setJornadaFocoId(jornada.id);
+      setJornadaFocoOrigen(origen);
+    } else {
+      setJornadaFocoId(null);
+      setJornadaFocoOrigen(null);
+      setErrorEntregas('No hay jornadas registradas.');
+    }
   };
 
   const confirmarEliminarArqueo = async (arqueoId) => {
@@ -1103,6 +1388,320 @@ export default function VistaReportes() {
               )}
             </>
           )}
+            </>
+          ) : null}
+
+          {tabReportes === 'entregas' ? (
+            <>
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+
+                  <div
+                    className={`reportes-rango-personalizado${
+                      modoFiltroEntregas === 'rango' ? ' activo' : ' desactivado'
+                    }`}
+                  >
+                    <label className="reportes-fecha-campo" htmlFor="reportes-entregas-fecha-desde">
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-entregas-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(e) => {
+                          setFechaDesde(e.target.value);
+                          setJornadaFocoId(null);
+                          setJornadaFocoOrigen(null);
+                        }}
+                      />
+                    </label>
+                    <label className="reportes-fecha-campo" htmlFor="reportes-entregas-fecha-hasta">
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-entregas-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(e) => {
+                          setFechaHasta(e.target.value);
+                          setJornadaFocoId(null);
+                          setJornadaFocoOrigen(null);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="reportes-control-grupo reportes-control-grupo-filtro">
+                  <SelectorRepartidorPedido
+                    id="reportes-entregas-repartidor"
+                    modo={MODO_SELECTOR_REPARTIDOR_REPORTE}
+                    repartidores={repartidores}
+                    value={filtroRepartidorEntregas}
+                    onChange={setFiltroRepartidorEntregas}
+                    disabled={cargandoEntregas}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className={`reportes-periodo-btn reportes-jornada-actual-btn${
+                    modoFiltroEntregas === 'jornada' ? ' activo' : ' desactivado'
+                  }`}
+                  onClick={activarJornadaActualEntregas}
+                  disabled={activandoJornadaActual || cargandoEntregas}
+                >
+                  {activandoJornadaActual ? 'Cargando jornada...' : etiquetaBotonJornadaEntregas}
+                </button>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfEntregas}
+                  disabled={cargandoEntregas || !entregasPeriodoActivo || rangoInvalido}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+
+              {jornadaFoco ? (
+                <p className="reportes-filtro-activo">
+                  {etiquetaBannerJornadaEntregas}{' '}
+                  <strong>{etiquetaJornadaFocoEntregas}</strong>
+                </p>
+              ) : null}
+
+              {repartidorEntregasEtiqueta ? (
+                <p className="reportes-filtro-activo">
+                  Repartidor: <strong>{repartidorEntregasEtiqueta}</strong>
+                </p>
+              ) : null}
+
+              <div className="reportes-resumen">
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Período activo</span>
+                  <div className="reportes-resumen-valor reportes-resumen-valor-periodo">
+                    {jornadaFoco ? (
+                      <span className="reportes-periodo-descripcion">
+                        {etiquetaJornadaFocoEntregas}
+                      </span>
+                    ) : usaRangoPersonalizado ? (
+                      <>
+                        <span className="reportes-periodo-descripcion">
+                          {descripcionPeriodoTarjeta(configPeriodo)}
+                        </span>
+                        <span className="reportes-periodo-fechas">
+                          {fechasPeriodoTarjeta(configPeriodo)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="reportes-periodo-descripcion">
+                        Selecciona Jornada actual o un rango De/Hasta
+                      </span>
+                    )}
+                  </div>
+                </article>
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Pedidos entregados</span>
+                  <span className="reportes-resumen-valor">{resumenEntregas.totalPedidos}</span>
+                </article>
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Total cobrado</span>
+                  <span className="reportes-resumen-valor reportes-resumen-valor-monto">
+                    {formatearMoneda(resumenEntregas.montoAcumulado)}
+                  </span>
+                </article>
+              </div>
+
+              {estadoVistaEntregas === ESTADOS_VISTA_ENTREGAS_REPORTE.PENDIENTE_MODO ? (
+                <p className="dashboard-vacio">
+                  Selecciona Jornada actual o completa un rango De/Hasta para ver entregas.
+                </p>
+              ) : estadoVistaEntregas === ESTADOS_VISTA_ENTREGAS_REPORTE.RANGO_INVALIDO ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : estadoVistaEntregas === ESTADOS_VISTA_ENTREGAS_REPORTE.CARGANDO ? (
+                <p className="dashboard-vacio">Cargando entregas...</p>
+              ) : estadoVistaEntregas === ESTADOS_VISTA_ENTREGAS_REPORTE.ERROR ? (
+                <p className="dashboard-vacio reportes-error">{errorEntregas}</p>
+              ) : estadoVistaEntregas === ESTADOS_VISTA_ENTREGAS_REPORTE.SIN_RESULTADOS ? (
+                <p className="dashboard-vacio">
+                  {filtroRepartidorEntregas
+                    ? `No hay entregas para ${repartidorEntregasEtiqueta} en el período seleccionado.`
+                    : jornadaFocoId
+                      ? 'No hay entregas a domicilio en la jornada seleccionada.'
+                      : 'No hay entregas a domicilio para el rango seleccionado.'}
+                </p>
+              ) : (
+                <>
+                  {!filtroRepartidorEntregas ? (
+                    <section
+                      className="reportes-por-repartidor"
+                      aria-labelledby="reportes-por-repartidor-titulo"
+                    >
+                      <h3
+                        id="reportes-por-repartidor-titulo"
+                        className="reportes-por-producto-titulo"
+                      >
+                        Entregas por repartidor
+                      </h3>
+                      {entregasPorRepartidor.length === 0 ? (
+                        <p className="dashboard-vacio reportes-por-producto-vacio">
+                          No hay entregas por repartidor en el período seleccionado.
+                        </p>
+                      ) : (
+                        <div className="reportes-tabla reportes-por-producto-tabla">
+                          <div className="reportes-tabla-header reportes-por-producto-header">
+                            <span>Repartidor</span>
+                            <span>Pedidos</span>
+                            <span>Total cobrado</span>
+                          </div>
+                          {entregasPorRepartidor.map((fila) => (
+                            <div
+                              key={fila.claveRepartidor}
+                              className="reportes-tabla-fila reportes-por-producto-fila"
+                            >
+                              <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                              <span className="reporte-producto-cantidad">
+                                {fila.resumen.totalPedidos}
+                              </span>
+                              <span className="reporte-producto-total">
+                                {formatearMoneda(fila.resumen.montoAcumulado)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {cobrosEntregasPorFormaPago.length > 0 ? (
+                    <section
+                      className="reportes-por-producto"
+                      aria-labelledby="reportes-entregas-cobros-titulo"
+                    >
+                      <h3
+                        id="reportes-entregas-cobros-titulo"
+                        className="reportes-por-producto-titulo"
+                      >
+                        Cobros por forma de pago
+                      </h3>
+                      <div className="reportes-tabla reportes-por-producto-tabla">
+                        <div className="reportes-tabla-header reportes-por-producto-header">
+                          <span>Forma de pago</span>
+                          <span>Pedidos</span>
+                          <span>Total cobrado</span>
+                        </div>
+                        {cobrosEntregasPorFormaPago.map((fila) => (
+                          <div
+                            key={fila.forma}
+                            className="reportes-tabla-fila reportes-por-producto-fila"
+                          >
+                            <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                            <span className="reporte-producto-cantidad">{fila.cantidad}</span>
+                            <span className="reporte-producto-total">
+                              {formatearMoneda(fila.total)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {multiplesDiasEntregas && entregasAgrupadasPorJornada.length > 0 ? (
+                    <section
+                      className="reportes-por-jornada"
+                      aria-labelledby="reportes-entregas-jornada-titulo"
+                    >
+                      <h3
+                        id="reportes-entregas-jornada-titulo"
+                        className="reportes-por-producto-titulo"
+                      >
+                        Entregas por jornada
+                      </h3>
+                      {entregasAgrupadasPorJornada.map((grupo) => (
+                        <div key={grupo.clave} className="pedidos-grupo pedidos-grupo-separado">
+                          <div className="pedidos-grupo-encabezado">
+                            <span className="pedidos-grupo-encabezado-linea">
+                              <span
+                                className="pedidos-grupo-encabezado-separador"
+                                aria-hidden="true"
+                              >
+                                ──
+                              </span>
+                              {grupo.etiqueta}
+                              <span
+                                className="pedidos-grupo-encabezado-separador"
+                                aria-hidden="true"
+                              >
+                                ──
+                              </span>
+                            </span>
+                            <span className="pedidos-grupo-encabezado-total">
+                              {grupo.etiquetaTotal}: {formatearMoneda(grupo.totalDelDia)} ·{' '}
+                              {grupo.pedidos.length} pedido
+                              {grupo.pedidos.length === 1 ? '' : 's'}
+                              {sufijoRepartidorInlineEntregasJornada(grupo.entregasPorRepartidor)}
+                              {sufijoFormaPagoInlineEntregasJornada(grupo.cobrosPorFormaPago)}
+                            </span>
+                          </div>
+                          {grupo.entregasPorRepartidor?.length > 1 ? (
+                            <div className="reportes-tabla reportes-jornada-desglose">
+                              <div className="reportes-tabla-header reportes-por-producto-header">
+                                <span>Repartidor</span>
+                                <span>Pedidos</span>
+                                <span>Total cobrado</span>
+                              </div>
+                              {grupo.entregasPorRepartidor.map((fila) => (
+                                <div
+                                  key={fila.claveRepartidor}
+                                  className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
+                                >
+                                  <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                                  <span className="reporte-producto-cantidad">
+                                    {fila.resumen.totalPedidos}
+                                  </span>
+                                  <span className="reporte-producto-total">
+                                    {formatearMoneda(fila.resumen.montoAcumulado)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {grupo.cobrosPorFormaPago?.length > 1 ? (
+                            <div className="reportes-tabla reportes-jornada-desglose">
+                              <div className="reportes-tabla-header reportes-por-producto-header">
+                                <span>Forma de pago</span>
+                                <span>Pedidos</span>
+                                <span>Total cobrado</span>
+                              </div>
+                              {grupo.cobrosPorFormaPago.map((fila) => (
+                                <div
+                                  key={fila.forma}
+                                  className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
+                                >
+                                  <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                                  <span className="reporte-producto-cantidad">{fila.cantidad}</span>
+                                  <span className="reporte-producto-total">
+                                    {formatearMoneda(fila.total)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </section>
+                  ) : null}
+                </>
+              )}
             </>
           ) : null}
 
