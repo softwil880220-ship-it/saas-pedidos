@@ -43,6 +43,8 @@ import {
   pedidoEntregadoEnVentanaReporte,
   resolverEstadoVistaEntregasReporte,
   resolverJornadaActualParaReporte,
+  normalizarRetirosDetalleArqueo,
+  sumaRetirosDetalleArqueo,
 } from './reportesHelpers';
 
 const pedidoDomicilioEntregado = {
@@ -968,5 +970,61 @@ describe('exportarEntregasPdf', () => {
       ['Efectivo', '2', '$300.00'],
       ['Tarjeta', '1', '$150.00'],
     ]);
+  });
+});
+
+describe('snapshot retiros de arqueo', () => {
+  test('normalizarRetirosDetalleArqueo ordena por created_at y asigna _key', () => {
+    const detalle = normalizarRetirosDetalleArqueo([
+      {
+        retiro_id: 'r2',
+        monto: 50,
+        motivo: 'Segundo',
+        usuario: 'cajero',
+        created_at: '2026-03-03T16:00:00.000Z',
+      },
+      {
+        retiro_id: 'r1',
+        monto: 100,
+        motivo: 'Primero',
+        usuario: null,
+        created_at: '2026-03-03T14:00:00.000Z',
+      },
+    ]);
+
+    expect(detalle.map((item) => item.retiro_id)).toEqual(['r1', 'r2']);
+    expect(detalle[0]._key).toBe('r1');
+    expect(detalle[1].motivo).toBe('Segundo');
+  });
+
+  test('sumaRetirosDetalleArqueo coincide con retiros_del_dia del arqueo', () => {
+    const retirosDetalle = [
+      {
+        retiro_id: 'r1',
+        monto: 100,
+        motivo: 'Compra',
+        usuario: 'cajero',
+        created_at: '2026-03-03T14:00:00.000Z',
+      },
+      {
+        retiro_id: 'r2',
+        monto: 50.5,
+        motivo: 'Otro',
+        usuario: null,
+        created_at: '2026-03-03T15:00:00.000Z',
+      },
+    ];
+
+    const arqueo = {
+      retiros_del_dia: 150.5,
+      retiros_detalle: retirosDetalle,
+    };
+
+    expect(sumaRetirosDetalleArqueo(arqueo.retiros_detalle)).toBe(arqueo.retiros_del_dia);
+  });
+
+  test('sumaRetirosDetalleArqueo devuelve 0 para arqueos legacy sin detalle', () => {
+    expect(sumaRetirosDetalleArqueo([])).toBe(0);
+    expect(sumaRetirosDetalleArqueo(null)).toBe(0);
   });
 });

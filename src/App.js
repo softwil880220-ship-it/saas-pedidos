@@ -80,7 +80,8 @@ import {
   cargarFondoFijoJornada,
   cargarJornadaAbierta,
   cargarMesasAbiertasJornada,
-  cargarRetirosJornada,
+  cargarRetirosDetalleJornada,
+  construirRetirosDetalleSnapshot,
   cerrarJornada,
   esErrorJornadaDuplicada,
   formatearHoraJornada,
@@ -1037,7 +1038,7 @@ function Dashboard() {
   const [modalArqueoAbierto, setModalArqueoAbierto] = useState(false);
   const [arqueoContado, setArqueoContado] = useState(crearArqueoContadoVacio);
   const [arqueoContadoCampoEnfocado, setArqueoContadoCampoEnfocado] = useState(null);
-  const [retirosDelDia, setRetirosDelDia] = useState(0);
+  const [retirosDetalleJornada, setRetirosDetalleJornada] = useState([]);
   const [fondoFijoDelDia, setFondoFijoDelDia] = useState(0);
   const [fondoFijoHoyId, setFondoFijoHoyId] = useState(null);
   const [fondoFijoJornadaId, setFondoFijoJornadaId] = useState(null);
@@ -1178,13 +1179,17 @@ function Dashboard() {
   }, [negocioId]);
 
   const cargarRetirosJornadaAbierta = async (jornadaId) => {
-    const { total, error } = await cargarRetirosJornada(supabase, negocioId, jornadaId);
+    const { retirosDetalle, total, error } = await cargarRetirosDetalleJornada(
+      supabase,
+      negocioId,
+      jornadaId
+    );
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return total;
+    return { retirosDetalle, total };
   };
 
   const cargarFondoFijoJornadaAbierta = async (jornadaId) => {
@@ -1199,7 +1204,7 @@ function Dashboard() {
 
   const sincronizarTotalesJornadaAbierta = useCallback(async (jornadaId) => {
     if (!jornadaId) {
-      setRetirosDelDia(0);
+      setRetirosDetalleJornada([]);
       setFondoFijoDelDia(0);
       setFondoFijoHoyId(null);
       setFondoFijoJornadaId(null);
@@ -1212,9 +1217,9 @@ function Dashboard() {
     ]);
 
     if (retirosResult.status === 'fulfilled') {
-      setRetirosDelDia(retirosResult.value);
+      setRetirosDetalleJornada(retirosResult.value.retirosDetalle);
     } else {
-      setRetirosDelDia(0);
+      setRetirosDetalleJornada([]);
     }
 
     if (fondoResult.status === 'fulfilled') {
@@ -1965,6 +1970,13 @@ function Dashboard() {
   const descuentosDelDiaMesas = useMemo(
     () => sumarCampoFoliosMesas(foliosMesasCerradosHoy, 'descuento_monto_aplicado'),
     [foliosMesasCerradosHoy]
+  );
+  const retirosDelDia = useMemo(
+    () =>
+      redondearMoneda(
+        retirosDetalleJornada.reduce((suma, retiro) => suma + (Number(retiro.monto) || 0), 0)
+      ),
+    [retirosDetalleJornada]
   );
   const arqueoSistema = useMemo(() => {
     const ventasEfectivo = ventasBrutasPorFormaPago.efectivo;
@@ -2773,9 +2785,9 @@ function Dashboard() {
       ]);
 
       if (retirosResult.status === 'fulfilled') {
-        setRetirosDelDia(retirosResult.value);
+        setRetirosDetalleJornada(retirosResult.value.retirosDetalle);
       } else {
-        setRetirosDelDia(0);
+        setRetirosDetalleJornada([]);
         errores.push(
           retirosResult.reason?.message || 'No se pudieron cargar los retiros de la jornada.'
         );
@@ -2897,6 +2909,17 @@ function Dashboard() {
       const transferenciaContado = Number.parseFloat(arqueoContado.transferencia);
       const linkContado = Number.parseFloat(arqueoContado.link_pago);
 
+      const {
+        retirosDetalle: retirosDetalleSnapshot,
+        total: retirosDelDiaSnapshot,
+        error: errorRetirosSnapshot,
+      } = await cargarRetirosDetalleJornada(supabase, negocioId, jornada.id);
+
+      if (errorRetirosSnapshot) {
+        setErrorArqueo(errorRetirosSnapshot.message);
+        return;
+      }
+
       const { error } = await supabase.from('arqueos').insert(
         payloadConNegocio(
           {
@@ -2912,7 +2935,8 @@ function Dashboard() {
             total_sistema: arqueoSistema.total,
             total_contado: totalArqueoContado,
             diferencia: diferenciaArqueoTotal,
-            retiros_del_dia: retirosDelDia,
+            retiros_del_dia: retirosDelDiaSnapshot,
+            retiros_detalle: retirosDetalleSnapshot,
             fondo_fijo_del_dia: fondoFijoDelDia,
             jornada_id: jornada.id,
           },

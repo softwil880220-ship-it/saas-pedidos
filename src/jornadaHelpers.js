@@ -144,23 +144,54 @@ export async function cerrarJornada(supabase, negocioId, jornadaId, usuarioNegoc
   return { data: data ?? null, error };
 }
 
-export async function cargarRetirosJornada(supabase, negocioId, jornadaId) {
-  if (!negocioId || !jornadaId) return { total: 0, error: null };
+export function construirRetirosDetalleSnapshot(filas) {
+  const retirosDetalle = (filas || []).map((retiro) => ({
+    retiro_id: retiro.id,
+    monto: redondearMoneda(Number(retiro.monto) || 0),
+    motivo: retiro.motivo?.trim() || 'Sin motivo',
+    usuario: retiro.usuario ?? null,
+    created_at: retiro.created_at,
+  }));
+
+  const total = redondearMoneda(
+    retirosDetalle.reduce((suma, retiro) => suma + retiro.monto, 0)
+  );
+
+  return { retirosDetalle, total };
+}
+
+export async function cargarRetirosDetalleJornada(supabase, negocioId, jornadaId) {
+  if (!negocioId || !jornadaId) {
+    return { filas: [], retirosDetalle: [], total: 0, error: null };
+  }
 
   const { data, error } = await queryConNegocio(
-    supabase.from('retiros').select('monto').eq('jornada_id', jornadaId),
+    supabase
+      .from('retiros')
+      .select('id, monto, motivo, usuario, created_at')
+      .eq('jornada_id', jornadaId)
+      .order('created_at', { ascending: true }),
     negocioId
   );
 
   if (error) {
-    return { total: 0, error };
+    return { filas: [], retirosDetalle: [], total: 0, error };
   }
 
-  const total = redondearMoneda(
-    (data || []).reduce((suma, retiro) => suma + (Number(retiro.monto) || 0), 0)
-  );
+  const filas = data || [];
+  const { retirosDetalle, total } = construirRetirosDetalleSnapshot(filas);
 
-  return { total, error: null };
+  return { filas, retirosDetalle, total, error: null };
+}
+
+export async function cargarRetirosJornada(supabase, negocioId, jornadaId) {
+  const resultado = await cargarRetirosDetalleJornada(supabase, negocioId, jornadaId);
+
+  if (resultado.error) {
+    return { total: 0, error: resultado.error };
+  }
+
+  return { total: resultado.total, error: null };
 }
 
 export async function cargarFondoFijoJornada(supabase, negocioId, jornadaId) {

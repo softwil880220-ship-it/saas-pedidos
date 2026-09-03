@@ -6,6 +6,7 @@ import {
   resolverProductoDeLinea,
 } from './categoriaFrecuenciaPedidos';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
+import { redondearMoneda } from './pedidoCarritoCalculos';
 import {
   cargarJornadaAbierta,
   JORNADA_ESTADO_CERRADA,
@@ -1063,67 +1064,34 @@ export async function resolverJornadaActualParaReporte(supabase, negocioId) {
   };
 }
 
-export function agruparRetirosPorDia(retiros) {
-  const grupos = new Map();
+export function normalizarRetirosDetalleArqueo(retirosDetalle) {
+  const lista = Array.isArray(retirosDetalle) ? retirosDetalle : [];
 
-  (retiros || []).forEach((retiro) => {
-    const clave = claveFechaDesdeDate(
-      retiro.created_at ? new Date(retiro.created_at) : new Date(0)
+  return lista
+    .map((retiro, indice) => ({
+      retiro_id: retiro?.retiro_id ?? null,
+      monto: Number(retiro?.monto) || 0,
+      motivo: retiro?.motivo?.trim() || 'Sin motivo',
+      usuario: retiro?.usuario ?? null,
+      created_at: retiro?.created_at ?? null,
+      _key: retiro?.retiro_id ?? `snapshot-${indice}`,
+    }))
+    .sort(
+      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
-
-    if (!grupos.has(clave)) {
-      grupos.set(clave, []);
-    }
-
-    grupos.get(clave).push(retiro);
-  });
-
-  grupos.forEach((lista) => {
-    lista.sort(
-      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    );
-  });
-
-  return grupos;
 }
 
-export function agruparRetirosPorJornadaId(retiros) {
-  const grupos = new Map();
-
-  (retiros || []).forEach((retiro) => {
-    if (!retiro?.jornada_id) {
-      return;
-    }
-
-    const clave = String(retiro.jornada_id);
-
-    if (!grupos.has(clave)) {
-      grupos.set(clave, []);
-    }
-
-    grupos.get(clave).push(retiro);
-  });
-
-  grupos.forEach((lista) => {
-    lista.sort(
-      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    );
-  });
-
-  return grupos;
-}
-
-export function resolverRetirosParaArqueo(arqueo, retirosPorJornadaId, retirosPorDia) {
-  if (arqueo?.jornada_id) {
-    return retirosPorJornadaId.get(String(arqueo.jornada_id)) || [];
-  }
-
-  const claveDia = claveFechaDesdeDate(
-    arqueo?.created_at ? new Date(arqueo.created_at) : new Date(0)
+export function sumaRetirosDetalleArqueo(retirosDetalle) {
+  return redondearMoneda(
+    normalizarRetirosDetalleArqueo(retirosDetalle).reduce(
+      (suma, retiro) => suma + (Number(retiro.monto) || 0),
+      0
+    )
   );
-
-  return retirosPorDia.get(claveDia) || [];
 }
+
+export const MENSAJE_ARQUEO_SIN_DESGLOSE_RETIROS =
+  'Sin desglose guardado (arqueo anterior al cierre con detalle).';
 
 export function periodoMultiplesDias(configPeriodo) {
   const { inicio, fin } = obtenerRangoReporte(configPeriodo);
@@ -1265,7 +1233,7 @@ const FORMAS_PAGO_ARQUEO_PDF = [
   { label: 'Link de pago', sistema: 'link_sistema', contado: 'link_contado' },
 ];
 
-export function filtrarArqueosReporte(arqueos, configPeriodo) {
+export function filtrarPorPeriodoCreatedAt(registros, configPeriodo) {
   if (rangoFechasInvalido(configPeriodo.fechaDesde, configPeriodo.fechaHasta)) {
     return [];
   }
@@ -1273,20 +1241,16 @@ export function filtrarArqueosReporte(arqueos, configPeriodo) {
   const { inicio, fin } = obtenerRangoReporte(configPeriodo);
   if (!inicio || !fin) return [];
 
-  return (arqueos || [])
-    .filter((arqueo) => {
-      const fecha = new Date(arqueo.created_at || 0);
+  return (registros || [])
+    .filter((registro) => {
+      const fecha = new Date(registro.created_at || 0);
       return fecha >= inicio && fecha <= fin;
     })
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
-function agruparRetirosPorDiaPdf(retiros) {
-  return agruparRetirosPorDia(retiros);
-}
-
-function agruparRetirosPorJornadaIdPdf(retiros) {
-  return agruparRetirosPorJornadaId(retiros);
+export function filtrarArqueosReporte(arqueos, configPeriodo) {
+  return filtrarPorPeriodoCreatedAt(arqueos, configPeriodo);
 }
 
 function formatearDesgloseArqueoPdf(arqueo) {
@@ -1296,7 +1260,7 @@ function formatearDesgloseArqueoPdf(arqueo) {
   ).join('\n');
 }
 
-function formatearRetirosArqueoPdf(arqueo, retirosDelDia) {
+function formatearRetirosArqueoPdf(arqueo) {
   const ventasTotalesDelDia =
     (Number(arqueo.total_sistema) || 0) -
     (Number(arqueo.fondo_fijo_del_dia) || 0) +
@@ -1310,17 +1274,23 @@ function formatearRetirosArqueoPdf(arqueo, retirosDelDia) {
 
   lineas.push(`Retiros del día: ${formatearMoneda(arqueo.retiros_del_dia)}`);
 
-  if (!retirosDelDia.length) {
-    lineas.push('Sin retiros registrados ese día.');
+  const retirosDelArqueo = normalizarRetirosDetalleArqueo(arqueo.retiros_detalle);
+
+  if (retirosDelArqueo.length > 0) {
+    retirosDelArqueo.forEach((retiro) => {
+      lineas.push(
+        `${formatearHoraPedidoLista(retiro.created_at)} — ${retiro.motivo} — ${formatearMoneda(retiro.monto)}`
+      );
+    });
     return lineas.join('\n');
   }
 
-  retirosDelDia.forEach((retiro) => {
-    lineas.push(
-      `${formatearHoraPedidoLista(retiro.created_at)} — ${retiro.motivo?.trim() || 'Sin motivo'} — ${formatearMoneda(retiro.monto)}`
-    );
-  });
+  if (Number(arqueo.retiros_del_dia) > 0) {
+    lineas.push(MENSAJE_ARQUEO_SIN_DESGLOSE_RETIROS);
+    return lineas.join('\n');
+  }
 
+  lineas.push('Sin retiros registrados ese día.');
   return lineas.join('\n');
 }
 
@@ -1330,11 +1300,9 @@ function formatearDiferenciaArqueoPdf(valor) {
   return `${prefijo}${formatearMoneda(diferencia)}`;
 }
 
-export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
+export function exportarArqueosPdf({ configPeriodo, arqueos }) {
   const doc = new jsPDF();
   const arqueosFiltrados = filtrarArqueosReporte(arqueos, configPeriodo);
-  const retirosPorDia = agruparRetirosPorDiaPdf(retiros);
-  const retirosPorJornadaId = agruparRetirosPorJornadaIdPdf(retiros);
   const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
 
   doc.setFontSize(16);
@@ -1346,21 +1314,13 @@ export function exportarArqueosPdf({ configPeriodo, arqueos, retiros }) {
   doc.text(`Período: ${tituloPeriodo}`, 14, 26);
   doc.text(`Total de arqueos: ${arqueosFiltrados.length}`, 14, 32);
 
-  const filas = arqueosFiltrados.map((arqueo) => {
-    const retirosDelArqueo = resolverRetirosParaArqueo(
-      arqueo,
-      retirosPorJornadaId,
-      retirosPorDia
-    );
-
-    return [
-      formatearFechaPedidoReporte(arqueo.created_at),
-      arqueo.usuario?.trim() || '—',
-      formatearDesgloseArqueoPdf(arqueo),
-      formatearRetirosArqueoPdf(arqueo, retirosDelArqueo),
-      formatearDiferenciaArqueoPdf(arqueo.diferencia),
-    ];
-  });
+  const filas = arqueosFiltrados.map((arqueo) => [
+    formatearFechaPedidoReporte(arqueo.created_at),
+    arqueo.usuario?.trim() || '—',
+    formatearDesgloseArqueoPdf(arqueo),
+    formatearRetirosArqueoPdf(arqueo),
+    formatearDiferenciaArqueoPdf(arqueo.diferencia),
+  ]);
 
   autoTable(doc, {
     startY: 40,
@@ -1450,9 +1410,9 @@ export function exportarRetirosPdf({ configPeriodo, retiros }) {
   doc.save(`reporte-retiros-${sufijos[tipo] || 'reporte'}.pdf`);
 }
 
-export function exportarFondosFijosPdf({ configPeriodo, arqueos }) {
+export function exportarFondosFijosPdf({ configPeriodo, fondosFijos }) {
   const doc = new jsPDF();
-  const arqueosFiltrados = filtrarArqueosReporte(arqueos, configPeriodo);
+  const fondosFiltrados = filtrarPorPeriodoCreatedAt(fondosFijos, configPeriodo);
   const tituloPeriodo = etiquetaPeriodoReporte(configPeriodo);
 
   doc.setFontSize(16);
@@ -1462,13 +1422,13 @@ export function exportarFondosFijosPdf({ configPeriodo, arqueos }) {
   doc.setFontSize(10);
   doc.setTextColor(51, 65, 85);
   doc.text(`Período: ${tituloPeriodo}`, 14, 26);
-  doc.text(`Total de registros: ${arqueosFiltrados.length}`, 14, 32);
+  doc.text(`Total de registros: ${fondosFiltrados.length}`, 14, 32);
 
-  const filas = arqueosFiltrados.map((arqueo) => [
-    formatearFechaSoloRetiroPdf(arqueo.created_at),
-    formatearHoraPedidoLista(arqueo.created_at),
-    arqueo.usuario?.trim() || '—',
-    formatearMoneda(arqueo.fondo_fijo_del_dia),
+  const filas = fondosFiltrados.map((fondo) => [
+    formatearFechaSoloRetiroPdf(fondo.created_at),
+    formatearHoraPedidoLista(fondo.created_at),
+    fondo.usuario?.trim() || '—',
+    formatearMoneda(fondo.monto),
   ]);
 
   autoTable(doc, {

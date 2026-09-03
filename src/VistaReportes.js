@@ -9,8 +9,6 @@ import {
   agruparEntregasPorJornada,
   agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
-  agruparRetirosPorDia,
-  agruparRetirosPorJornadaId,
   calcularReportePorCategoria,
   calcularReportePorProducto,
   enriquecerEntregasPorJornada,
@@ -38,12 +36,15 @@ import {
   formatearEtiquetaJornadaFocoReporte,
   FILTROS_VENTA_REPORTE,
   filtrarArqueosReporte,
+  filtrarPorPeriodoCreatedAt,
   filtrarPedidosReporte,
   formatearClienteReporte,
   formatearFechaPedidoReporte,
   formatearFormaPagoReporte,
   formatearHoraPedidoLista,
   formatearProductosReporte,
+  MENSAJE_ARQUEO_SIN_DESGLOSE_RETIROS,
+  normalizarRetirosDetalleArqueo,
   obtenerRangoReporte,
   ORIGEN_JORNADA_FOCO_ABIERTA,
   ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA,
@@ -52,7 +53,6 @@ import {
   rangoFechasInvalido,
   rangoPersonalizadoActivo,
   resolverJornadaActualParaReporte,
-  resolverRetirosParaArqueo,
 } from './reportesHelpers';
 import { formatearMoneda } from './pedidosShared';
 import { concentradoCobrosPorFormaPago } from './repartidorHelpers';
@@ -163,7 +163,6 @@ export default function VistaReportes() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [arqueos, setArqueos] = useState([]);
-  const [retiros, setRetiros] = useState([]);
   const [cargandoArqueos, setCargandoArqueos] = useState(false);
   const [errorArqueos, setErrorArqueos] = useState(null);
   const [arqueoConfirmarEliminar, setArqueoConfirmarEliminar] = useState(null);
@@ -176,7 +175,7 @@ export default function VistaReportes() {
   const [jornadaEstadoPorId, setJornadaEstadoPorId] = useState({});
   const [jornadasPorId, setJornadasPorId] = useState({});
   const [retiroMensajeBloqueo, setRetiroMensajeBloqueo] = useState(null);
-  const [fondosFijosArqueos, setFondosFijosArqueos] = useState([]);
+  const [fondosFijosHistorial, setFondosFijosHistorial] = useState([]);
   const [cargandoFondosFijos, setCargandoFondosFijos] = useState(false);
   const [errorFondosFijos, setErrorFondosFijos] = useState(null);
   const [pedidosEntregados, setPedidosEntregados] = useState([]);
@@ -360,26 +359,18 @@ export default function VistaReportes() {
       setCargandoArqueos(true);
       setErrorArqueos(null);
 
-      const [arqueosRes, retirosRes] = await Promise.all([
-        queryConNegocio(
-          supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
-          negocioId
-        ),
-        queryConNegocio(
-          supabase.from('retiros').select('*').order('created_at', { ascending: false }),
-          negocioId
-        ),
-      ]);
+      const { data, error: errorConsulta } = await queryConNegocio(
+        supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
+        negocioId
+      );
 
       if (!activo) return;
 
-      if (arqueosRes.error || retirosRes.error) {
+      if (errorConsulta) {
         setErrorArqueos('No se pudo cargar el historial de arqueos.');
         setArqueos([]);
-        setRetiros([]);
       } else {
-        setArqueos(arqueosRes.data || []);
-        setRetiros(retirosRes.data || []);
+        setArqueos(data || []);
       }
 
       setCargandoArqueos(false);
@@ -441,7 +432,10 @@ export default function VistaReportes() {
       setErrorFondosFijos(null);
 
       const { data, error: errorConsulta } = await queryConNegocio(
-        supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
+        supabase
+          .from('fondos_fijos')
+          .select('id, monto, usuario, created_at, jornada_id')
+          .order('created_at', { ascending: false }),
         negocioId
       );
 
@@ -449,9 +443,9 @@ export default function VistaReportes() {
 
       if (errorConsulta) {
         setErrorFondosFijos('No se pudo cargar el historial de fondos fijos.');
-        setFondosFijosArqueos([]);
+        setFondosFijosHistorial([]);
       } else {
-        setFondosFijosArqueos(data || []);
+        setFondosFijosHistorial(data || []);
       }
 
       setCargandoFondosFijos(false);
@@ -552,12 +546,6 @@ export default function VistaReportes() {
     usaRangoPersonalizado,
   ]);
 
-  const retirosPorDia = useMemo(() => agruparRetirosPorDia(retiros), [retiros]);
-  const retirosPorJornadaId = useMemo(
-    () => agruparRetirosPorJornadaId(retiros),
-    [retiros]
-  );
-
   const arqueosFiltrados = useMemo(
     () => filtrarArqueosReporte(arqueos, configPeriodo),
     [arqueos, configPeriodo]
@@ -569,8 +557,8 @@ export default function VistaReportes() {
   );
 
   const fondosFijosFiltrados = useMemo(
-    () => filtrarArqueosReporte(fondosFijosArqueos, configPeriodo),
-    [fondosFijosArqueos, configPeriodo]
+    () => filtrarPorPeriodoCreatedAt(fondosFijosHistorial, configPeriodo),
+    [fondosFijosHistorial, configPeriodo]
   );
 
   const pedidosFiltrados = useMemo(
@@ -739,7 +727,6 @@ export default function VistaReportes() {
     exportarArqueosPdf({
       configPeriodo,
       arqueos,
-      retiros,
     });
   };
 
@@ -753,7 +740,7 @@ export default function VistaReportes() {
   const exportarPdfFondosFijos = () => {
     exportarFondosFijosPdf({
       configPeriodo,
-      arqueos: fondosFijosArqueos,
+      fondosFijos: fondosFijosHistorial,
     });
   };
 
@@ -876,11 +863,8 @@ export default function VistaReportes() {
   };
 
   const renderTarjetaArqueo = (arqueo) => {
-    const retirosDelArqueo = resolverRetirosParaArqueo(
-      arqueo,
-      retirosPorJornadaId,
-      retirosPorDia
-    );
+    const retirosDelArqueo = normalizarRetirosDetalleArqueo(arqueo.retiros_detalle);
+    const retirosDelDiaTotal = Number(arqueo.retiros_del_dia) || 0;
 
     return (
       <article key={arqueo.id} className="reportes-arqueo-card">
@@ -965,14 +949,18 @@ export default function VistaReportes() {
           {retirosDelArqueo.length > 0 ? (
             <ul className="reportes-arqueo-retiros-lista">
               {retirosDelArqueo.map((retiro) => (
-                <li key={retiro.id}>
+                <li key={retiro._key}>
                   {formatearHoraPedidoLista(retiro.created_at)} —{' '}
-                  {retiro.motivo?.trim() || 'Sin motivo'} —{' '}
+                  {retiro.motivo} —{' '}
                   {formatearMoneda(retiro.monto)}
                   {retiro.usuario ? ` (${retiro.usuario})` : ''}
                 </li>
               ))}
             </ul>
+          ) : retirosDelDiaTotal > 0 ? (
+            <p className="reportes-arqueo-retiros-vacio">
+              {MENSAJE_ARQUEO_SIN_DESGLOSE_RETIROS}
+            </p>
           ) : (
             <p className="reportes-arqueo-retiros-vacio">
               Sin retiros registrados ese día.
@@ -1970,7 +1958,7 @@ export default function VistaReportes() {
                 <p className="dashboard-vacio">Cargando fondos fijos...</p>
               ) : errorFondosFijos ? (
                 <p className="dashboard-vacio reportes-error">{errorFondosFijos}</p>
-              ) : fondosFijosArqueos.length === 0 ? (
+              ) : fondosFijosHistorial.length === 0 ? (
                 <p className="dashboard-vacio">No hay fondos registrados.</p>
               ) : fondosFijosFiltrados.length === 0 ? (
                 <p className="dashboard-vacio">
@@ -1984,19 +1972,19 @@ export default function VistaReportes() {
                     <span>Usuario</span>
                     <span>Fondo fijo</span>
                   </div>
-                  {fondosFijosFiltrados.map((arqueo) => (
-                    <div key={arqueo.id} className="fondos-fijos-reporte-fila">
+                  {fondosFijosFiltrados.map((fondo) => (
+                    <div key={fondo.id} className="fondos-fijos-reporte-fila">
                       <span className="reporte-fecha">
-                        {formatearFechaSoloReporte(arqueo.created_at)}
+                        {formatearFechaSoloReporte(fondo.created_at)}
                       </span>
                       <span className="reporte-hora">
-                        {formatearHoraPedidoLista(arqueo.created_at)}
+                        {formatearHoraPedidoLista(fondo.created_at)}
                       </span>
                       <span className="reporte-cliente">
-                        {arqueo.usuario?.trim() || '—'}
+                        {fondo.usuario?.trim() || '—'}
                       </span>
                       <span className="reporte-total">
-                        {formatearMoneda(arqueo.fondo_fijo_del_dia)}
+                        {formatearMoneda(fondo.monto)}
                       </span>
                     </div>
                   ))}
