@@ -92,9 +92,13 @@ export function filtrarLineasDetallePorCocina(pedido, cocina) {
     return [];
   }
 
-  return lineasDetalle.filter((linea) =>
-    coincideCocina(linea.cocina, cocina)
-  );
+  return lineasDetalle.filter((linea) => {
+    if (linea?.es_flete === true) {
+      return false;
+    }
+
+    return coincideCocina(linea.cocina, cocina);
+  });
 }
 
 export const STATUS_COCINA = {

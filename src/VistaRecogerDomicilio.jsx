@@ -10,7 +10,7 @@ import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import useRepartidoresNegocio from './useRepartidoresNegocio';
-import { payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
+import { formatearZonaConTarifa, payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
 import {
   cargarCarritoWhatsappDisponible,
   cargarTabRecogerDomicilio,
@@ -98,6 +98,8 @@ export default function VistaRecogerDomicilio({
   const [modalJornadaCerradaAbierto, setModalJornadaCerradaAbierto] = useState(false);
   const [mensajeModalJornadaCerrada, setMensajeModalJornadaCerrada] = useState(null);
   const [zonasActivas, setZonasActivas] = useState([]);
+  const [mostrarFleteManual, setMostrarFleteManual] = useState(false);
+  const [montoFleteManual, setMontoFleteManual] = useState('');
 
   const { modulosNegocio } = useAuth();
   const mostrarBuscadorClientes = modulosNegocio.habilitar_clientes === true;
@@ -112,6 +114,7 @@ export default function VistaRecogerDomicilio({
     modoCaptura: 'whatsapp',
     persistir: true,
     snapshotInicial: snapshotInicialRef.current,
+    zonasActivas,
   });
 
   const { repartidores } = useRepartidoresNegocio(negocioId);
@@ -177,9 +180,18 @@ export default function VistaRecogerDomicilio({
         form: formActualizado,
         pagoRecibido: carrito.pagoRecibido,
       });
+      carrito.sincronizarFleteAutomatico({ reemplazarManual: true });
     },
     [carrito, mostrarSelectorZona]
   );
+
+  useEffect(() => {
+    if (!zonasActivas.length) return;
+    if (carrito.form.tipoEntrega !== TIPOS_ENTREGA.DOMICILIO) return;
+    if (carrito.lineaFlete) return;
+    if (!carrito.form.zona_id) return;
+    carrito.sincronizarFleteAutomatico({ reemplazarManual: false });
+  }, [zonasActivas]);
 
   useEffect(() => {
     persistirTabRecogerDomicilio(tabActivo);
@@ -859,12 +871,51 @@ export default function VistaRecogerDomicilio({
                         <option value="">Sin zona</option>
                         {zonasActivas.map((zona) => (
                           <option key={zona.id} value={zona.id}>
-                            {zona.nombre}
+                            {formatearZonaConTarifa(zona)}
                           </option>
                         ))}
                       </select>
                     </div>
                   ) : null}
+                  <div className="formulario-campo formulario-campo-flete-manual">
+                    <span className="formulario-campo-etiqueta-superior">Flete</span>
+                    <div className="formulario-flete-manual-controles">
+                      <button
+                        type="button"
+                        className="agregar-flete-manual-btn"
+                        onClick={() => setMostrarFleteManual((valor) => !valor)}
+                      >
+                        + Agregar flete
+                      </button>
+                    </div>
+                    {mostrarFleteManual ? (
+                      <div className="formulario-flete-manual">
+                        <label htmlFor="monto-flete-manual">Monto de flete</label>
+                        <div className="formulario-flete-manual-aplicar">
+                          <input
+                            id="monto-flete-manual"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={montoFleteManual}
+                            onChange={(evento) => setMontoFleteManual(evento.target.value)}
+                            placeholder="0.00"
+                          />
+                          <button
+                            type="button"
+                            className="confirmar-flete-manual-btn"
+                            onClick={() => {
+                              carrito.agregarFleteManual(montoFleteManual);
+                              setMostrarFleteManual(false);
+                              setMontoFleteManual('');
+                            }}
+                          >
+                            Aplicar
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               {tipoEntregaRecogerDomicilioSeleccionado(carrito.form.tipoEntrega) ? (
@@ -920,7 +971,7 @@ export default function VistaRecogerDomicilio({
             ) : null}
 
             <PedidoLineasCarrito
-              lineas={carrito.lineasPedidoConProducto}
+              lineas={carrito.lineasPedidoVisibles}
               productos={productos}
               variantesCtx={variantesCtx}
               totalPedido={carrito.totalPedido}

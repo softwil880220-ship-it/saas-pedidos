@@ -5,6 +5,7 @@ import {
   keyRenderLineaCarrito,
   redondearMoneda,
 } from './pedidoCarritoCalculos';
+import { esLineaFlete, etiquetaLineaFleteCarrito } from './pedidoFleteHelpers';
 import { formatearMoneda } from './pedidosShared';
 import {
   esProductoPorPeso,
@@ -65,6 +66,38 @@ export default function PedidoLineasCarrito({
 
         {(!colapsablePorDefecto || expandido) &&
           lineas.map((linea, indice) => {
+            if (esLineaFlete(linea)) {
+              const subtotalFlete = redondearMoneda(Number(linea.monto) || 0);
+
+              return (
+                <div key={`flete-${linea.id}`} className="pedido-linea-contenedor pedido-linea-flete">
+                  <div className="pedido-linea-cabecera">
+                    <div className="pedido-linea-numero">#{indice + 1}</div>
+                    <button
+                      type="button"
+                      className="eliminar-linea-btn"
+                      onClick={() => onEliminarLinea(linea.id)}
+                      aria-label={`Eliminar flete ${indice + 1}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="pedido-linea pedido-linea-flete-cuerpo">
+                    <div className="formulario-campo pedido-linea-producto">
+                      <span className="pedido-linea-producto-label">Concepto</span>
+                      <span className="pedido-linea-producto-nombre">
+                        {etiquetaLineaFleteCarrito(linea)}
+                      </span>
+                    </div>
+                    <div className="formulario-campo pedido-linea-subtotal">
+                      <span className="pedido-linea-cantidad-label">Subtotal</span>
+                      <input type="text" value={formatearMoneda(subtotalFlete)} readOnly />
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             const productoSeleccionado = buscarProductoPorId(productos, linea.productoId);
             const subtotal = calcularSubtotal(linea, productos, variantesCtx);
             const extras = redondearMoneda(calcularExtrasLinea(linea, variantesCtx));

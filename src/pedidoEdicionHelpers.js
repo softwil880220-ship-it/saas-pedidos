@@ -1,4 +1,5 @@
 import { buscarProductoPorId } from './pedidoCarritoCalculos';
+import { esLineaFlete, lineaFleteFormularioDesdeDetalle } from './pedidoFleteHelpers';
 import { payloadDireccionDomicilioDesdeForm } from './clientesHelpers';
 import {
   datetimeLocalDesdeIso,
@@ -135,6 +136,10 @@ export function lineasFormularioDesdePedido(pedido, listaProductos, variantesCtx
 
   if (lineasDetalle.length > 0) {
     return lineasDetalle.map((linea, index) => {
+      if (esLineaFlete(linea)) {
+        return lineaFleteFormularioDesdeDetalle(linea, index);
+      }
+
       const productoId = productoIdDesdeLineaDetalle(linea, listaProductos);
 
       return {

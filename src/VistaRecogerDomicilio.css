@@ -178,3 +178,61 @@
   }
 }
 
+.formulario-campo-flete-manual {
+  grid-column: 1 / -1;
+}
+
+.formulario-campo-etiqueta-superior {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.formulario-flete-manual-controles,
+.formulario-flete-manual-aplicar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.formulario-flete-manual {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.formulario-flete-manual input {
+  max-width: 10rem;
+}
+
+.agregar-flete-manual-btn,
+.confirmar-flete-manual-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.agregar-flete-manual-btn:hover,
+.confirmar-flete-manual-btn:hover {
+  background: #eef2ff;
+}
+
+.pedido-linea-flete .pedido-linea-flete-cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(8rem, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .pedido-linea-flete .pedido-linea-flete-cuerpo {
+    grid-template-columns: 1fr;
+  }
+}
+

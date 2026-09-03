@@ -92,4 +92,32 @@ describe('lineasFormularioDesdePedido', () => {
     expect(lineas[0].variantes['10']).toEqual(['100']);
     expect(calcularSubtotal(lineas[0], productos, variantesCtx)).toBe(92.5);
   });
+
+  test('restaura línea de flete desde snapshot guardado sin recalcular', () => {
+    const pedido = {
+      lineas_detalle: [
+        {
+          es_flete: true,
+          zona_id: 'z1',
+          zona_nombre: 'Caucel',
+          flete_manual: false,
+          nombre: 'Flete',
+          descripcion: 'Flete: Caucel — $20.00',
+          cantidad: 1,
+          subtotal: 20,
+        },
+      ],
+    };
+
+    const lineas = lineasFormularioDesdePedido(pedido, productos, variantesCtx);
+
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0]).toMatchObject({
+      es_flete: true,
+      monto: 20,
+      zona_id: 'z1',
+      zona_nombre: 'Caucel',
+      flete_manual: false,
+    });
+  });
 });

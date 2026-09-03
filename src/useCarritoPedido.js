@@ -4,6 +4,12 @@ import {
   obtenerFlujoStatus,
 } from './pedidosShared';
 import {
+  aplicarLineaFleteManual,
+  buscarLineaFlete,
+  esLineaFlete,
+  sincronizarLineaFleteAutomatica,
+} from './pedidoFleteHelpers';
+import {
   aplicarConsolidacionCarrito,
   buscarProductoPorId,
   calcularDetalleLineasPedido,
@@ -101,7 +107,7 @@ function crearFormularioInicial(modoCaptura, variantesCtx, tipoEntrega = TIPO_EN
 }
 
 function lineaEstaVacia(linea) {
-  return !linea?.productoId;
+  return !linea?.productoId && !esLineaFlete(linea);
 }
 
 function esCarritoVacioLocal({ form, pagoRecibido }, modoCaptura) {
@@ -213,6 +219,7 @@ export default function useCarritoPedido({
   folioId,
   snapshotInicial,
   persistir = true,
+  zonasActivas = [],
 }) {
   const estadoInicial = resolverEstadoInicial(
     snapshotInicial,
@@ -244,7 +251,12 @@ export default function useCarritoPedido({
   );
 
   const lineasPedidoActivas = useMemo(
-    () => (form.lineas || []).filter((linea) => linea?.productoId),
+    () => (form.lineas || []).filter((linea) => linea?.productoId && !esLineaFlete(linea)),
+    [form.lineas]
+  );
+
+  const lineaFlete = useMemo(
+    () => buscarLineaFlete(form.lineas),
     [form.lineas]
   );
 
@@ -253,9 +265,14 @@ export default function useCarritoPedido({
     [lineasPedidoActivas, ctxConsolidacion]
   );
 
+  const lineasPedidoVisibles = useMemo(
+    () => (lineaFlete ? [...lineasPedidoConProducto, lineaFlete] : lineasPedidoConProducto),
+    [lineasPedidoConProducto, lineaFlete]
+  );
+
   const totalPedido = useMemo(
-    () => calcularTotalLineas(lineasPedidoConProducto, productos, variantesCtx),
-    [lineasPedidoConProducto, productos, variantesCtx]
+    () => calcularTotalLineas(lineasPedidoVisibles, productos, variantesCtx),
+    [lineasPedidoVisibles, productos, variantesCtx]
   );
 
   const pagoEsEfectivo =
@@ -372,17 +389,78 @@ export default function useCarritoPedido({
     [folioId, modoStorage, modoCaptura, variantesCtx, form.tipoEntrega, persistir]
   );
 
+  const sincronizarFleteAutomatico = useCallback(
+    ({ reemplazarManual = false } = {}) => {
+      setForm((prev) => {
+        const resultado = sincronizarLineaFleteAutomatica({
+          lineas: prev.lineas,
+          zonaId: prev.zona_id,
+          zonasActivas,
+          tipoEntrega: prev.tipoEntrega,
+          nextLineaId: nextLineaId.current,
+          reemplazarManual,
+        });
+
+        if (!resultado.cambio) {
+          return prev;
+        }
+
+        nextLineaId.current = resultado.nextLineaId;
+        return {
+          ...prev,
+          lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
+        };
+      });
+    },
+    [zonasActivas, ctxConsolidacion]
+  );
+
+  const agregarFleteManual = useCallback(
+    (monto) => {
+      setForm((prev) => {
+        const resultado = aplicarLineaFleteManual({
+          lineas: prev.lineas,
+          monto,
+          nextLineaId: nextLineaId.current,
+        });
+
+        if (!resultado.cambio) {
+          return prev;
+        }
+
+        nextLineaId.current = resultado.nextLineaId;
+        return {
+          ...prev,
+          lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
+        };
+      });
+    },
+    [ctxConsolidacion]
+  );
+
   const setCampoCaptura = useCallback(
     (name, value) => {
       if (name === 'tipoEntrega' && modoCaptura === 'whatsapp') {
         persistirSnapshotActual();
 
         if (!value) {
-          setForm((prev) => ({
-            ...prev,
-            tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
-            direccion: '',
-          }));
+          setForm((prev) => {
+            const resultado = sincronizarLineaFleteAutomatica({
+              lineas: prev.lineas,
+              zonaId: '',
+              zonasActivas,
+              tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+              nextLineaId: nextLineaId.current,
+              reemplazarManual: true,
+            });
+            nextLineaId.current = resultado.nextLineaId;
+            return {
+              ...prev,
+              tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+              direccion: '',
+              lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
+            };
+          });
           return;
         }
 
@@ -404,11 +482,42 @@ export default function useCarritoPedido({
             ? prev.status
             : STATUS_DEFAULT_WHATSAPP_FORM;
           const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
+          const tipoEntrega = value;
+          const resultado = sincronizarLineaFleteAutomatica({
+            lineas: prev.lineas,
+            zonaId: esDomicilio ? prev.zona_id : '',
+            zonasActivas,
+            tipoEntrega,
+            nextLineaId: nextLineaId.current,
+            reemplazarManual: true,
+          });
+          nextLineaId.current = resultado.nextLineaId;
           return {
             ...prev,
-            tipoEntrega: value,
+            tipoEntrega,
             status,
             direccion: esDomicilio ? prev.direccion : '',
+            lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
+          };
+        });
+        return;
+      }
+
+      if (name === 'zona_id') {
+        setForm((prev) => {
+          const resultado = sincronizarLineaFleteAutomatica({
+            lineas: prev.lineas,
+            zonaId: value,
+            zonasActivas,
+            tipoEntrega: prev.tipoEntrega,
+            nextLineaId: nextLineaId.current,
+            reemplazarManual: true,
+          });
+          nextLineaId.current = resultado.nextLineaId;
+          return {
+            ...prev,
+            zona_id: value,
+            lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
           };
         });
         return;
@@ -417,10 +526,20 @@ export default function useCarritoPedido({
       setForm((prev) => {
         if (name === 'tipoEntrega') {
           if (!value) {
+            const resultado = sincronizarLineaFleteAutomatica({
+              lineas: prev.lineas,
+              zonaId: '',
+              zonasActivas,
+              tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
+              nextLineaId: nextLineaId.current,
+              reemplazarManual: true,
+            });
+            nextLineaId.current = resultado.nextLineaId;
             return {
               ...prev,
               tipoEntrega: TIPO_ENTREGA_SIN_SELECCION,
               direccion: '',
+              lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
             };
           }
 
@@ -429,11 +548,21 @@ export default function useCarritoPedido({
             ? prev.status
             : STATUS_DEFAULT_WHATSAPP_FORM;
           const esDomicilio = value === TIPOS_ENTREGA.DOMICILIO;
+          const resultado = sincronizarLineaFleteAutomatica({
+            lineas: prev.lineas,
+            zonaId: esDomicilio ? prev.zona_id : '',
+            zonasActivas,
+            tipoEntrega: value,
+            nextLineaId: nextLineaId.current,
+            reemplazarManual: true,
+          });
+          nextLineaId.current = resultado.nextLineaId;
           return {
             ...prev,
             tipoEntrega: value,
             status,
             direccion: esDomicilio ? prev.direccion : '',
+            lineas: aplicarConsolidacionCarrito(resultado.lineas, ctxConsolidacion),
           };
         }
         return { ...prev, [name]: value };
@@ -447,7 +576,7 @@ export default function useCarritoPedido({
         setPagoRecibido('');
       }
     },
-    [modoCaptura, persistirSnapshotActual, aplicarSnapshot, variantesCtx]
+    [modoCaptura, persistirSnapshotActual, aplicarSnapshot, zonasActivas, ctxConsolidacion]
   );
 
   const actualizarLinea = useCallback(
@@ -610,8 +739,8 @@ export default function useCarritoPedido({
   );
 
   const obtenerDetallePedido = useCallback(
-    () => calcularDetalleLineasPedido(lineasPedidoConProducto, productos, variantesCtx),
-    [lineasPedidoConProducto, productos, variantesCtx]
+    () => calcularDetalleLineasPedido(lineasPedidoVisibles, productos, variantesCtx),
+    [lineasPedidoVisibles, productos, variantesCtx]
   );
 
   const obtenerResumenProductos = useCallback(
@@ -625,6 +754,8 @@ export default function useCarritoPedido({
     categoriaPedidoActiva,
     lineasPedidoActivas,
     lineasPedidoConProducto,
+    lineasPedidoVisibles,
+    lineaFlete,
     totalPedido,
     pagoValido,
     cambio,
@@ -639,6 +770,8 @@ export default function useCarritoPedido({
     actualizarLinea,
     cambiarVarianteLinea,
     agregarLinea,
+    agregarFleteManual,
+    sincronizarFleteAutomatico,
     setCampoCaptura,
     setPagoRecibido,
     setCategoriaPedidoActiva,

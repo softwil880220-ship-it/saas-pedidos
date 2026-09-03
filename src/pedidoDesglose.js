@@ -208,6 +208,17 @@ function crearFilasBaseRecibo(normalizada) {
 }
 
 function expandirLineaDetalleRecibo(lineaCruda, variantesCtx) {
+  if (lineaCruda?.es_flete === true) {
+    const monto = redondearMoneda(Number(lineaCruda.subtotal ?? lineaCruda.precioUnitario) || 0);
+    return [
+      {
+        cantidad: 1,
+        nombre: lineaCruda.descripcion || lineaCruda.nombre || 'Flete',
+        precioLinea: monto,
+      },
+    ];
+  }
+
   const normalizada = normalizarLineaDetalleRecibo(lineaCruda);
   const esPorPeso = esProductoPorPeso(normalizada);
   const filas = crearFilasBaseRecibo(normalizada);

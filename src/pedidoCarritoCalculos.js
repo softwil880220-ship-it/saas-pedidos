@@ -1,3 +1,4 @@
+import { calcularDetalleLineaFlete, esLineaFlete } from './pedidoFleteHelpers';
 import { normalizarCocinaProducto } from './pedidosShared';
 import {
   UNIDAD_VENTA_PESO,
@@ -134,16 +135,17 @@ export function calcularNextLineaIdDesdeLineas(lineas, nextLineaIdFallback = 2) 
 }
 
 export function aplicarConsolidacionCarrito(lineas, ctx) {
-  const vacias = (lineas || []).filter((linea) => !linea?.productoId);
+  const fletes = (lineas || []).filter(esLineaFlete);
+  const vacias = (lineas || []).filter((linea) => !linea?.productoId && !esLineaFlete(linea));
   const consolidadas = consolidarLineasPorProducto(
-    (lineas || []).filter((linea) => linea?.productoId),
+    (lineas || []).filter((linea) => linea?.productoId && !esLineaFlete(linea)),
     ctx
   ).map((linea) => ({
     ...linea,
     id: idEstableLineaCarrito(linea, ctx),
   }));
 
-  return [...consolidadas, ...vacias];
+  return [...consolidadas, ...vacias, ...fletes];
 }
 
 export function normalizarFormLineasCarrito(form, ctx) {
@@ -243,9 +245,17 @@ export function calcularDetalleLineaPedido(linea, listaProductos, variantesCtx) 
   };
 }
 
+export function calcularDetalleLineaPedidoCaptura(linea, listaProductos, variantesCtx) {
+  if (esLineaFlete(linea)) {
+    return calcularDetalleLineaFlete(linea);
+  }
+
+  return calcularDetalleLineaPedido(linea, listaProductos, variantesCtx);
+}
+
 export function calcularDetalleLineasPedido(lineas, listaProductos, variantesCtx) {
   const lineasDetalle = lineas
-    .map((linea) => calcularDetalleLineaPedido(linea, listaProductos, variantesCtx))
+    .map((linea) => calcularDetalleLineaPedidoCaptura(linea, listaProductos, variantesCtx))
     .filter(Boolean);
 
   const total = redondearMoneda(
@@ -256,7 +266,7 @@ export function calcularDetalleLineasPedido(lineas, listaProductos, variantesCtx
 }
 
 export function calcularSubtotal(linea, listaProductos, variantesCtx) {
-  return calcularDetalleLineaPedido(linea, listaProductos, variantesCtx)?.subtotal ?? 0;
+  return calcularDetalleLineaPedidoCaptura(linea, listaProductos, variantesCtx)?.subtotal ?? 0;
 }
 
 export function calcularTotalLineas(lineas, listaProductos, variantesCtx) {
