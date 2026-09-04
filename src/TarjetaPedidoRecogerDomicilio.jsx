@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatearDireccionPedido } from './clientesHelpers';
 import {
   formatearPrecioLineaRecibo,
   obtenerDesgloseLineasPedido,
@@ -16,12 +17,14 @@ import {
 } from './recogerDomicilioHelpers';
 import {
   STATUS_PENDIENTE_REPARTIDOR,
+  TIPOS_ENTREGA,
   construirUrlWhatsApp,
   enriquecerLineasDetalleCocina,
   etiquetaStatusPedido,
   formatearFechaHoraCocina,
   formatearMoneda,
   formatearProgresoCocinas,
+  normalizarTipoEntrega,
   pedidoRequiereAlgunaCocina,
 } from './pedidosShared';
 
@@ -90,6 +93,9 @@ export default function TarjetaPedidoRecogerDomicilio({
   );
   const fechaReferencia = fechaReferenciaPedidoRecoger(pedido);
   const etiquetaRepartidor = etiquetaRepartidorPedido(pedido, repartidores);
+  const esDomicilio =
+    normalizarTipoEntrega(pedido.tipo_entrega) === TIPOS_ENTREGA.DOMICILIO;
+  const direccionEntrega = esDomicilio ? formatearDireccionPedido(pedido) : null;
 
   const badgeClass =
     pedido.status === 'por-aceptar'
@@ -137,6 +143,10 @@ export default function TarjetaPedidoRecogerDomicilio({
       </div>
 
       <p className="recoger-domicilio-recibo-meta">{formatearTipoEntregaPedido(pedido.tipo_entrega)}</p>
+
+      {esDomicilio ? (
+        <p className="vista-operativa-direccion">{direccionEntrega}</p>
+      ) : null}
 
       {etiquetaFormaPago(pedido.forma_pago) ? (
         <p className="recoger-domicilio-recibo-meta">
