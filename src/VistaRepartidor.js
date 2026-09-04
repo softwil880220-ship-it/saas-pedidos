@@ -21,8 +21,8 @@ import useVariantesCtx from './useVariantesCtx';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 
 const compararPedidosPorEntregar = (a, b) => {
-  const fechaA = new Date(a.created_at || 0);
-  const fechaB = new Date(b.created_at || 0);
+  const fechaA = new Date(a.repartidor_asignado_en || a.created_at || 0);
+  const fechaB = new Date(b.repartidor_asignado_en || b.created_at || 0);
   return fechaA - fechaB;
 };
 
