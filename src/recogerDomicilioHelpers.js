@@ -163,7 +163,17 @@ export function construirPayloadAsignacionRepartidor(
 }
 
 export function construirPayloadAvancePedidoRecogerDomicilio(pedido) {
-  return construirPayloadAvancePedido(pedido);
+  const payload = construirPayloadAvancePedido(pedido);
+  if (!payload) return null;
+
+  if (payload.status === 'entregado' && !pedido?.entregado_en) {
+    return {
+      ...payload,
+      entregado_en: new Date().toISOString(),
+    };
+  }
+
+  return payload;
 }
 
 export function construirPayloadRetrocesoPedidoRecogerDomicilio(pedido) {

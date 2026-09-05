@@ -232,7 +232,7 @@ describe('resolverEstadoVistaEntregasReporte', () => {
 });
 
 describe('pedidoEntregadoEnVentanaReporte', () => {
-  test('usa updated_at cuando entregado_en es null (repartidor externo vía Recoger/Domicilio)', () => {
+  test('excluye pedido entregado sin entregado_en', () => {
     const inicio = new Date('2026-09-01T08:00:00.000Z');
     const fin = new Date('2026-09-01T23:59:59.000Z');
     const pedido = {
@@ -241,23 +241,35 @@ describe('pedidoEntregadoEnVentanaReporte', () => {
       repartidor_externo: true,
       repartidor_usuario_id: null,
       entregado_en: null,
-      updated_at: '2026-09-01T18:30:00.000Z',
+    };
+
+    expect(pedidoEntregadoEnVentanaReporte(pedido, inicio, fin)).toBe(false);
+  });
+
+  test('incluye pedido externo entregado cuando entregado_en cae en el rango', () => {
+    const inicio = new Date('2026-09-01T08:00:00.000Z');
+    const fin = new Date('2026-09-01T23:59:59.000Z');
+    const pedido = {
+      ...pedidoDomicilioEntregado,
+      id: 'p-ext',
+      repartidor_externo: true,
+      repartidor_usuario_id: null,
+      entregado_en: '2026-09-01T18:30:00.000Z',
     };
 
     expect(pedidoEntregadoEnVentanaReporte(pedido, inicio, fin)).toBe(true);
   });
 });
 
-describe('filtrarPedidosEntregadosReporte con repartidor externo sin entregado_en', () => {
-  test('incluye pedido externo entregado cuando updated_at cae en el rango personalizado', () => {
+describe('filtrarPedidosEntregadosReporte con repartidor externo', () => {
+  test('incluye pedido externo entregado cuando entregado_en cae en el rango personalizado', () => {
     const pedidos = [
       {
         ...pedidoDomicilioEntregado,
         id: 'p-ext',
         repartidor_externo: true,
         repartidor_usuario_id: null,
-        entregado_en: null,
-        updated_at: '2026-09-01T18:30:00.000Z',
+        entregado_en: '2026-09-01T18:30:00.000Z',
       },
     ];
 

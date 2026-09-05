@@ -6,6 +6,7 @@ import {
 } from './pedidosShared';
 import {
   construirPayloadAsignacionRepartidor,
+  construirPayloadAvancePedidoRecogerDomicilio,
   pedidoCoincideBusquedaRecogerDomicilio,
   pedidoRecogerDomicilioEnCocina,
   pedidoRecogerDomicilioEntregadoJornada,
@@ -96,6 +97,34 @@ describe('recogerDomicilioHelpers', () => {
         repartidor_asignado_en: expect.any(String),
       })
     );
+  });
+
+  test('construirPayloadAvancePedidoRecogerDomicilio escribe entregado_en al pasar a entregado', () => {
+    const pedido = { ...pedidoBase, status: 'enviado' };
+    const payload = construirPayloadAvancePedidoRecogerDomicilio(pedido);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        status: 'entregado',
+        entregado_en: expect.any(String),
+      })
+    );
+  });
+
+  test('construirPayloadAvancePedidoRecogerDomicilio no sobreescribe entregado_en existente', () => {
+    const pedido = {
+      ...pedidoBase,
+      status: 'enviado',
+      entregado_en: '2026-08-23T12:00:00.000Z',
+    };
+    const payload = construirPayloadAvancePedidoRecogerDomicilio(pedido);
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        status: 'entregado',
+      })
+    );
+    expect(payload).not.toHaveProperty('entregado_en');
   });
 
   test('filtros por tab respetan jornada abierta', () => {

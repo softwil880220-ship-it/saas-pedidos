@@ -145,14 +145,6 @@ export function timestampEntregaParaReporte(pedido) {
     return new Date(pedido.entregado_en);
   }
 
-  if (pedido?.updated_at) {
-    return new Date(pedido.updated_at);
-  }
-
-  if (pedido?.created_at) {
-    return new Date(pedido.created_at);
-  }
-
   return null;
 }
 
@@ -188,46 +180,18 @@ export async function consultarPedidosEntregadosEnVentana(
   const isoInicio = inicio.toISOString();
   const isoFin = fin.toISOString();
 
-  const consultaBase = () =>
+  const { data, error } = await queryConNegocio(
     supabase
       .from('pedidos')
       .select('*')
       .is('deleted_at', null)
-      .eq('status', 'entregado');
+      .eq('status', 'entregado')
+      .gte('entregado_en', isoInicio)
+      .lte('entregado_en', isoFin),
+    negocioId
+  ).order('entregado_en', { ascending: false });
 
-  const [conEntregadoEn, sinEntregadoEn] = await Promise.all([
-    queryConNegocio(
-      consultaBase().gte('entregado_en', isoInicio).lte('entregado_en', isoFin),
-      negocioId
-    ).order('entregado_en', { ascending: false }),
-    queryConNegocio(
-      consultaBase()
-        .is('entregado_en', null)
-        .gte('updated_at', isoInicio)
-        .lte('updated_at', isoFin),
-      negocioId
-    ).order('updated_at', { ascending: false }),
-  ]);
-
-  const error = conEntregadoEn.error || sinEntregadoEn.error;
-  if (error) {
-    return { data: [], error };
-  }
-
-  const porId = new Map();
-  [...(conEntregadoEn.data || []), ...(sinEntregadoEn.data || [])].forEach((pedido) => {
-    if (pedido?.id) {
-      porId.set(pedido.id, pedido);
-    }
-  });
-
-  const data = Array.from(porId.values()).sort(
-    (a, b) =>
-      new Date(b.entregado_en || b.updated_at || 0) -
-      new Date(a.entregado_en || a.updated_at || 0)
-  );
-
-  return { data, error: null };
+  return { data: data || [], error };
 }
 
 export function rangoFechasInvalido(fechaDesde, fechaHasta) {
@@ -878,8 +842,7 @@ export function filtrarPedidosEntregadosReporte(
       .filter((pedido) => pedidoEntregadoEnJornadaRepartidor(pedido, jornada))
       .sort(
         (a, b) =>
-          new Date(b.entregado_en || b.updated_at || 0) -
-          new Date(a.entregado_en || a.updated_at || 0)
+          new Date(b.entregado_en || 0) - new Date(a.entregado_en || 0)
       );
   }
 
@@ -898,8 +861,7 @@ export function filtrarPedidosEntregadosReporte(
     .filter((pedido) => pedidoEntregadoEnVentanaReporte(pedido, inicio, fin))
     .sort(
       (a, b) =>
-        new Date(b.entregado_en || b.updated_at || 0) -
-        new Date(a.entregado_en || a.updated_at || 0)
+        new Date(b.entregado_en || 0) - new Date(a.entregado_en || 0)
     );
 }
 
