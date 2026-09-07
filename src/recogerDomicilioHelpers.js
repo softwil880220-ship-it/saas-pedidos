@@ -18,6 +18,52 @@ export const TABS_RECOGER_DOMICILIO = [
 
 export const MIN_BUSQUEDA_RECOGER_DOMICILIO = 3;
 
+export const FILTRO_TIPO_ENTREGA = {
+  TODOS: 'todos',
+  DOMICILIO: TIPOS_ENTREGA.DOMICILIO,
+  SUCURSAL: TIPOS_ENTREGA.SUCURSAL,
+};
+
+export const SUBTABS_FILTRO_TIPO_ENTREGA = [
+  { value: FILTRO_TIPO_ENTREGA.TODOS, label: 'Todos' },
+  { value: FILTRO_TIPO_ENTREGA.SUCURSAL, label: 'Recoger en sucursal' },
+  { value: FILTRO_TIPO_ENTREGA.DOMICILIO, label: 'A domicilio' },
+];
+
+export const SECCIONES_PENDIENTES_ENTREGA = [
+  {
+    id: 'listo-para-recoger',
+    titulo: 'Listo para recoger',
+    tiposEntrega: [TIPOS_ENTREGA.SUCURSAL],
+    status: 'listo-para-recoger',
+  },
+  {
+    id: 'pendiente-repartidor',
+    titulo: 'Esperando repartidor',
+    tiposEntrega: [TIPOS_ENTREGA.DOMICILIO],
+    status: STATUS_PENDIENTE_REPARTIDOR,
+  },
+  {
+    id: 'enviado',
+    titulo: 'Enviado',
+    tiposEntrega: [TIPOS_ENTREGA.DOMICILIO],
+    status: 'enviado',
+  },
+];
+
+export const SECCIONES_ENTREGADOS_POR_TIPO = [
+  {
+    id: TIPOS_ENTREGA.SUCURSAL,
+    titulo: 'Recoger en sucursal',
+    tipoEntrega: TIPOS_ENTREGA.SUCURSAL,
+  },
+  {
+    id: TIPOS_ENTREGA.DOMICILIO,
+    titulo: 'A domicilio',
+    tipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+  },
+];
+
 export const TIPOS_ENTREGA_OPCIONES = [
   { value: TIPOS_ENTREGA.DOMICILIO, label: 'A domicilio', icono: '🛵' },
   { value: TIPOS_ENTREGA.SUCURSAL, label: 'Recoger en sucursal', icono: '🏪' },
@@ -75,6 +121,95 @@ export function tabRecogerDomicilioParaPedido(pedido) {
   if (pedidoRecogerDomicilioPendienteEntrega(pedido)) return 'pendientes';
   if (pedido.status === 'entregado') return 'entregados';
   return null;
+}
+
+export function filtroTipoEntregaParaPedido(pedido) {
+  return normalizarTipoEntrega(pedido?.tipo_entrega);
+}
+
+export function navegacionRecogerDomicilioParaPedido(pedido) {
+  const tab = tabRecogerDomicilioParaPedido(pedido);
+  if (!tab) return null;
+
+  return {
+    tab,
+    filtroTipoEntrega: filtroTipoEntregaParaPedido(pedido),
+  };
+}
+
+export function filtrarPedidosRecogerDomicilioPorTipoEntrega(pedidos, filtroTipo) {
+  if (!filtroTipo || filtroTipo === FILTRO_TIPO_ENTREGA.TODOS) {
+    return [...(pedidos || [])];
+  }
+
+  return (pedidos || []).filter(
+    (pedido) => filtroTipoEntregaParaPedido(pedido) === filtroTipo
+  );
+}
+
+export function contarPedidosPorFiltroTipoEntrega(pedidos) {
+  const lista = pedidos || [];
+
+  return {
+    todos: lista.length,
+    [TIPOS_ENTREGA.DOMICILIO]: lista.filter(
+      (pedido) => filtroTipoEntregaParaPedido(pedido) === TIPOS_ENTREGA.DOMICILIO
+    ).length,
+    [TIPOS_ENTREGA.SUCURSAL]: lista.filter(
+      (pedido) => filtroTipoEntregaParaPedido(pedido) === TIPOS_ENTREGA.SUCURSAL
+    ).length,
+  };
+}
+
+export function seccionesPendientesEntregaVisibles(filtroTipo) {
+  if (filtroTipo === FILTRO_TIPO_ENTREGA.DOMICILIO) {
+    return SECCIONES_PENDIENTES_ENTREGA.filter((seccion) =>
+      seccion.tiposEntrega.includes(TIPOS_ENTREGA.DOMICILIO)
+    );
+  }
+
+  if (filtroTipo === FILTRO_TIPO_ENTREGA.SUCURSAL) {
+    return SECCIONES_PENDIENTES_ENTREGA.filter((seccion) =>
+      seccion.tiposEntrega.includes(TIPOS_ENTREGA.SUCURSAL)
+    );
+  }
+
+  return SECCIONES_PENDIENTES_ENTREGA;
+}
+
+export function agruparPedidosPendientesEntregaPorSeccion(
+  pedidos,
+  filtroTipo = FILTRO_TIPO_ENTREGA.TODOS
+) {
+  const filtrados = filtrarPedidosRecogerDomicilioPorTipoEntrega(pedidos, filtroTipo);
+
+  return seccionesPendientesEntregaVisibles(filtroTipo)
+    .map((definicion) => ({
+      id: definicion.id,
+      titulo: definicion.titulo,
+      pedidos: filtrados.filter(
+        (pedido) =>
+          definicion.tiposEntrega.includes(filtroTipoEntregaParaPedido(pedido)) &&
+          pedido.status === definicion.status
+      ),
+    }))
+    .filter((seccion) => {
+      if (filtroTipo === FILTRO_TIPO_ENTREGA.TODOS) {
+        return seccion.pedidos.length > 0;
+      }
+
+      return true;
+    });
+}
+
+export function agruparPedidosEntregadosPorTipoEntrega(pedidos) {
+  return SECCIONES_ENTREGADOS_POR_TIPO.map((definicion) => ({
+    id: definicion.id,
+    titulo: definicion.titulo,
+    pedidos: (pedidos || []).filter(
+      (pedido) => filtroTipoEntregaParaPedido(pedido) === definicion.tipoEntrega
+    ),
+  })).filter((seccion) => seccion.pedidos.length > 0);
 }
 
 export function pedidoCoincideBusquedaRecogerDomicilio(pedido, query) {

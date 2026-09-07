@@ -18,6 +18,7 @@ export default function ListaPedidosRecogerDomicilio({
   onAsignarRepartidor,
 }) {
   if (!pedidos.length) {
+    if (!mensajeVacio) return null;
     return <p className="recoger-domicilio-lista-vacio">{mensajeVacio}</p>;
   }
 

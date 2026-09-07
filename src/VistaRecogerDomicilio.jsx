@@ -5,6 +5,8 @@ import { useAuth } from './AuthContext';
 import BuscadorPedidosRecogerDomicilio from './BuscadorPedidosRecogerDomicilio.jsx';
 import ClienteBusquedaWhatsapp from './ClienteBusquedaWhatsapp';
 import ListaPedidosRecogerDomicilio from './ListaPedidosRecogerDomicilio.jsx';
+import ListaPedidosRecogerDomicilioSecciones from './ListaPedidosRecogerDomicilioSecciones.jsx';
+import SubNavFiltroTipoEntrega from './SubNavFiltroTipoEntrega.jsx';
 import ModalAutorizacionPin from './ModalAutorizacionPin.jsx';
 import PedidoLineasCarrito from './PedidoLineasCarrito.jsx';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal.jsx';
@@ -31,11 +33,16 @@ import {
 import {
   TABS_RECOGER_DOMICILIO,
   TIPOS_ENTREGA_OPCIONES,
+  FILTRO_TIPO_ENTREGA,
+  agruparPedidosEntregadosPorTipoEntrega,
+  agruparPedidosPendientesEntregaPorSeccion,
   construirPayloadAsignacionRepartidor,
   construirPayloadAvancePedidoRecogerDomicilio,
   construirPayloadRetrocesoPedidoRecogerDomicilio,
+  contarPedidosPorFiltroTipoEntrega,
   crearIdOptimisticoPedidoRecogerDomicilio,
   filtrarPedidosRecogerDomicilioPorTab,
+  filtrarPedidosRecogerDomicilioPorTipoEntrega,
   normalizarFormaPagoRecogerDomicilio,
   ordenarPedidosRecogerDomicilioDesc,
   tipoEntregaRecogerDomicilioSeleccionado,
@@ -86,6 +93,12 @@ export default function VistaRecogerDomicilio({
   setPedidos,
 }) {
   const [tabActivo, setTabActivo] = useState(() => cargarTabRecogerDomicilio());
+  const [filtroTipoEntregaPendientes, setFiltroTipoEntregaPendientes] = useState(
+    FILTRO_TIPO_ENTREGA.TODOS
+  );
+  const [filtroTipoEntregaEntregados, setFiltroTipoEntregaEntregados] = useState(
+    FILTRO_TIPO_ENTREGA.TODOS
+  );
   const [errorGuardar, setErrorGuardar] = useState(null);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
@@ -230,6 +243,39 @@ export default function VistaRecogerDomicilio({
   const pedidosEntregados = useMemo(
     () => filtrarPedidosRecogerDomicilioPorTab(pedidos, 'entregados', jornadaAbierta),
     [pedidos, jornadaAbierta]
+  );
+
+  const conteosTipoEntregaPendientes = useMemo(
+    () => contarPedidosPorFiltroTipoEntrega(pedidosPendientes),
+    [pedidosPendientes]
+  );
+
+  const conteosTipoEntregaEntregados = useMemo(
+    () => contarPedidosPorFiltroTipoEntrega(pedidosEntregados),
+    [pedidosEntregados]
+  );
+
+  const seccionesPendientes = useMemo(
+    () =>
+      agruparPedidosPendientesEntregaPorSeccion(
+        pedidosPendientes,
+        filtroTipoEntregaPendientes
+      ),
+    [pedidosPendientes, filtroTipoEntregaPendientes]
+  );
+
+  const pedidosEntregadosVisibles = useMemo(
+    () =>
+      filtrarPedidosRecogerDomicilioPorTipoEntrega(
+        pedidosEntregados,
+        filtroTipoEntregaEntregados
+      ),
+    [pedidosEntregados, filtroTipoEntregaEntregados]
+  );
+
+  const seccionesEntregados = useMemo(
+    () => agruparPedidosEntregadosPorTipoEntrega(pedidosEntregados),
+    [pedidosEntregados]
   );
 
   const abrirModalJornadaCerrada = (mensaje) => {
@@ -611,9 +657,17 @@ export default function VistaRecogerDomicilio({
     }
   };
 
-  const handleSeleccionBusqueda = ({ pedidoId, tab }) => {
+  const handleSeleccionBusqueda = ({ pedidoId, tab, filtroTipoEntrega }) => {
     if (tab) {
       setTabActivo(tab);
+    }
+
+    if (tab === 'pendientes' && filtroTipoEntrega) {
+      setFiltroTipoEntregaPendientes(filtroTipoEntrega);
+    }
+
+    if (tab === 'entregados' && filtroTipoEntrega) {
+      setFiltroTipoEntregaEntregados(filtroTipoEntrega);
     }
 
     setPedidoResaltadoId(pedidoId);
@@ -1072,8 +1126,14 @@ export default function VistaRecogerDomicilio({
               {pedidosPendientes.length} pedido{pedidosPendientes.length === 1 ? '' : 's'}
             </span>
           </header>
-          <ListaPedidosRecogerDomicilio
-            pedidos={pedidosPendientes}
+          <SubNavFiltroTipoEntrega
+            valor={filtroTipoEntregaPendientes}
+            conteos={conteosTipoEntregaPendientes}
+            onChange={setFiltroTipoEntregaPendientes}
+            ariaLabel="Filtrar pendientes por tipo de entrega"
+          />
+          <ListaPedidosRecogerDomicilioSecciones
+            secciones={seccionesPendientes}
             productos={productos}
             variantesCtx={variantesCtx}
             repartidores={repartidores}
@@ -1098,23 +1158,49 @@ export default function VistaRecogerDomicilio({
               {pedidosEntregados.length} pedido{pedidosEntregados.length === 1 ? '' : 's'}
             </span>
           </header>
-          <ListaPedidosRecogerDomicilio
-            pedidos={pedidosEntregados}
-            productos={productos}
-            variantesCtx={variantesCtx}
-            repartidores={repartidores}
-            pedidoResaltadoId={pedidoResaltadoId}
-            editandoPedidoId={editandoPedidoId}
-            bloqueadoPorJornada={bloqueadoPorJornada}
-            claseBotonJornadaCerrada={claseBotonJornadaCerrada}
-            asignandoRepartidorId={asignandoRepartidorId}
-            mensajeVacio="No hay pedidos entregados en la jornada activa."
-            onAvanzar={intentarAvanzar}
-            onRetroceder={intentarRetroceder}
-            onEditar={(pedido) => solicitarAutorizacion(pedido, 'editar')}
-            onEliminar={(pedido) => solicitarAutorizacion(pedido, 'eliminar')}
-            onAsignarRepartidor={intentarAsignarRepartidor}
+          <SubNavFiltroTipoEntrega
+            valor={filtroTipoEntregaEntregados}
+            conteos={conteosTipoEntregaEntregados}
+            onChange={setFiltroTipoEntregaEntregados}
+            ariaLabel="Filtrar entregados por tipo de entrega"
           />
+          {filtroTipoEntregaEntregados === FILTRO_TIPO_ENTREGA.TODOS ? (
+            <ListaPedidosRecogerDomicilioSecciones
+              secciones={seccionesEntregados}
+              productos={productos}
+              variantesCtx={variantesCtx}
+              repartidores={repartidores}
+              pedidoResaltadoId={pedidoResaltadoId}
+              editandoPedidoId={editandoPedidoId}
+              bloqueadoPorJornada={bloqueadoPorJornada}
+              claseBotonJornadaCerrada={claseBotonJornadaCerrada}
+              asignandoRepartidorId={asignandoRepartidorId}
+              mensajeVacio="No hay pedidos entregados en la jornada activa."
+              onAvanzar={intentarAvanzar}
+              onRetroceder={intentarRetroceder}
+              onEditar={(pedido) => solicitarAutorizacion(pedido, 'editar')}
+              onEliminar={(pedido) => solicitarAutorizacion(pedido, 'eliminar')}
+              onAsignarRepartidor={intentarAsignarRepartidor}
+            />
+          ) : (
+            <ListaPedidosRecogerDomicilio
+              pedidos={pedidosEntregadosVisibles}
+              productos={productos}
+              variantesCtx={variantesCtx}
+              repartidores={repartidores}
+              pedidoResaltadoId={pedidoResaltadoId}
+              editandoPedidoId={editandoPedidoId}
+              bloqueadoPorJornada={bloqueadoPorJornada}
+              claseBotonJornadaCerrada={claseBotonJornadaCerrada}
+              asignandoRepartidorId={asignandoRepartidorId}
+              mensajeVacio="No hay pedidos entregados en la jornada activa."
+              onAvanzar={intentarAvanzar}
+              onRetroceder={intentarRetroceder}
+              onEditar={(pedido) => solicitarAutorizacion(pedido, 'editar')}
+              onEliminar={(pedido) => solicitarAutorizacion(pedido, 'eliminar')}
+              onAsignarRepartidor={intentarAsignarRepartidor}
+            />
+          )}
         </section>
       )}
 

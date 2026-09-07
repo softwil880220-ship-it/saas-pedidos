@@ -120,6 +120,143 @@
   gap: 0.75rem;
 }
 
+.recoger-domicilio-subtabs-tipo-entrega {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  border-bottom: 1px solid var(--borde-suave, #e5e7eb);
+}
+
+.recoger-domicilio-subtab-tipo-entrega {
+  margin: 0;
+  padding: 0.45rem 0.85rem 0.55rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.recoger-domicilio-subtab-tipo-entrega:hover {
+  color: #334155;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.recoger-domicilio-subtab-tipo-entrega.activo {
+  color: #1e3a8a;
+  border-bottom-color: #2563eb;
+  background: transparent;
+  font-weight: 600;
+}
+
+.recoger-domicilio-lista-secciones {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.recoger-domicilio-lista-seccion-grupo {
+  width: 100%;
+  min-width: 0;
+}
+
+.recoger-domicilio-lista-seccion-grupo .mostrador-pendientes-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+  width: 100%;
+}
+
+.recoger-domicilio-seccion-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.45rem;
+}
+
+.recoger-domicilio-seccion-titulo {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.recoger-domicilio-seccion-cabecera .mostrador-pendientes-contador {
+  font-size: 0.8rem;
+}
+
+.recoger-domicilio-seccion-cabecera--pendiente-repartidor {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.recoger-domicilio-seccion-cabecera--pendiente-repartidor
+  .recoger-domicilio-seccion-titulo,
+.recoger-domicilio-seccion-cabecera--pendiente-repartidor
+  .mostrador-pendientes-contador {
+  color: #c2410c;
+}
+
+.recoger-domicilio-seccion-cabecera--enviado {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.recoger-domicilio-seccion-cabecera--enviado .recoger-domicilio-seccion-titulo,
+.recoger-domicilio-seccion-cabecera--enviado .mostrador-pendientes-contador {
+  color: #1e40af;
+}
+
+.recoger-domicilio-seccion-cabecera--listo-para-recoger {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.recoger-domicilio-seccion-cabecera--listo-para-recoger
+  .recoger-domicilio-seccion-titulo,
+.recoger-domicilio-seccion-cabecera--listo-para-recoger
+  .mostrador-pendientes-contador {
+  color: #6b21a8;
+}
+
+.recoger-domicilio-seccion-cabecera--sucursal {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.recoger-domicilio-seccion-cabecera--sucursal .recoger-domicilio-seccion-titulo,
+.recoger-domicilio-seccion-cabecera--sucursal .mostrador-pendientes-contador {
+  color: #6b21a8;
+}
+
+.recoger-domicilio-seccion-cabecera--domicilio {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.recoger-domicilio-seccion-cabecera--domicilio .recoger-domicilio-seccion-titulo,
+.recoger-domicilio-seccion-cabecera--domicilio .mostrador-pendientes-contador {
+  color: #1e40af;
+}
+
+@media (max-width: 640px) {
+  .recoger-domicilio-lista-seccion-grupo .mostrador-pendientes-lista {
+    grid-template-columns: 1fr;
+  }
+}
+
 .formulario-direccion-domicilio {
   grid-column: 1 / -1;
   display: grid;

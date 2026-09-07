@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
   MIN_BUSQUEDA_RECOGER_DOMICILIO,
+  navegacionRecogerDomicilioParaPedido,
   pedidoCoincideBusquedaRecogerDomicilio,
   pedidoRecogerDomicilioEnJornada,
-  tabRecogerDomicilioParaPedido,
 } from './recogerDomicilioHelpers';
 import { formatearNombreClientePedidoRecoger } from './recogerDomicilioHelpers';
 
@@ -55,12 +55,16 @@ export default function BuscadorPedidosRecogerDomicilio({
               <button
                 type="button"
                 className="recoger-domicilio-buscador-resultado"
-                onClick={() =>
+                onClick={() => {
+                  const navegacion = navegacionRecogerDomicilioParaPedido(pedido);
+                  if (!navegacion) return;
+
                   onSeleccionarPedido({
                     pedidoId: pedido.id,
-                    tab: tabRecogerDomicilioParaPedido(pedido),
-                  })
-                }
+                    tab: navegacion.tab,
+                    filtroTipoEntrega: navegacion.filtroTipoEntrega,
+                  });
+                }}
               >
                 <span>{formatearNombreClientePedidoRecoger(pedido)}</span>
                 {pedido.telefono ? <span>{pedido.telefono}</span> : null}

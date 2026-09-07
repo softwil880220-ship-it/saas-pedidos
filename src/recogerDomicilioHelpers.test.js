@@ -7,6 +7,12 @@ import {
 import {
   construirPayloadAsignacionRepartidor,
   construirPayloadAvancePedidoRecogerDomicilio,
+  FILTRO_TIPO_ENTREGA,
+  agruparPedidosEntregadosPorTipoEntrega,
+  agruparPedidosPendientesEntregaPorSeccion,
+  contarPedidosPorFiltroTipoEntrega,
+  filtrarPedidosRecogerDomicilioPorTipoEntrega,
+  navegacionRecogerDomicilioParaPedido,
   pedidoCoincideBusquedaRecogerDomicilio,
   pedidoRecogerDomicilioEnCocina,
   pedidoRecogerDomicilioEntregadoJornada,
@@ -125,6 +131,121 @@ describe('recogerDomicilioHelpers', () => {
       })
     );
     expect(payload).not.toHaveProperty('entregado_en');
+  });
+
+  test('filtrarPedidosRecogerDomicilioPorTipoEntrega separa domicilio y sucursal', () => {
+    const pedidos = [
+      { ...pedidoBase, id: 'd1', tipo_entrega: TIPOS_ENTREGA.DOMICILIO },
+      {
+        ...pedidoBase,
+        id: 's1',
+        tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+      },
+    ];
+
+    expect(
+      filtrarPedidosRecogerDomicilioPorTipoEntrega(pedidos, FILTRO_TIPO_ENTREGA.DOMICILIO).map(
+        (pedido) => pedido.id
+      )
+    ).toEqual(['d1']);
+    expect(
+      filtrarPedidosRecogerDomicilioPorTipoEntrega(pedidos, FILTRO_TIPO_ENTREGA.SUCURSAL).map(
+        (pedido) => pedido.id
+      )
+    ).toEqual(['s1']);
+    expect(
+      filtrarPedidosRecogerDomicilioPorTipoEntrega(pedidos, FILTRO_TIPO_ENTREGA.TODOS)
+    ).toHaveLength(2);
+  });
+
+  test('contarPedidosPorFiltroTipoEntrega devuelve conteos por tipo', () => {
+    const pedidos = [
+      { ...pedidoBase, id: 'd1', tipo_entrega: TIPOS_ENTREGA.DOMICILIO },
+      { ...pedidoBase, id: 'd2', tipo_entrega: TIPOS_ENTREGA.DOMICILIO },
+      {
+        ...pedidoBase,
+        id: 's1',
+        tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+      },
+    ];
+
+    expect(contarPedidosPorFiltroTipoEntrega(pedidos)).toEqual({
+      todos: 3,
+      domicilio: 2,
+      sucursal: 1,
+    });
+  });
+
+  test('agruparPedidosPendientesEntregaPorSeccion agrupa domicilio por status', () => {
+    const pedidos = [
+      {
+        ...pedidoBase,
+        id: 'd-espera',
+        status: STATUS_PENDIENTE_REPARTIDOR,
+      },
+      { ...pedidoBase, id: 'd-enviado', status: 'enviado' },
+      {
+        ...pedidoBase,
+        id: 's-listo',
+        tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+        status: 'listo-para-recoger',
+      },
+    ];
+
+    const secciones = agruparPedidosPendientesEntregaPorSeccion(
+      pedidos,
+      FILTRO_TIPO_ENTREGA.TODOS
+    );
+
+    expect(secciones.map((seccion) => seccion.id)).toEqual([
+      'listo-para-recoger',
+      'pendiente-repartidor',
+      'enviado',
+    ]);
+    expect(secciones[0].pedidos.map((pedido) => pedido.id)).toEqual(['s-listo']);
+    expect(secciones[1].pedidos.map((pedido) => pedido.id)).toEqual(['d-espera']);
+    expect(secciones[2].pedidos.map((pedido) => pedido.id)).toEqual(['d-enviado']);
+  });
+
+  test('navegacionRecogerDomicilioParaPedido incluye tab y filtro de tipo de entrega', () => {
+    expect(
+      navegacionRecogerDomicilioParaPedido({
+        ...pedidoBase,
+        status: 'enviado',
+      })
+    ).toEqual({
+      tab: 'pendientes',
+      filtroTipoEntrega: TIPOS_ENTREGA.DOMICILIO,
+    });
+
+    expect(
+      navegacionRecogerDomicilioParaPedido({
+        ...pedidoBase,
+        tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+        status: 'entregado',
+      })
+    ).toEqual({
+      tab: 'entregados',
+      filtroTipoEntrega: TIPOS_ENTREGA.SUCURSAL,
+    });
+  });
+
+  test('agruparPedidosEntregadosPorTipoEntrega separa sucursal y domicilio sin secciones vacías', () => {
+    const pedidos = [
+      { ...pedidoBase, id: 'd1', status: 'entregado' },
+      {
+        ...pedidoBase,
+        id: 's1',
+        tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+        status: 'entregado',
+      },
+    ];
+
+    const secciones = agruparPedidosEntregadosPorTipoEntrega(pedidos);
+
+    expect(secciones.map((seccion) => seccion.id)).toEqual(['sucursal', 'domicilio']);
+    expect(secciones[0].pedidos.map((pedido) => pedido.id)).toEqual(['s1']);
+    expect(secciones[1].pedidos.map((pedido) => pedido.id)).toEqual(['d1']);
   });
 
   test('filtros por tab respetan jornada abierta', () => {
