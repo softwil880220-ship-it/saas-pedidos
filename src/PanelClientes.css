@@ -166,7 +166,7 @@
 
 @media (max-width: 720px) {
   .panel-clientes-tabla-wrap.panel-clientes-tabla-wrap--scroll {
-    max-height: min(80vh, 50rem);
+    max-height: min(85vh, 56rem);
   }
 }
 
