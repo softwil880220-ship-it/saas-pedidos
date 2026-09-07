@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabase';
 import { queryConNegocio, payloadConNegocio } from './tenantHelpers';
 import {
+  clienteCoincideBusquedaNombreTelefono,
   direccionVacia,
   formatearDireccionResumen,
   marcarPrincipalUnico,
+  MIN_BUSQUEDA_CLIENTES,
   telefonoPrincipal,
   telefonoVacio,
 } from './clientesHelpers';
@@ -169,6 +171,22 @@ export default function PanelClientes({ negocioId }) {
   const [formulario, setFormulario] = useState(formularioClienteVacio);
   const [guardando, setGuardando] = useState(false);
   const [eliminandoId, setEliminandoId] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+
+  const terminoBusqueda = busqueda.trim();
+  const busquedaActiva = terminoBusqueda.length >= MIN_BUSQUEDA_CLIENTES;
+
+  const clientesFiltrados = useMemo(() => {
+    if (!busquedaActiva) return clientes;
+
+    return clientes.filter((cliente) => {
+      const detalle = resumen[cliente.id] || { telefonos: [], direcciones: [] };
+      return clienteCoincideBusquedaNombreTelefono(
+        { nombre: cliente.nombre, telefonos: detalle.telefonos },
+        terminoBusqueda
+      );
+    });
+  }, [clientes, resumen, busquedaActiva, terminoBusqueda]);
 
   const cargarClientes = useCallback(async () => {
     if (!negocioId) {
@@ -437,7 +455,16 @@ export default function PanelClientes({ negocioId }) {
   return (
     <section className="panel-clientes">
       <div className="panel-zonas-cabecera">
-        <h2 className="panel-zonas-titulo">Base de clientes</h2>
+        <div className="panel-clientes-cabecera-info">
+          <h2 className="panel-zonas-titulo">Base de clientes</h2>
+          {!cargando && clientes.length > 0 ? (
+            <p className="panel-clientes-contador" role="status">
+              {busquedaActiva
+                ? `${clientesFiltrados.length} de ${clientes.length} clientes`
+                : `${clientes.length} clientes registrados`}
+            </p>
+          ) : null}
+        </div>
         <button type="button" className="panel-clientes-agregar-btn" onClick={abrirNuevo}>
           Agregar cliente
         </button>
@@ -456,18 +483,37 @@ export default function PanelClientes({ negocioId }) {
           </button>
         </div>
       ) : (
-        <div className="panel-clientes-tabla-wrap">
-          <table className="panel-clientes-tabla">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Teléfono principal</th>
-                <th>Direcciones</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientes.map((cliente) => {
+        <>
+          <section className="panel-clientes-buscador" aria-label="Buscar clientes">
+            <label className="panel-clientes-buscador-label" htmlFor="buscar-cliente-base">
+              Buscar cliente por nombre o teléfono
+            </label>
+            <input
+              id="buscar-cliente-base"
+              type="search"
+              value={busqueda}
+              placeholder={`Mínimo ${MIN_BUSQUEDA_CLIENTES} caracteres`}
+              onChange={(evento) => setBusqueda(evento.target.value)}
+            />
+          </section>
+
+          {busquedaActiva && clientesFiltrados.length === 0 ? (
+            <p className="panel-clientes-buscador-vacio" role="status">
+              No se encontraron clientes con ese criterio.
+            </p>
+          ) : (
+            <div className="panel-clientes-tabla-wrap panel-clientes-tabla-wrap--scroll">
+              <table className="panel-clientes-tabla">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Teléfono principal</th>
+                    <th>Direcciones</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesFiltrados.map((cliente) => {
                 const detalle = resumen[cliente.id] || { telefonos: [], direcciones: [] };
                 const telefono = telefonoPrincipal({ telefonos: detalle.telefonos });
                 const cantidadDirecciones = detalle.direcciones.length;
@@ -508,10 +554,12 @@ export default function PanelClientes({ negocioId }) {
                     </td>
                   </tr>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {modalAbierto ? (

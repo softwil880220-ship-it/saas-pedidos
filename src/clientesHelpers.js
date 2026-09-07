@@ -1,5 +1,24 @@
 import { TIPOS_ENTREGA, formatearMoneda } from './pedidosShared';
 
+export const MIN_BUSQUEDA_CLIENTES = 3;
+
+export function clienteCoincideBusquedaNombreTelefono({ nombre, telefonos }, query) {
+  const termino = String(query ?? '').trim().toLowerCase();
+  if (termino.length < MIN_BUSQUEDA_CLIENTES) return false;
+
+  const nombreNorm = String(nombre ?? '').toLowerCase();
+  const terminoTelefono = termino.replace(/\D/g, '');
+
+  if (nombreNorm.includes(termino)) return true;
+
+  for (const item of telefonos || []) {
+    const telefono = String(item?.telefono ?? item ?? '').replace(/\D/g, '');
+    if (terminoTelefono && telefono.includes(terminoTelefono)) return true;
+  }
+
+  return false;
+}
+
 function formatearCalleConNumero(direccion) {
   const calle = (direccion.calle || '').trim();
   const numero = (direccion.numero || '').trim();
