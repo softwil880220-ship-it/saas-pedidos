@@ -151,7 +151,7 @@
 }
 
 .panel-clientes-tabla-wrap.panel-clientes-tabla-wrap--scroll {
-  max-height: 30rem;
+  max-height: 40rem;
   overflow-y: auto;
 }
 
