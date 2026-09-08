@@ -1255,6 +1255,7 @@ export function exportarReportePdf({
   configPeriodo,
   filtroVenta,
   resumen,
+  categorias = [],
   pedidos,
   jornadasPorId = {},
 }) {
@@ -1273,14 +1274,41 @@ export function exportarReportePdf({
   doc.text(`Total de pedidos: ${resumen.totalPedidos}`, 14, 40);
   doc.text(`Monto acumulado: ${formatearMoneda(resumen.montoAcumulado)}`, 14, 46);
 
+  let startYSeccion = 52;
+
+  doc.setFontSize(11);
+  doc.setTextColor(20, 83, 45);
+  doc.text('Reporte por categoría', 14, startYSeccion);
+
+  autoTable(doc, {
+    startY: startYSeccion + 4,
+    head: [['Categoría', 'Cantidad vendida', 'Total facturado']],
+    body: categorias.length
+      ? categorias.map((fila) => [
+          fila.nombre,
+          String(fila.cantidadVendida),
+          formatearMoneda(fila.totalFacturado),
+        ])
+      : [['—', '0', '—']],
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [20, 83, 45], textColor: 255 },
+    alternateRowStyles: { fillColor: [236, 253, 245] },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+    },
+  });
+
+  startYSeccion = (doc.lastAutoTable?.finalY ?? startYSeccion) + 8;
+
   const reportePorProducto = calcularReportePorProducto(pedidos);
 
   doc.setFontSize(11);
   doc.setTextColor(20, 83, 45);
-  doc.text('Reporte por producto', 14, 52);
+  doc.text('Reporte por producto', 14, startYSeccion);
 
   autoTable(doc, {
-    startY: 56,
+    startY: startYSeccion + 4,
     head: [['Producto', 'Cantidad vendida', 'Total facturado']],
     body: reportePorProducto.length
       ? reportePorProducto.map((fila) => [
@@ -1298,7 +1326,7 @@ export function exportarReportePdf({
     },
   });
 
-  const inicioTablaPedidos = (doc.lastAutoTable?.finalY ?? 56) + 8;
+  const inicioTablaPedidos = (doc.lastAutoTable?.finalY ?? startYSeccion) + 8;
 
   const multiplesDias = periodoMultiplesDias(configPeriodo);
   let filas = [];

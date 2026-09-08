@@ -863,6 +863,7 @@ export default function VistaReportes() {
       configPeriodo,
       filtroVenta,
       resumen: resumenVentasRpc,
+      categorias: reportePorCategoriaRpc,
       pedidos: pedidosFiltrados,
       jornadasPorId,
     });
