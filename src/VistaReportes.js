@@ -10,6 +10,7 @@ import {
   agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
   consultarPedidosReporteVentana,
+  consultarRegistrosReportePaginados,
   enriquecerEntregasPorJornada,
   enriquecerEntregasPorJornadaConCobros,
   calcularResumenReporte,
@@ -481,13 +482,28 @@ export default function VistaReportes() {
       return undefined;
     }
 
+    if (rangoInvalido) {
+      setArqueos([]);
+      setCargandoArqueos(false);
+      setErrorArqueos(null);
+      return undefined;
+    }
+
     const cargarArqueos = async () => {
       setCargandoArqueos(true);
       setErrorArqueos(null);
 
-      const { data, error: errorConsulta } = await queryConNegocio(
-        supabase.from('arqueos').select('*').order('created_at', { ascending: false }),
-        negocioId
+      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+      const { data, error: errorConsulta } = await consultarRegistrosReportePaginados(
+        supabase,
+        negocioId,
+        {
+          tabla: 'arqueos',
+          select: '*',
+          columnaFecha: 'created_at',
+          inicio,
+          fin,
+        }
       );
 
       if (!activo) return;
@@ -502,17 +518,26 @@ export default function VistaReportes() {
       setCargandoArqueos(false);
     };
 
-    cargarArqueos();
+    void cargarArqueos();
 
     return () => {
       activo = false;
     };
-  }, [tabReportes, negocioId]);
+  }, [tabReportes, negocioId, configPeriodo, rangoInvalido]);
 
   useEffect(() => {
     let activo = true;
 
     if (tabReportes !== 'retiros' || !negocioId) {
+      return undefined;
+    }
+
+    if (rangoInvalido) {
+      setRetirosHistorial([]);
+      setCargandoRetiros(false);
+      setErrorRetiros(null);
+      setRetiroMensajeBloqueo(null);
+      setRetiroConfirmarEliminar(null);
       return undefined;
     }
 
@@ -522,9 +547,17 @@ export default function VistaReportes() {
       setRetiroMensajeBloqueo(null);
       setRetiroConfirmarEliminar(null);
 
-      const { data, error: errorConsulta } = await queryConNegocio(
-        supabase.from('retiros').select('*').order('created_at', { ascending: false }),
-        negocioId
+      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+      const { data, error: errorConsulta } = await consultarRegistrosReportePaginados(
+        supabase,
+        negocioId,
+        {
+          tabla: 'retiros',
+          select: '*',
+          columnaFecha: 'created_at',
+          inicio,
+          fin,
+        }
       );
 
       if (!activo) return;
@@ -539,12 +572,12 @@ export default function VistaReportes() {
       setCargandoRetiros(false);
     };
 
-    cargarRetiros();
+    void cargarRetiros();
 
     return () => {
       activo = false;
     };
-  }, [tabReportes, negocioId]);
+  }, [tabReportes, negocioId, configPeriodo, rangoInvalido]);
 
   useEffect(() => {
     let activo = true;
@@ -553,16 +586,28 @@ export default function VistaReportes() {
       return undefined;
     }
 
+    if (rangoInvalido) {
+      setFondosFijosHistorial([]);
+      setCargandoFondosFijos(false);
+      setErrorFondosFijos(null);
+      return undefined;
+    }
+
     const cargarFondosFijos = async () => {
       setCargandoFondosFijos(true);
       setErrorFondosFijos(null);
 
-      const { data, error: errorConsulta } = await queryConNegocio(
-        supabase
-          .from('fondos_fijos')
-          .select('id, monto, usuario, created_at, jornada_id')
-          .order('created_at', { ascending: false }),
-        negocioId
+      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+      const { data, error: errorConsulta } = await consultarRegistrosReportePaginados(
+        supabase,
+        negocioId,
+        {
+          tabla: 'fondos_fijos',
+          select: 'id, monto, usuario, created_at, jornada_id',
+          columnaFecha: 'created_at',
+          inicio,
+          fin,
+        }
       );
 
       if (!activo) return;
@@ -577,12 +622,12 @@ export default function VistaReportes() {
       setCargandoFondosFijos(false);
     };
 
-    cargarFondosFijos();
+    void cargarFondosFijos();
 
     return () => {
       activo = false;
     };
-  }, [tabReportes, negocioId]);
+  }, [tabReportes, negocioId, configPeriodo, rangoInvalido]);
 
   useEffect(() => {
     let activo = true;

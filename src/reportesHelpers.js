@@ -210,6 +210,51 @@ export async function consultarPedidosReporteVentana(supabase, negocioId, inicio
   return { data: acumulado, error: null };
 }
 
+export const TAMANO_PAGINA_REGISTROS_REPORTE = 1000;
+
+export async function consultarRegistrosReportePaginados(
+  supabase,
+  negocioId,
+  { tabla, select = '*', columnaFecha = 'created_at', inicio = null, fin = null } = {}
+) {
+  if (!negocioId || !tabla) {
+    return { data: [], error: null };
+  }
+
+  const acumulado = [];
+  let offset = 0;
+  const aplicarFiltroFecha = Boolean(inicio && fin);
+
+  while (true) {
+    let query = queryConNegocio(supabase.from(tabla).select(select), negocioId);
+
+    if (aplicarFiltroFecha) {
+      query = query
+        .gte(columnaFecha, inicio.toISOString())
+        .lte(columnaFecha, fin.toISOString());
+    }
+
+    const { data, error } = await query
+      .order(columnaFecha, { ascending: false })
+      .range(offset, offset + TAMANO_PAGINA_REGISTROS_REPORTE - 1);
+
+    if (error) {
+      return { data: [], error };
+    }
+
+    const lote = data || [];
+    acumulado.push(...lote);
+
+    if (lote.length < TAMANO_PAGINA_REGISTROS_REPORTE) {
+      break;
+    }
+
+    offset += TAMANO_PAGINA_REGISTROS_REPORTE;
+  }
+
+  return { data: acumulado, error: null };
+}
+
 export async function consultarPedidosEntregadosEnVentana(
   supabase,
   negocioId,
