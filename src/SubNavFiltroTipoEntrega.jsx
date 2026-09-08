@@ -12,7 +12,7 @@ export default function SubNavFiltroTipoEntrega({
       aria-label={ariaLabel}
     >
       {SUBTABS_FILTRO_TIPO_ENTREGA.map(({ value, label }) => {
-        const contador = conteos[value] ?? conteos.todos ?? 0;
+        const contador = conteos[value] ?? 0;
 
         return (
           <button

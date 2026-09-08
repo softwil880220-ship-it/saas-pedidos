@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   TAB_MOSTRADOR: 'pos_tab_mostrador',
   TAB_MESAS: 'pos_tab_mesas',
   TAB_RECOGER_DOMICILIO: 'pos_tab_recoger_domicilio',
+  FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO: 'pos_filtro_tipo_entrega_recoger_domicilio',
   TAB_REPARTIDOR: 'pos_tab_repartidor',
 };
 
@@ -22,6 +23,19 @@ const TABS_RECOGER_DOMICILIO_VALIDOS = new Set([
   'pendientes',
   'entregados',
 ]);
+
+const FILTROS_TIPO_ENTREGA_RECOGER_DOMICILIO_VALIDOS = new Set([
+  TIPOS_ENTREGA.DOMICILIO,
+  TIPOS_ENTREGA.SUCURSAL,
+]);
+
+const FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO_DEFAULT = TIPOS_ENTREGA.SUCURSAL;
+
+function normalizarFiltroTipoEntregaRecogerDomicilio(valor) {
+  return FILTROS_TIPO_ENTREGA_RECOGER_DOMICILIO_VALIDOS.has(valor)
+    ? valor
+    : FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO_DEFAULT;
+}
 
 const TABS_REPARTIDOR_VALIDOS = new Set(['por-entregar', 'entregados']);
 
@@ -430,6 +444,50 @@ export function cargarTabRecogerDomicilio() {
     return TABS_RECOGER_DOMICILIO_VALIDOS.has(tab) ? tab : 'nuevo';
   } catch {
     return 'nuevo';
+  }
+}
+
+export function cargarFiltroTipoEntregaRecogerDomicilio() {
+  const filtrosDefault = {
+    pendientes: FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO_DEFAULT,
+    entregados: FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO_DEFAULT,
+  };
+
+  if (typeof window === 'undefined') {
+    return filtrosDefault;
+  }
+
+  try {
+    const serializado = window.localStorage.getItem(
+      STORAGE_KEYS.FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO
+    );
+    if (!serializado) {
+      return filtrosDefault;
+    }
+
+    const raw = JSON.parse(serializado);
+    return {
+      pendientes: normalizarFiltroTipoEntregaRecogerDomicilio(raw?.pendientes),
+      entregados: normalizarFiltroTipoEntregaRecogerDomicilio(raw?.entregados),
+    };
+  } catch {
+    return filtrosDefault;
+  }
+}
+
+export function persistirFiltroTipoEntregaRecogerDomicilio({ pendientes, entregados }) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEYS.FILTRO_TIPO_ENTREGA_RECOGER_DOMICILIO,
+      JSON.stringify({
+        pendientes: normalizarFiltroTipoEntregaRecogerDomicilio(pendientes),
+        entregados: normalizarFiltroTipoEntregaRecogerDomicilio(entregados),
+      })
+    );
+  } catch {
+    // Ignorar errores de almacenamiento local.
   }
 }
 

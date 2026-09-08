@@ -25,7 +25,6 @@ export const FILTRO_TIPO_ENTREGA = {
 };
 
 export const SUBTABS_FILTRO_TIPO_ENTREGA = [
-  { value: FILTRO_TIPO_ENTREGA.TODOS, label: 'Todos' },
   { value: FILTRO_TIPO_ENTREGA.SUCURSAL, label: 'Recoger en sucursal' },
   { value: FILTRO_TIPO_ENTREGA.DOMICILIO, label: 'A domicilio' },
 ];

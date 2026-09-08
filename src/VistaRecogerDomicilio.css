@@ -120,39 +120,48 @@
   gap: 0.75rem;
 }
 
+.recoger-domicilio-cocina-contador {
+  margin: 0;
+}
+
+.recoger-domicilio-lista-seccion > .recoger-domicilio-subtabs-tipo-entrega:first-child {
+  margin-top: 0;
+}
+
 .recoger-domicilio-subtabs-tipo-entrega {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
-  margin: 0 0 0.5rem;
+  margin: 0 0 1rem;
   padding: 0;
-  border-bottom: 1px solid var(--borde-suave, #e5e7eb);
+  border-bottom: 1px solid var(--borde-suave, #e2e8f0);
 }
 
 .recoger-domicilio-subtab-tipo-entrega {
   margin: 0;
-  padding: 0.45rem 0.85rem 0.55rem;
+  padding: 0.6rem 1rem 0.65rem;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.2;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .recoger-domicilio-subtab-tipo-entrega:hover {
-  color: #334155;
-  background: rgba(148, 163, 184, 0.08);
+  color: #64748b;
+  background: transparent;
 }
 
 .recoger-domicilio-subtab-tipo-entrega.activo {
-  color: #1e3a8a;
+  color: #111827;
   border-bottom-color: #2563eb;
   background: transparent;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .recoger-domicilio-lista-secciones {
@@ -179,27 +188,29 @@
 .recoger-domicilio-seccion-cabecera {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.35rem 0.75rem;
-  margin-bottom: 0.65rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.45rem;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.3rem;
 }
 
-.recoger-domicilio-seccion-titulo {
+.recoger-domicilio-seccion-cabecera .recoger-domicilio-seccion-titulo {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .recoger-domicilio-seccion-cabecera .mostrador-pendientes-contador {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .recoger-domicilio-seccion-cabecera--pendiente-repartidor {
   background: #ffedd5;
-  color: #c2410c;
 }
 
 .recoger-domicilio-seccion-cabecera--pendiente-repartidor
@@ -211,7 +222,6 @@
 
 .recoger-domicilio-seccion-cabecera--enviado {
   background: #dbeafe;
-  color: #1e40af;
 }
 
 .recoger-domicilio-seccion-cabecera--enviado .recoger-domicilio-seccion-titulo,
@@ -221,7 +231,6 @@
 
 .recoger-domicilio-seccion-cabecera--listo-para-recoger {
   background: #f3e8ff;
-  color: #6b21a8;
 }
 
 .recoger-domicilio-seccion-cabecera--listo-para-recoger
@@ -233,7 +242,6 @@
 
 .recoger-domicilio-seccion-cabecera--sucursal {
   background: #f3e8ff;
-  color: #6b21a8;
 }
 
 .recoger-domicilio-seccion-cabecera--sucursal .recoger-domicilio-seccion-titulo,
@@ -243,7 +251,6 @@
 
 .recoger-domicilio-seccion-cabecera--domicilio {
   background: #dbeafe;
-  color: #1e40af;
 }
 
 .recoger-domicilio-seccion-cabecera--domicilio .recoger-domicilio-seccion-titulo,
@@ -252,8 +259,24 @@
 }
 
 @media (max-width: 640px) {
+  .recoger-domicilio-subtabs-tipo-entrega {
+    margin-bottom: 0.85rem;
+  }
+
+  .recoger-domicilio-subtab-tipo-entrega {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 0;
+    padding: 0.55rem 0.5rem 0.6rem;
+    font-size: 0.9375rem;
+    text-align: center;
+  }
+
   .recoger-domicilio-lista-seccion-grupo .mostrador-pendientes-lista {
     grid-template-columns: 1fr;
+  }
+
+  .recoger-domicilio-seccion-cabecera {
+    padding: 0.28rem 0.65rem;
   }
 }
 
