@@ -7,6 +7,7 @@ import {
 } from './categoriaFrecuenciaPedidos';
 import { formatearMoneda, normalizarTipoEntrega, TIPOS_ENTREGA } from './pedidosShared';
 import { redondearMoneda } from './pedidoCarritoCalculos';
+import { formatearDescripcionLineaFlete } from './pedidoFleteHelpers';
 import {
   cargarJornadaAbierta,
   JORNADA_ESTADO_CERRADA,
@@ -553,6 +554,19 @@ export function formatearProductosReporte(pedido) {
   if (lineas.length > 0) {
     return lineas
       .map((linea) => {
+        if (linea.es_flete === true) {
+          const descripcion = (linea.descripcion || '').trim();
+          if (descripcion) {
+            return descripcion;
+          }
+
+          return formatearDescripcionLineaFlete({
+            zonaNombre: linea.zona_nombre,
+            monto: linea.monto ?? linea.subtotal ?? linea.precio_unitario,
+            manual: linea.flete_manual === true || !linea.zona_id,
+          });
+        }
+
         const textoPeso = formatearLineaDetalleGuardada(linea);
         if (textoPeso) {
           return textoPeso;
@@ -873,6 +887,75 @@ export function filtrarPedidosEntregadosPorRepartidor(pedidos, claveRepartidor =
   return (pedidos || []).filter(
     (pedido) => claveRepartidorPedidoEntrega(pedido) === claveRepartidor
   );
+}
+
+export function repartidoresDetalleEntregasJornada(grupo, repartidorEtiquetaFallback = null) {
+  if (grupo?.entregasPorRepartidor?.length) {
+    return grupo.entregasPorRepartidor;
+  }
+
+  if (!grupo?.pedidos?.length) {
+    return [];
+  }
+
+  return [
+    {
+      claveRepartidor: '__todos__',
+      etiqueta: repartidorEtiquetaFallback || 'Entregas',
+      pedidos: grupo.pedidos,
+      resumen: calcularResumenReporte(grupo.pedidos),
+    },
+  ];
+}
+
+export function construirFilasDetalleEntregasPorJornadaPdf(
+  porJornada = [],
+  repartidorEtiquetaFallback = null
+) {
+  const filas = [];
+
+  (porJornada || []).forEach((grupo) => {
+    filas.push([
+      {
+        content: `${grupo.etiqueta} — ${grupo.etiquetaTotal}: ${formatearMoneda(grupo.totalDelDia)}`,
+        colSpan: 6,
+        styles: {
+          fillColor: [236, 253, 245],
+          textColor: [20, 83, 45],
+          fontStyle: 'bold',
+        },
+      },
+    ]);
+
+    repartidoresDetalleEntregasJornada(grupo, repartidorEtiquetaFallback).forEach((fila) => {
+      filas.push([
+        {
+          content: `${fila.etiqueta} — ${fila.resumen.totalPedidos} pedido${
+            fila.resumen.totalPedidos === 1 ? '' : 's'
+          } — ${formatearMoneda(fila.resumen.montoAcumulado)}`,
+          colSpan: 6,
+          styles: {
+            fillColor: [241, 245, 249],
+            textColor: [51, 65, 85],
+            fontStyle: 'bold',
+          },
+        },
+      ]);
+
+      (fila.pedidos || []).forEach((pedido) => {
+        filas.push([
+          formatearHoraPedidoLista(pedido.entregado_en),
+          pedido.folio != null ? String(pedido.folio) : '—',
+          formatearClienteReporte(pedido),
+          formatearFormaPagoReporte(pedido),
+          formatearProductosReporte(pedido),
+          formatearMoneda(pedido.total),
+        ]);
+      });
+    });
+  });
+
+  return filas;
 }
 
 export function agruparEntregasPorRepartidor(pedidos, repartidoresPorId = {}) {
@@ -1501,8 +1584,12 @@ export function exportarEntregasPdf({
     });
   }
 
-  if (porJornada.length > 1) {
+  if (porJornada.length > 0) {
     let startYJornadas = (doc.lastAutoTable?.finalY ?? startYCobros) + 8;
+    const filasDetalle = construirFilasDetalleEntregasPorJornadaPdf(
+      porJornada,
+      repartidorEtiqueta
+    );
 
     doc.setFontSize(11);
     doc.setTextColor(20, 83, 45);
@@ -1510,14 +1597,16 @@ export function exportarEntregasPdf({
 
     autoTable(doc, {
       startY: startYJornadas + 4,
-      head: [['Jornada', 'Pedidos', 'Total cobrado']],
-      body: construirFilasEntregasPorJornadaPdf(porJornada),
+      head: [['Hora', 'Folio', 'Cliente', 'Forma de pago', 'Productos', 'Total']],
+      body: filasDetalle.length
+        ? filasDetalle
+        : [['—', '—', '—', 'Sin entregas en el período', '—', '—']],
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [20, 83, 45], textColor: 255 },
       alternateRowStyles: { fillColor: [236, 253, 245] },
       columnStyles: {
-        1: { halign: 'right' },
-        2: { halign: 'right' },
+        4: { cellWidth: 60 },
+        5: { halign: 'right' },
       },
     });
   }

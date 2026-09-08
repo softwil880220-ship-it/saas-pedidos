@@ -14,6 +14,7 @@ import {
   enriquecerEntregasPorJornada,
   enriquecerEntregasPorJornadaConCobros,
   calcularResumenReporte,
+  repartidoresDetalleEntregasJornada,
   sufijoRepartidorInlineEntregasJornada,
   sufijoFormaPagoInlineEntregasJornada,
   consultarPedidosEntregadosEnVentana,
@@ -104,6 +105,35 @@ function cargarTabReportes() {
 
 const MENSAJE_RETIRO_JORNADA_CERRADA =
   'No puedes eliminar este retiro de efectivo porque la jornada a la que pertenece ya está cerrada.';
+
+function TablaPedidosEntregaReporte({ pedidos }) {
+  if (!pedidos?.length) {
+    return null;
+  }
+
+  return (
+    <div className="reportes-tabla pedidos-reporte pedidos-reporte-entregas">
+      <div className="reportes-tabla-header pedidos-reporte-header">
+        <span>Hora</span>
+        <span>Folio</span>
+        <span>Cliente</span>
+        <span>Forma de pago</span>
+        <span>Productos</span>
+        <span>Total</span>
+      </div>
+      {pedidos.map((pedido) => (
+        <div key={pedido.id} className="reportes-tabla-fila pedidos-reporte-fila">
+          <span className="reporte-hora">{formatearHoraPedidoLista(pedido.entregado_en)}</span>
+          <span className="reporte-folio">{pedido.folio ?? '—'}</span>
+          <span className="reporte-cliente">{formatearClienteReporte(pedido)}</span>
+          <span className="reporte-forma-pago">{formatearFormaPagoReporte(pedido)}</span>
+          <span className="reporte-productos">{formatearProductosReporte(pedido)}</span>
+          <span className="reporte-total">{formatearMoneda(pedido.total)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const FORMAS_PAGO_ARQUEO = [
   { label: 'Efectivo', sistema: 'efectivo_sistema', contado: 'efectivo_contado' },
@@ -640,9 +670,6 @@ export default function VistaReportes() {
     [pedidosEntregasVisibles]
   );
 
-  const multiplesDiasEntregas =
-    !jornadaFocoId && usaRangoPersonalizado && periodoMultiplesDias(configPeriodo);
-
   const entregasPeriodoActivo = entregasReportePeriodoActivo({
     jornadaFocoId,
     usaRangoPersonalizado,
@@ -667,20 +694,12 @@ export default function VistaReportes() {
 
   const entregasAgrupadasPorJornada = useMemo(
     () =>
-      multiplesDiasEntregas
-        ? enriquecerEntregasPorJornada(
-            agruparEntregasPorJornada(pedidosEntregasVisibles, jornadasPorId),
-            repartidoresPorId,
-            { incluirRepartidor: !filtroRepartidorEntregas }
-          )
-        : [],
-    [
-      multiplesDiasEntregas,
-      pedidosEntregasVisibles,
-      jornadasPorId,
-      repartidoresPorId,
-      filtroRepartidorEntregas,
-    ]
+      enriquecerEntregasPorJornada(
+        agruparEntregasPorJornada(pedidosEntregasVisibles, jornadasPorId),
+        repartidoresPorId,
+        { incluirRepartidor: !filtroRepartidorEntregas }
+      ),
+    [pedidosEntregasVisibles, jornadasPorId, repartidoresPorId, filtroRepartidorEntregas]
   );
 
   const etiquetaJornadaFocoEntregas = jornadaFoco
@@ -1603,7 +1622,7 @@ export default function VistaReportes() {
                     </section>
                   ) : null}
 
-                  {multiplesDiasEntregas && entregasAgrupadasPorJornada.length > 0 ? (
+                  {entregasAgrupadasPorJornada.length > 0 ? (
                     <section
                       className="reportes-por-jornada"
                       aria-labelledby="reportes-entregas-jornada-titulo"
@@ -1614,78 +1633,99 @@ export default function VistaReportes() {
                       >
                         Entregas por jornada
                       </h3>
-                      {entregasAgrupadasPorJornada.map((grupo) => (
-                        <div key={grupo.clave} className="pedidos-grupo pedidos-grupo-separado">
-                          <div className="pedidos-grupo-encabezado">
-                            <span className="pedidos-grupo-encabezado-linea">
-                              <span
-                                className="pedidos-grupo-encabezado-separador"
-                                aria-hidden="true"
-                              >
-                                ──
+                      {entregasAgrupadasPorJornada.map((grupo) => {
+                        const multiplesJornadasEntregas = entregasAgrupadasPorJornada.length > 1;
+                        const repartidoresJornada = repartidoresDetalleEntregasJornada(
+                          grupo,
+                          repartidorEntregasEtiqueta
+                        );
+
+                        return (
+                          <div key={grupo.clave} className="pedidos-grupo pedidos-grupo-separado">
+                            <div className="pedidos-grupo-encabezado">
+                              <span className="pedidos-grupo-encabezado-linea">
+                                <span
+                                  className="pedidos-grupo-encabezado-separador"
+                                  aria-hidden="true"
+                                >
+                                  ──
+                                </span>
+                                {grupo.etiqueta}
+                                <span
+                                  className="pedidos-grupo-encabezado-separador"
+                                  aria-hidden="true"
+                                >
+                                  ──
+                                </span>
                               </span>
-                              {grupo.etiqueta}
-                              <span
-                                className="pedidos-grupo-encabezado-separador"
-                                aria-hidden="true"
-                              >
-                                ──
+                              <span className="pedidos-grupo-encabezado-total">
+                                {grupo.etiquetaTotal}: {formatearMoneda(grupo.totalDelDia)} ·{' '}
+                                {grupo.pedidos.length} pedido
+                                {grupo.pedidos.length === 1 ? '' : 's'}
+                                {sufijoRepartidorInlineEntregasJornada(grupo.entregasPorRepartidor)}
+                                {sufijoFormaPagoInlineEntregasJornada(grupo.cobrosPorFormaPago)}
                               </span>
-                            </span>
-                            <span className="pedidos-grupo-encabezado-total">
-                              {grupo.etiquetaTotal}: {formatearMoneda(grupo.totalDelDia)} ·{' '}
-                              {grupo.pedidos.length} pedido
-                              {grupo.pedidos.length === 1 ? '' : 's'}
-                              {sufijoRepartidorInlineEntregasJornada(grupo.entregasPorRepartidor)}
-                              {sufijoFormaPagoInlineEntregasJornada(grupo.cobrosPorFormaPago)}
-                            </span>
+                            </div>
+                            {multiplesJornadasEntregas && repartidoresJornada.length > 0 ? (
+                              <div className="reportes-tabla reportes-jornada-desglose">
+                                <div className="reportes-tabla-header reportes-por-producto-header">
+                                  <span>Repartidor</span>
+                                  <span>Pedidos</span>
+                                  <span>Total cobrado</span>
+                                </div>
+                                {repartidoresJornada.map((fila) => (
+                                  <div
+                                    key={fila.claveRepartidor}
+                                    className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
+                                  >
+                                    <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                                    <span className="reporte-producto-cantidad">
+                                      {fila.resumen.totalPedidos}
+                                    </span>
+                                    <span className="reporte-producto-total">
+                                      {formatearMoneda(fila.resumen.montoAcumulado)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                            {repartidoresJornada.map((fila) => (
+                              <div
+                                key={`detalle-${fila.claveRepartidor}`}
+                                className="reportes-jornada-repartidor-detalle"
+                              >
+                                <p className="reportes-jornada-repartidor-titulo">
+                                  {fila.etiqueta} — {fila.resumen.totalPedidos} pedido
+                                  {fila.resumen.totalPedidos === 1 ? '' : 's'} —{' '}
+                                  {formatearMoneda(fila.resumen.montoAcumulado)}
+                                </p>
+                                <TablaPedidosEntregaReporte pedidos={fila.pedidos} />
+                              </div>
+                            ))}
+                            {multiplesJornadasEntregas && grupo.cobrosPorFormaPago?.length > 1 ? (
+                              <div className="reportes-tabla reportes-jornada-desglose">
+                                <div className="reportes-tabla-header reportes-por-producto-header">
+                                  <span>Forma de pago</span>
+                                  <span>Pedidos</span>
+                                  <span>Total cobrado</span>
+                                </div>
+                                {grupo.cobrosPorFormaPago.map((fila) => (
+                                  <div
+                                    key={fila.forma}
+                                    className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
+                                  >
+                                    <span className="reporte-producto-nombre">{fila.etiqueta}</span>
+                                    <span className="reporte-producto-cantidad">{fila.cantidad}</span>
+                                    <span className="reporte-producto-total">
+                                      {formatearMoneda(fila.total)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                          {grupo.entregasPorRepartidor?.length > 1 ? (
-                            <div className="reportes-tabla reportes-jornada-desglose">
-                              <div className="reportes-tabla-header reportes-por-producto-header">
-                                <span>Repartidor</span>
-                                <span>Pedidos</span>
-                                <span>Total cobrado</span>
-                              </div>
-                              {grupo.entregasPorRepartidor.map((fila) => (
-                                <div
-                                  key={fila.claveRepartidor}
-                                  className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
-                                >
-                                  <span className="reporte-producto-nombre">{fila.etiqueta}</span>
-                                  <span className="reporte-producto-cantidad">
-                                    {fila.resumen.totalPedidos}
-                                  </span>
-                                  <span className="reporte-producto-total">
-                                    {formatearMoneda(fila.resumen.montoAcumulado)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {grupo.cobrosPorFormaPago?.length > 1 ? (
-                            <div className="reportes-tabla reportes-jornada-desglose">
-                              <div className="reportes-tabla-header reportes-por-producto-header">
-                                <span>Forma de pago</span>
-                                <span>Pedidos</span>
-                                <span>Total cobrado</span>
-                              </div>
-                              {grupo.cobrosPorFormaPago.map((fila) => (
-                                <div
-                                  key={fila.forma}
-                                  className="reportes-tabla-fila reportes-por-producto-fila reportes-jornada-desglose-fila"
-                                >
-                                  <span className="reporte-producto-nombre">{fila.etiqueta}</span>
-                                  <span className="reporte-producto-cantidad">{fila.cantidad}</span>
-                                  <span className="reporte-producto-total">
-                                    {formatearMoneda(fila.total)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </section>
                   ) : null}
                 </>

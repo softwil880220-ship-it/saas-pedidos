@@ -37,6 +37,7 @@ import {
   filtrarPedidosEntregadosReporte,
   formatearEncabezadoGrupoJornada,
   formatearEtiquetaJornadaFocoReporte,
+  formatearProductosReporte,
   jornadaEstaCerrada,
   ORIGEN_JORNADA_FOCO_ABIERTA,
   ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA,
@@ -835,6 +836,38 @@ describe('construirFilasEntregasPorJornadaPdf', () => {
   });
 });
 
+describe('formatearProductosReporte', () => {
+  test('omite cantidad y precio unitario en líneas de flete', () => {
+    expect(
+      formatearProductosReporte({
+        lineas_detalle: [
+          {
+            es_flete: true,
+            descripcion: 'Flete: Centro — $40.00',
+            cantidad: 1,
+            precio_unitario: 40,
+            subtotal: 40,
+          },
+        ],
+      })
+    ).toBe('Flete: Centro — $40.00');
+  });
+
+  test('mantiene formato con cantidad y precio unitario en productos normales', () => {
+    expect(
+      formatearProductosReporte({
+        lineas_detalle: [
+          {
+            nombre: 'Taco',
+            cantidad: 3,
+            precio_unitario: 25,
+          },
+        ],
+      })
+    ).toBe('Taco x3 — $25.00 c/u');
+  });
+});
+
 describe('exportarEntregasPdf', () => {
   let mockDoc;
 
@@ -916,7 +949,7 @@ describe('exportarEntregasPdf', () => {
     ]);
   });
 
-  test('incluye sub-filas en Entregas por jornada cuando hay múltiples formas de pago', () => {
+  test('incluye detalle por jornada y repartidor con filas de pedido', () => {
     exportarEntregasPdf({
       configPeriodo: { fechaDesde: '2026-09-01', fechaHasta: '2026-09-03' },
       resumen: resumenEntregas,
@@ -924,6 +957,7 @@ describe('exportarEntregasPdf', () => {
       porJornada: [
         {
           etiqueta: 'Jornada: 31 Ago 08:00 — 23:00',
+          etiquetaTotal: 'Total del día',
           pedidos: [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }],
           totalDelDia: 325,
           entregasPorRepartidor: [
@@ -931,11 +965,42 @@ describe('exportarEntregasPdf', () => {
               claveRepartidor: 'rep-1',
               etiqueta: 'Repartidor1',
               resumen: { totalPedidos: 2, montoAcumulado: 200 },
+              pedidos: [
+                {
+                  id: 'p1',
+                  folio: 101,
+                  entregado_en: '2026-08-31T18:30:00.000Z',
+                  cliente: 'Ana',
+                  forma_pago: 'efectivo',
+                  total: 100,
+                  lineas_detalle: [{ nombre: 'Taco', cantidad: 2 }],
+                },
+                {
+                  id: 'p2',
+                  folio: 102,
+                  entregado_en: '2026-08-31T19:00:00.000Z',
+                  cliente: 'Luis',
+                  forma_pago: 'efectivo',
+                  total: 100,
+                  lineas_detalle: [{ nombre: 'Burrito', cantidad: 1 }],
+                },
+              ],
             },
             {
               claveRepartidor: 'rep-2',
               etiqueta: 'Repartidor2',
               resumen: { totalPedidos: 1, montoAcumulado: 125 },
+              pedidos: [
+                {
+                  id: 'p3',
+                  folio: 103,
+                  entregado_en: '2026-08-31T20:15:00.000Z',
+                  cliente: 'María',
+                  forma_pago: 'tarjeta',
+                  total: 125,
+                  lineas_detalle: [{ nombre: 'Combo', cantidad: 1 }],
+                },
+              ],
             },
           ],
           cobrosPorFormaPago: [
@@ -945,6 +1010,7 @@ describe('exportarEntregasPdf', () => {
         },
         {
           etiqueta: 'Jornada: 1 Sep 08:00 — 23:00',
+          etiquetaTotal: 'Total del día',
           pedidos: [{ id: 'p4' }],
           totalDelDia: 125,
           entregasPorRepartidor: [
@@ -952,6 +1018,17 @@ describe('exportarEntregasPdf', () => {
               claveRepartidor: 'rep-1',
               etiqueta: 'Repartidor1',
               resumen: { totalPedidos: 1, montoAcumulado: 125 },
+              pedidos: [
+                {
+                  id: 'p4',
+                  folio: 104,
+                  entregado_en: '2026-09-01T17:45:00.000Z',
+                  cliente: 'Pedro',
+                  forma_pago: 'tarjeta',
+                  total: 125,
+                  lineas_detalle: [{ nombre: 'Ensalada', cantidad: 1 }],
+                },
+              ],
             },
           ],
           cobrosPorFormaPago: [
@@ -962,17 +1039,31 @@ describe('exportarEntregasPdf', () => {
     });
 
     const tablaJornadas = autoTable.mock.calls.find(
-      ([, options]) => options.head?.[0]?.[0] === 'Jornada'
+      ([, options]) => options.head?.[0]?.[0] === 'Hora'
     );
     expect(tablaJornadas).toBeDefined();
-    expect(tablaJornadas[1].body).toEqual([
-      ['Jornada: 31 Ago 08:00 — 23:00', '3', '$325.00'],
-      ['  Repartidor1', '2', '$200.00'],
-      ['  Repartidor2', '1', '$125.00'],
-      ['  Efectivo', '1', '$200.00'],
-      ['  Tarjeta', '1', '$125.00'],
-      ['Jornada: 1 Sep 08:00 — 23:00', '1 · Repartidor1 · Tarjeta', '$125.00'],
+    expect(tablaJornadas[1].head).toEqual([
+      ['Hora', 'Folio', 'Cliente', 'Forma de pago', 'Productos', 'Total'],
     ]);
+
+    const body = tablaJornadas[1].body;
+    expect(body[0][0]).toMatchObject({
+      colSpan: 6,
+      content: expect.stringContaining('Jornada: 31 Ago 08:00 — 23:00'),
+    });
+    expect(body[1][0]).toMatchObject({
+      colSpan: 6,
+      content: expect.stringContaining('Repartidor1'),
+    });
+    expect(body[2]).toEqual([
+      expect.stringMatching(/\d/),
+      '101',
+      'Ana',
+      'Efectivo',
+      expect.any(String),
+      '$100.00',
+    ]);
+    expect(body.some((fila) => fila[1] === '104' && fila[2] === 'Pedro')).toBe(true);
 
     const tablaCobros = autoTable.mock.calls.find(
       ([, options]) => options.head?.[0]?.[0] === 'Forma de pago'

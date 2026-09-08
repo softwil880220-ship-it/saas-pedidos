@@ -2504,6 +2504,50 @@
   font-size: 0.875rem;
 }
 
+.reportes-jornada-repartidor-detalle {
+  margin: 0.75rem 0 1rem;
+}
+
+.reportes-jornada-repartidor-titulo {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.reportes-tabla.pedidos-reporte-entregas .pedidos-reporte-header,
+.reportes-tabla.pedidos-reporte-entregas .pedidos-reporte-fila {
+  grid-template-columns:
+    minmax(3.25rem, 0.55fr)
+    minmax(4.5rem, 0.75fr)
+    minmax(0, 2fr)
+    minmax(4.5rem, 0.85fr)
+    minmax(0, 2fr)
+    minmax(5rem, auto);
+}
+
+@media (max-width: 640px) {
+  .reportes-tabla.pedidos-reporte-entregas .pedidos-reporte-fila {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      'hora folio total'
+      'cliente cliente cliente'
+      'forma forma forma'
+      'productos productos productos';
+  }
+
+  .reportes-tabla.pedidos-reporte-entregas .reporte-folio {
+    grid-area: folio;
+    font-size: 0.8rem;
+  }
+
+  .reportes-tabla.pedidos-reporte-entregas .reporte-forma-pago {
+    grid-area: forma;
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+}
+
 @media (max-width: 720px) {
   .dashboard-grupo-encabezado {
     flex-direction: column;
