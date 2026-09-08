@@ -168,6 +168,48 @@ export function etiquetaPeriodoEntregasPdf({ jornadaFoco, jornadaFocoOrigen, con
   return 'Sin período seleccionado';
 }
 
+export const TAMANO_PAGINA_PEDIDOS_REPORTE = 1000;
+
+export async function consultarPedidosReporteVentana(supabase, negocioId, inicio, fin) {
+  if (!negocioId || !inicio || !fin) {
+    return { data: [], error: null };
+  }
+
+  const isoInicio = inicio.toISOString();
+  const isoFin = fin.toISOString();
+  const acumulado = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('pedidos')
+        .select('*')
+        .is('deleted_at', null)
+        .gte('created_at', isoInicio)
+        .lte('created_at', isoFin),
+      negocioId
+    )
+      .order('created_at', { ascending: false })
+      .range(offset, offset + TAMANO_PAGINA_PEDIDOS_REPORTE - 1);
+
+    if (error) {
+      return { data: [], error };
+    }
+
+    const lote = data || [];
+    acumulado.push(...lote);
+
+    if (lote.length < TAMANO_PAGINA_PEDIDOS_REPORTE) {
+      break;
+    }
+
+    offset += TAMANO_PAGINA_PEDIDOS_REPORTE;
+  }
+
+  return { data: acumulado, error: null };
+}
+
 export async function consultarPedidosEntregadosEnVentana(
   supabase,
   negocioId,

@@ -9,7 +9,7 @@ import {
   agruparEntregasPorJornada,
   agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
-  calcularReportePorProducto,
+  consultarPedidosReporteVentana,
   enriquecerEntregasPorJornada,
   enriquecerEntregasPorJornadaConCobros,
   calcularResumenReporte,
@@ -192,6 +192,7 @@ function normalizarReporteVentasRpc(data) {
     return {
       resumen: RESUMEN_VENTAS_RPC_VACIO,
       categorias: [],
+      productos: [],
     };
   }
 
@@ -203,12 +204,21 @@ function normalizarReporteVentasRpc(data) {
       }))
     : [];
 
+  const productos = Array.isArray(data.productos)
+    ? data.productos.map((fila) => ({
+        nombre: fila?.nombre ?? 'Producto',
+        cantidadVendida: Number(fila?.cantidad_vendida) || 0,
+        totalFacturado: Number(fila?.total_facturado) || 0,
+      }))
+    : [];
+
   return {
     resumen: {
       totalPedidos: Number(data.total_pedidos) || 0,
       montoAcumulado: Number(data.monto_acumulado) || 0,
     },
     categorias,
+    productos,
   };
 }
 
@@ -232,6 +242,7 @@ export default function VistaReportes() {
   const [error, setError] = useState(null);
   const [resumenVentasRpc, setResumenVentasRpc] = useState(RESUMEN_VENTAS_RPC_VACIO);
   const [reportePorCategoriaRpc, setReportePorCategoriaRpc] = useState([]);
+  const [reportePorProductoRpc, setReportePorProductoRpc] = useState([]);
   const [cargandoResumenVentas, setCargandoResumenVentas] = useState(true);
   const [errorResumenVentas, setErrorResumenVentas] = useState(null);
   const [arqueos, setArqueos] = useState([]);
@@ -361,15 +372,12 @@ export default function VistaReportes() {
       setError(null);
 
       const { inicio, fin } = obtenerRangoReporte(configPeriodo);
-      const { data, error: errorConsulta } = await queryConNegocio(
-        supabase
-          .from('pedidos')
-          .select('*')
-          .is('deleted_at', null)
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fin.toISOString()),
-        negocioId
-      ).order('created_at', { ascending: false });
+      const { data, error: errorConsulta } = await consultarPedidosReporteVentana(
+        supabase,
+        negocioId,
+        inicio,
+        fin
+      );
 
       if (!activo) return;
 
@@ -396,6 +404,7 @@ export default function VistaReportes() {
     if (tabReportes !== 'ventas' || !negocioId) {
       setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
       setReportePorCategoriaRpc([]);
+      setReportePorProductoRpc([]);
       setCargandoResumenVentas(false);
       setErrorResumenVentas(null);
       return undefined;
@@ -404,6 +413,7 @@ export default function VistaReportes() {
     if (rangoInvalido) {
       setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
       setReportePorCategoriaRpc([]);
+      setReportePorProductoRpc([]);
       setCargandoResumenVentas(false);
       setErrorResumenVentas(null);
       return undefined;
@@ -419,6 +429,7 @@ export default function VistaReportes() {
         if (activo) {
           setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
           setReportePorCategoriaRpc([]);
+          setReportePorProductoRpc([]);
           setCargandoResumenVentas(false);
         }
         return;
@@ -445,10 +456,12 @@ export default function VistaReportes() {
         setErrorResumenVentas('No se pudo cargar el resumen de ventas.');
         setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
         setReportePorCategoriaRpc([]);
+        setReportePorProductoRpc([]);
       } else {
         const normalizado = normalizarReporteVentasRpc(data);
         setResumenVentasRpc(normalizado.resumen);
         setReportePorCategoriaRpc(normalizado.categorias);
+        setReportePorProductoRpc(normalizado.productos);
       }
 
       setCargandoResumenVentas(false);
@@ -679,16 +692,6 @@ export default function VistaReportes() {
     [pedidos, configPeriodo, filtroVenta]
   );
 
-  const resumen = useMemo(
-    () => calcularResumenReporte(pedidosFiltrados),
-    [pedidosFiltrados]
-  );
-
-  const reportePorProducto = useMemo(
-    () => calcularReportePorProducto(pedidosFiltrados),
-    [pedidosFiltrados]
-  );
-
   const multiplesDias = periodoMultiplesDias(configPeriodo);
   const pedidosAgrupados = useMemo(
     () =>
@@ -814,7 +817,7 @@ export default function VistaReportes() {
     exportarReportePdf({
       configPeriodo,
       filtroVenta,
-      resumen,
+      resumen: resumenVentasRpc,
       pedidos: pedidosFiltrados,
       jornadasPorId,
     });
@@ -1350,7 +1353,7 @@ export default function VistaReportes() {
             <p className="dashboard-vacio">Cargando resumen de ventas...</p>
           ) : null}
 
-          {!reporteDeshabilitado && !cargando && !error ? (
+          {!reporteDeshabilitado && !cargandoResumenVentas && !errorResumenVentas ? (
             <section
               className="reportes-por-producto"
               aria-labelledby="reportes-por-producto-titulo"
@@ -1358,7 +1361,7 @@ export default function VistaReportes() {
               <h3 id="reportes-por-producto-titulo" className="reportes-por-producto-titulo">
                 Reporte por producto
               </h3>
-              {reportePorProducto.length === 0 ? (
+              {reportePorProductoRpc.length === 0 ? (
                 <p className="dashboard-vacio reportes-por-producto-vacio">
                   No hay productos para el período y tipo de venta seleccionados.
                 </p>
@@ -1369,7 +1372,7 @@ export default function VistaReportes() {
                     <span>Cantidad vendida</span>
                     <span>Total facturado</span>
                   </div>
-                  {reportePorProducto.map((fila, indice) => (
+                  {reportePorProductoRpc.map((fila, indice) => (
                     <div
                       key={`${fila.nombre}-${indice}`}
                       className="reportes-tabla-fila reportes-por-producto-fila"
