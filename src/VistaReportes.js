@@ -9,7 +9,6 @@ import {
   agruparEntregasPorJornada,
   agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
-  calcularReportePorCategoria,
   calcularReportePorProducto,
   enriquecerEntregasPorJornada,
   enriquecerEntregasPorJornadaConCobros,
@@ -173,6 +172,46 @@ function formatearFechaSoloReporte(createdAt) {
   });
 }
 
+const RESUMEN_VENTAS_RPC_VACIO = {
+  totalPedidos: 0,
+  montoAcumulado: 0,
+};
+
+function esErrorAccesoDenegadoReporteVentas(error) {
+  if (!error) return false;
+
+  const codigo = String(error.code ?? '').trim();
+  if (codigo === '42501') return true;
+
+  const mensaje = String(error.message ?? '').toLowerCase();
+  return mensaje.includes('acceso denegado al negocio solicitado');
+}
+
+function normalizarReporteVentasRpc(data) {
+  if (!data || typeof data !== 'object') {
+    return {
+      resumen: RESUMEN_VENTAS_RPC_VACIO,
+      categorias: [],
+    };
+  }
+
+  const categorias = Array.isArray(data.categorias)
+    ? data.categorias.map((fila) => ({
+        nombre: fila?.nombre ?? 'Sin categoría',
+        cantidadVendida: Number(fila?.cantidad_vendida) || 0,
+        totalFacturado: Number(fila?.total_facturado) || 0,
+      }))
+    : [];
+
+  return {
+    resumen: {
+      totalPedidos: Number(data.total_pedidos) || 0,
+      montoAcumulado: Number(data.monto_acumulado) || 0,
+    },
+    categorias,
+  };
+}
+
 export default function VistaReportes() {
   const { negocioId, rol } = useAuth();
   const [tabReportes, setTabReportes] = useState(() => cargarTabReportes());
@@ -189,9 +228,12 @@ export default function VistaReportes() {
     () => cargarFiltrosReportes(negocioId).filtroVenta
   );
   const [pedidos, setPedidos] = useState([]);
-  const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const [resumenVentasRpc, setResumenVentasRpc] = useState(RESUMEN_VENTAS_RPC_VACIO);
+  const [reportePorCategoriaRpc, setReportePorCategoriaRpc] = useState([]);
+  const [cargandoResumenVentas, setCargandoResumenVentas] = useState(true);
+  const [errorResumenVentas, setErrorResumenVentas] = useState(null);
   const [arqueos, setArqueos] = useState([]);
   const [cargandoArqueos, setCargandoArqueos] = useState(false);
   const [errorArqueos, setErrorArqueos] = useState(null);
@@ -351,32 +393,73 @@ export default function VistaReportes() {
   useEffect(() => {
     let activo = true;
 
-    if (!negocioId) {
-      setProductos([]);
+    if (tabReportes !== 'ventas' || !negocioId) {
+      setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
+      setReportePorCategoriaRpc([]);
+      setCargandoResumenVentas(false);
+      setErrorResumenVentas(null);
       return undefined;
     }
 
-    const cargarProductos = async () => {
-      const { data, error: errorConsulta } = await queryConNegocio(
-        supabase.from('productos').select('id, nombre, categoria'),
-        negocioId
-      );
+    if (rangoInvalido) {
+      setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
+      setReportePorCategoriaRpc([]);
+      setCargandoResumenVentas(false);
+      setErrorResumenVentas(null);
+      return undefined;
+    }
+
+    const cargarResumenVentas = async () => {
+      setCargandoResumenVentas(true);
+      setErrorResumenVentas(null);
+
+      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+
+      if (!inicio || !fin) {
+        if (activo) {
+          setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
+          setReportePorCategoriaRpc([]);
+          setCargandoResumenVentas(false);
+        }
+        return;
+      }
+
+      const { data, error: errorRpc } = await supabase.rpc('obtener_reporte_ventas', {
+        p_negocio_id: negocioId,
+        p_fecha_inicio: inicio.toISOString(),
+        p_fecha_fin: fin.toISOString(),
+        p_filtro_venta: filtroVenta,
+      });
 
       if (!activo) return;
 
-      if (errorConsulta) {
-        setProductos([]);
+      if (errorRpc) {
+        if (esErrorAccesoDenegadoReporteVentas(errorRpc)) {
+          console.error(
+            '[Reportes > Ventas] Acceso denegado al negocio solicitado (42501). ' +
+              'Verifica que negocioId de la sesión coincide con usuario_negocio_id() en Supabase.',
+            { negocioId, error: errorRpc }
+          );
+        }
+
+        setErrorResumenVentas('No se pudo cargar el resumen de ventas.');
+        setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
+        setReportePorCategoriaRpc([]);
       } else {
-        setProductos(data || []);
+        const normalizado = normalizarReporteVentasRpc(data);
+        setResumenVentasRpc(normalizado.resumen);
+        setReportePorCategoriaRpc(normalizado.categorias);
       }
+
+      setCargandoResumenVentas(false);
     };
 
-    cargarProductos();
+    void cargarResumenVentas();
 
     return () => {
       activo = false;
     };
-  }, [negocioId]);
+  }, [tabReportes, negocioId, configPeriodo, filtroVenta, rangoInvalido]);
 
   useEffect(() => {
     let activo = true;
@@ -604,11 +687,6 @@ export default function VistaReportes() {
   const reportePorProducto = useMemo(
     () => calcularReportePorProducto(pedidosFiltrados),
     [pedidosFiltrados]
-  );
-
-  const reportePorCategoria = useMemo(
-    () => calcularReportePorCategoria(pedidosFiltrados, productos),
-    [pedidosFiltrados, productos]
   );
 
   const multiplesDias = periodoMultiplesDias(configPeriodo);
@@ -1208,17 +1286,33 @@ export default function VistaReportes() {
             </article>
             <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Total de pedidos</span>
-              <span className="reportes-resumen-valor">{resumen.totalPedidos}</span>
+              <span className="reportes-resumen-valor">
+                {cargandoResumenVentas
+                  ? 'Cargando...'
+                  : errorResumenVentas
+                    ? '—'
+                    : resumenVentasRpc.totalPedidos}
+              </span>
             </article>
             <article className="reportes-resumen-card">
               <span className="reportes-resumen-label">Monto acumulado</span>
               <span className="reportes-resumen-valor reportes-resumen-valor-monto">
-                {formatearMoneda(resumen.montoAcumulado)}
+                {cargandoResumenVentas
+                  ? 'Cargando...'
+                  : errorResumenVentas
+                    ? '—'
+                    : formatearMoneda(resumenVentasRpc.montoAcumulado)}
               </span>
             </article>
           </div>
 
-          {!reporteDeshabilitado && !cargando && !error ? (
+          {!reporteDeshabilitado && errorResumenVentas ? (
+            <p className="dashboard-vacio reportes-error" role="alert">
+              {errorResumenVentas}
+            </p>
+          ) : null}
+
+          {!reporteDeshabilitado && !cargandoResumenVentas && !errorResumenVentas ? (
             <section
               className="reportes-por-categoria"
               aria-labelledby="reportes-por-categoria-titulo"
@@ -1226,7 +1320,7 @@ export default function VistaReportes() {
               <h3 id="reportes-por-categoria-titulo" className="reportes-por-categoria-titulo">
                 Reporte por categoría
               </h3>
-              {reportePorCategoria.length === 0 ? (
+              {reportePorCategoriaRpc.length === 0 ? (
                 <p className="dashboard-vacio reportes-por-categoria-vacio">
                   No hay categorías para el período y tipo de venta seleccionados.
                 </p>
@@ -1237,7 +1331,7 @@ export default function VistaReportes() {
                     <span>Cantidad vendida</span>
                     <span>Total facturado</span>
                   </div>
-                  {reportePorCategoria.map((fila, indice) => (
+                  {reportePorCategoriaRpc.map((fila, indice) => (
                     <div
                       key={`${fila.nombre}-${indice}`}
                       className="reportes-tabla-fila reportes-por-categoria-fila"
@@ -1252,6 +1346,8 @@ export default function VistaReportes() {
                 </div>
               )}
             </section>
+          ) : !reporteDeshabilitado && cargandoResumenVentas ? (
+            <p className="dashboard-vacio">Cargando resumen de ventas...</p>
           ) : null}
 
           {!reporteDeshabilitado && !cargando && !error ? (
