@@ -267,19 +267,38 @@ export async function consultarPedidosEntregadosEnVentana(
 
   const isoInicio = inicio.toISOString();
   const isoFin = fin.toISOString();
+  const acumulado = [];
+  let offset = 0;
 
-  const { data, error } = await queryConNegocio(
-    supabase
-      .from('pedidos')
-      .select('*')
-      .is('deleted_at', null)
-      .eq('status', 'entregado')
-      .gte('entregado_en', isoInicio)
-      .lte('entregado_en', isoFin),
-    negocioId
-  ).order('entregado_en', { ascending: false });
+  while (true) {
+    const { data, error } = await queryConNegocio(
+      supabase
+        .from('pedidos')
+        .select('*')
+        .is('deleted_at', null)
+        .eq('status', 'entregado')
+        .gte('entregado_en', isoInicio)
+        .lte('entregado_en', isoFin),
+      negocioId
+    )
+      .order('entregado_en', { ascending: false })
+      .range(offset, offset + TAMANO_PAGINA_PEDIDOS_REPORTE - 1);
 
-  return { data: data || [], error };
+    if (error) {
+      return { data: [], error };
+    }
+
+    const lote = data || [];
+    acumulado.push(...lote);
+
+    if (lote.length < TAMANO_PAGINA_PEDIDOS_REPORTE) {
+      break;
+    }
+
+    offset += TAMANO_PAGINA_PEDIDOS_REPORTE;
+  }
+
+  return { data: acumulado, error: null };
 }
 
 export function rangoFechasInvalido(fechaDesde, fechaHasta) {
