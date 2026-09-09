@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 export const DASHBOARD_NAV_ITEMS = [
-  { id: 'pedidos', label: 'Pedidos', path: '/', rolesPermitidos: ['dueno', 'administrador', 'cajero'] },
+  { id: 'pedidos', label: 'Pedidos', path: '/', rolesPermitidos: ['dueno', 'administrador', 'cajero', 'mesero'] },
   { id: 'catalogo', label: 'Catálogo de productos', path: '/catalogo', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'clientes', label: 'Clientes', path: '/clientes', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'reportes', label: 'Reportes', path: '/reportes', rolesPermitidos: ['dueno', 'administrador'] },
@@ -27,7 +27,7 @@ export default function DashboardNav({ activo, rol }) {
           className={`nav-btn${activo === id ? ' activo' : ''}`}
           onClick={() => navigate(path)}
         >
-          {label}
+          {id === 'pedidos' && rol === 'mesero' ? 'Mesas' : label}
         </button>
       ))}
     </nav>

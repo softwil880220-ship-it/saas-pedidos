@@ -2013,6 +2013,20 @@ function Dashboard() {
   const esModoWhatsapp = modo === 'whatsapp';
   const esModoMesas = modo === 'mesas';
   const esModoMostrador = modo === 'mostrador';
+  const esMesero = rol === 'mesero';
+  const modosVisibles = useMemo(
+    () => (esMesero ? MODOS.filter(({ value }) => value === 'mesas') : MODOS),
+    [esMesero]
+  );
+
+  useEffect(() => {
+    if (!esMesero || modo === 'mesas') {
+      return;
+    }
+
+    persistirModoPedidos('mesas');
+    setModo('mesas');
+  }, [esMesero, modo]);
 
   const eliminarPedido = async (id, autorizadoPor = null) => {
     const { error } = await queryConNegocio(
@@ -3843,7 +3857,7 @@ function Dashboard() {
         {seccion === 'pedidos' && (
           <>
             <nav className="modo-nav">
-              {MODOS.map(({ value, label }) => (
+              {modosVisibles.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
@@ -4596,7 +4610,7 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'cajero']}>
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador', 'cajero', 'mesero']}>
                 <Dashboard />
               </ProtectedRoute>
             }

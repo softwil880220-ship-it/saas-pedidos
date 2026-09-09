@@ -60,6 +60,7 @@ export default function MesaCobroModal({
   onConfirmar,
 }) {
   const puedeAplicarDescuento = puedeAplicarDescuentoMesaCobro(rol);
+  const puedeConfirmarCobro = rol !== 'mesero';
   const cargando = cargandoPedidosFolio;
 
   const [descuentoTipo, setDescuentoTipo] = useState(TIPOS_AJUSTE_MONETARIO.PORCENTAJE);
@@ -361,7 +362,7 @@ export default function MesaCobroModal({
   };
 
   const handleConfirmar = async () => {
-    if (confirmando || cargando || subtotal <= 0 || !formaPago) {
+    if (!puedeConfirmarCobro || confirmando || cargando || subtotal <= 0 || !formaPago) {
       return;
     }
 
@@ -674,14 +675,16 @@ export default function MesaCobroModal({
             >
               Cancelar
             </button>
-            <button
-              type="button"
-              className="mesa-cobro-modal-confirmar"
-              onClick={() => void handleConfirmar()}
-              disabled={confirmando || cargando || subtotal <= 0 || !formaPago}
-            >
-              {confirmando ? 'Confirmando...' : 'Confirmar cobro'}
-            </button>
+            {puedeConfirmarCobro ? (
+              <button
+                type="button"
+                className="mesa-cobro-modal-confirmar"
+                onClick={() => void handleConfirmar()}
+                disabled={confirmando || cargando || subtotal <= 0 || !formaPago}
+              >
+                {confirmando ? 'Confirmando...' : 'Confirmar cobro'}
+              </button>
+            ) : null}
           </div>
         </footer>
       </div>

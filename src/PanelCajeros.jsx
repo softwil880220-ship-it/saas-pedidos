@@ -5,6 +5,7 @@ import './PanelCajeros.css';
 
 const ROLES_AGREGAR = [
   { value: 'cajero', label: 'Cajero' },
+  { value: 'mesero', label: 'Mesero' },
   { value: 'cocina', label: 'Cocina' },
   { value: 'cocina2', label: 'Cocina 2' },
   { value: 'repartidor', label: 'Repartidor' },

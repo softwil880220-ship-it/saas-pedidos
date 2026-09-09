@@ -27,6 +27,14 @@ const TABS_MESAS = [
   { value: 'cobradas', label: 'Cobradas hoy' },
 ];
 
+function tabsMesasVisibles(rol) {
+  if (rol === 'mesero') {
+    return TABS_MESAS.filter(({ value }) => value === 'activas');
+  }
+
+  return TABS_MESAS;
+}
+
 export const CANTIDAD_MESAS = 10;
 
 const MENSAJE_JORNADA_CERRADA_OPERAR_MESAS = 'Abre una jornada para operar mesas';
@@ -162,6 +170,16 @@ export default function VistaMesas({
     },
     [cerrarFolioPanelRemoto, sincronizarOcupacion]
   );
+
+  const tabsVisibles = useMemo(() => tabsMesasVisibles(rol), [rol]);
+
+  useEffect(() => {
+    if (rol !== 'mesero' || tabActivo === 'activas') {
+      return;
+    }
+
+    setTabActivo('activas');
+  }, [rol, tabActivo]);
 
   useEffect(() => {
     configurarContextoMesas({ usuarioId, rol });
@@ -314,18 +332,20 @@ export default function VistaMesas({
           : 'Consulta las mesas cobradas hoy.'}
       </p>
 
-      <nav className="seccion-subtabs-nav" aria-label="Secciones de mesas">
-        {TABS_MESAS.map(({ value, label }) => (
-          <button
-            key={value}
-            type="button"
-            className={`seccion-subtabs-tab${tabActivo === value ? ' activo' : ''}`}
-            onClick={() => cambiarTabMesas(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {tabsVisibles.length > 1 ? (
+        <nav className="seccion-subtabs-nav" aria-label="Secciones de mesas">
+          {tabsVisibles.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              className={`seccion-subtabs-tab${tabActivo === value ? ' activo' : ''}`}
+              onClick={() => cambiarTabMesas(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {errorHidratacion ? (
         <p className="formulario-error-guardar" role="alert">

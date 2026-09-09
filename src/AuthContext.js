@@ -29,6 +29,7 @@ export function rutaPorRol(rol) {
     case 'dueno':
     case 'administrador':
     case 'cajero':
+    case 'mesero':
       return '/';
     case 'cocina':
       return '/cocina';

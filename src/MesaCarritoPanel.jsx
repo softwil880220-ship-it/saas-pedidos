@@ -773,6 +773,10 @@ export default function MesaCarritoPanel({
     !modalCobroAbierto;
 
   const handleConfirmarCobro = async (datosCobro) => {
+    if (rol === 'mesero') {
+      throw new Error('No tienes permiso para cobrar mesas.');
+    }
+
     if (!folioId) {
       throw new Error('No hay folio activo para cobrar.');
     }
