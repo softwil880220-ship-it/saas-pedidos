@@ -556,7 +556,7 @@ export {
   MENSAJE_MESA_YA_COBRADA_POR_OTRO_USUARIO,
   MENSAJE_MESA_PEDIDO_MODIFICADO_SIN_COBRAR,
   MOTIVO_CIERRE_FOLIO_MESA,
-  mesaEstaOcupada,
+  mesaTieneFolioAbierto,
   obtenerFolioAbiertoPorMesa,
   obtenerFolioIdDesdePayloadRealtime,
   obtenerMetadatosMesa,

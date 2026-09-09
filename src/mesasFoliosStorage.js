@@ -780,19 +780,13 @@ export function obtenerNumeroMesaDeFolio(folioId) {
   return entrada?.numeroMesa ?? null;
 }
 
-export function mesaEstaOcupada(snapshot, meta = null) {
-  if (meta?.estado !== 'abierta') {
+export function mesaTieneFolioAbierto(numeroMesa) {
+  const folioId = folioAbiertoPorNumeroMesa.get(Number(numeroMesa));
+  if (!folioId) {
     return false;
   }
 
-  if (!snapshot) return false;
-
-  if ((snapshot.numeroRondaSiguiente ?? 1) > 1) {
-    return true;
-  }
-
-  const lineas = Array.isArray(snapshot?.form?.lineas) ? snapshot.form.lineas : [];
-  return lineas.some((linea) => linea?.productoId);
+  return folioSigueAbierto(folioId);
 }
 
 export function cargarCarritosMesasAbiertos() {
@@ -814,19 +808,19 @@ export function cargarCarritosMesasAbiertos() {
 }
 
 export function obtenerFolioAbiertoPorMesa(numeroMesa) {
+  if (!mesaTieneFolioAbierto(numeroMesa)) {
+    return null;
+  }
+
   return folioAbiertoPorNumeroMesa.get(Number(numeroMesa)) ?? null;
 }
 
 export function obtenerNumerosMesaOcupados() {
   const ocupados = new Set();
 
-  cacheFolios.forEach((entrada) => {
-    if (entrada.estado !== 'abierta' || entrada.numeroMesa == null) {
-      return;
-    }
-
-    if (mesaEstaOcupada(entrada, { estado: entrada.estado })) {
-      ocupados.add(String(entrada.numeroMesa));
+  folioAbiertoPorNumeroMesa.forEach((_folioId, numeroMesa) => {
+    if (mesaTieneFolioAbierto(numeroMesa)) {
+      ocupados.add(String(numeroMesa));
     }
   });
 
