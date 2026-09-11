@@ -37,7 +37,7 @@ export function construirPayloadPedidoMostrador({
     total: detallePedido.total,
     status: statusInicial.status,
     tipo: 'mostrador',
-    tipo_entrega: TIPOS_ENTREGA.SUCURSAL,
+    tipo_entrega: TIPOS_ENTREGA.MOSTRADOR,
     direccion: null,
     forma_pago: form.formaPago || 'efectivo',
     referencia: form.referencia?.trim() || null,

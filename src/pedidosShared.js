@@ -6,9 +6,19 @@ import {
 import { formatearDetalleVariantesLineaSoloValor } from './variantesDinamicas';
 
 export const TIPOS_ENTREGA = {
+  CAJA: 'caja',
+  MOSTRADOR: 'mostrador',
+  MESA: 'mesa',
   DOMICILIO: 'domicilio',
   SUCURSAL: 'sucursal',
 };
+
+export const TIPOS_ENTREGA_CANAL = new Set(['caja', 'mostrador', 'mesa']);
+export const TIPOS_ENTREGA_WHATSAPP = new Set(['sucursal', 'domicilio']);
+
+export function esValorCanalTipoEntrega(tipoEntrega) {
+  return TIPOS_ENTREGA_CANAL.has(tipoEntrega);
+}
 
 export const COCINAS = {
   COCINA1: 'cocina1',
@@ -172,7 +182,7 @@ export function obtenerStatusGlobalTrasCocinas(tipoEntrega, tipoPedido = 'whatsa
   if (tipoPedido === 'presencial' || tipoPedido === 'mesa') return 'entregado';
   if (tipoPedido === 'mostrador') return 'listo-para-recoger';
 
-  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
+  return normalizarModoEntregaWhatsapp(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'listo-para-recoger'
     : 'pendiente-repartidor';
 }
@@ -390,20 +400,33 @@ export function etiquetaStatusPedido(status) {
   return STATUS_PEDIDO_LABELS[status] || status || '—';
 }
 
-export function normalizarTipoEntrega(tipoEntrega) {
+export function normalizarModoEntregaWhatsapp(tipoEntrega) {
   return tipoEntrega === TIPOS_ENTREGA.SUCURSAL
     ? TIPOS_ENTREGA.SUCURSAL
     : TIPOS_ENTREGA.DOMICILIO;
 }
 
+export function normalizarTipoEntrega(tipoEntrega) {
+  if (tipoEntrega === TIPOS_ENTREGA.SUCURSAL) return TIPOS_ENTREGA.SUCURSAL;
+  if (tipoEntrega === TIPOS_ENTREGA.DOMICILIO) return TIPOS_ENTREGA.DOMICILIO;
+  if (esValorCanalTipoEntrega(tipoEntrega)) return tipoEntrega;
+  return tipoEntrega ?? TIPOS_ENTREGA.DOMICILIO;
+}
+
 export function obtenerFlujoStatus(tipoEntrega) {
-  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
+  if (esValorCanalTipoEntrega(tipoEntrega)) {
+    return null;
+  }
+
+  return normalizarModoEntregaWhatsapp(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? STATUS_FLOW_SUCURSAL
     : STATUS_FLOW_DOMICILIO;
 }
 
 export function siguienteStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
   const flujo = obtenerFlujoStatus(tipoEntrega);
+  if (!flujo) return status;
+
   const indice = flujo.indexOf(status);
   if (indice === -1 || indice === flujo.length - 1) return status;
   return flujo[indice + 1];
@@ -411,6 +434,8 @@ export function siguienteStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
 
 export function anteriorStatus(status, tipoEntrega = TIPOS_ENTREGA.DOMICILIO) {
   const flujo = obtenerFlujoStatus(tipoEntrega);
+  if (!flujo) return status;
+
   const indice = flujo.indexOf(status);
   if (indice <= 0) return status;
   return flujo[indice - 1];
@@ -603,7 +628,7 @@ export function pedidoVisibleEnCocinaColumnaDerecha(pedido, mostradorFlujoCocina
 }
 
 export function etiquetaCanalEntregaCocina(tipoEntrega) {
-  return normalizarTipoEntrega(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
+  return normalizarModoEntregaWhatsapp(tipoEntrega) === TIPOS_ENTREGA.SUCURSAL
     ? 'Para recoger'
     : 'Domicilio';
 }

@@ -51,7 +51,7 @@ import {
   TIPOS_ENTREGA,
   enriquecerLineasDetalleCocina,
   etiquetaStatusPedido,
-  normalizarTipoEntrega,
+  normalizarModoEntregaWhatsapp,
   obtenerFlujoStatus,
 } from './pedidosShared';
 import {
@@ -343,7 +343,7 @@ export default function VistaRecogerDomicilio({
       total: detallePedido.total,
       status: form.status,
       tipo: 'whatsapp',
-      tipo_entrega: normalizarTipoEntrega(form.tipoEntrega),
+      tipo_entrega: normalizarModoEntregaWhatsapp(form.tipoEntrega),
       ...direccionPayload,
       forma_pago: normalizarFormaPagoRecogerDomicilio(form.formaPago),
       created_by: usuarioId ?? null,

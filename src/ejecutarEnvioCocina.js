@@ -49,7 +49,7 @@ export async function ejecutarEnvioCocina({
     total: detallePedido.total,
     status: 'en-cocina',
     tipo: 'mesa',
-    tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
+    tipo_entrega: TIPOS_ENTREGA.MESA,
     direccion: null,
     forma_pago: null,
     referencia: `Ronda ${numeroRonda}`,

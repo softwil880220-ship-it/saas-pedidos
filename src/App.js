@@ -25,6 +25,7 @@ import {
   etiquetaCocinaProducto,
   formatearMoneda,
   normalizarCocinaProducto,
+  TIPOS_ENTREGA,
 } from './pedidosShared';
 import VistaRecogerDomicilio from './VistaRecogerDomicilio';
 import VistaCocina from './VistaCocina';
@@ -128,11 +129,6 @@ import {
   parsearVariantesActivasProducto,
   variantesActivasFormDesdeProducto,
 } from './variantesDinamicas';
-
-const TIPOS_ENTREGA = {
-  DOMICILIO: 'domicilio',
-  SUCURSAL: 'sucursal',
-};
 
 const MODOS = [
   { value: 'presencial', label: 'Caja' },
@@ -2512,7 +2508,7 @@ function Dashboard() {
       total: detallePedido.total,
       status: statusPresencial.status,
       tipo: 'presencial',
-      tipo_entrega: TIPOS_ENTREGA.DOMICILIO,
+      tipo_entrega: TIPOS_ENTREGA.CAJA,
       direccion: null,
       forma_pago: normalizarFormaPagoPayload(carrito.form.formaPago),
       referencia: carrito.form.referencia.trim() || null,
