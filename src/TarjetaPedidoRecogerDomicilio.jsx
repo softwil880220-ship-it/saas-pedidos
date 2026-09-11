@@ -67,6 +67,8 @@ export default function TarjetaPedidoRecogerDomicilio({
   productos,
   variantesCtx,
   repartidores,
+  repartidoresCargando = false,
+  repartidoresError = null,
   resaltado = false,
   otroEditando = false,
   estaEditando = false,
@@ -208,6 +210,8 @@ export default function TarjetaPedidoRecogerDomicilio({
             value={repartidorSeleccionado}
             onChange={setRepartidorSeleccionado}
             disabled={asignandoRepartidor || bloqueadoPorJornada}
+            cargando={repartidoresCargando}
+            error={repartidoresError}
           />
           <button
             type="button"

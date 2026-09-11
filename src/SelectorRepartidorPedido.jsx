@@ -11,8 +11,11 @@ export default function SelectorRepartidorPedido({
   disabled = false,
   id = 'selector-repartidor-pedido',
   modo = MODO_SELECTOR_REPARTIDOR_ASIGNACION,
+  cargando = false,
+  error = null,
 }) {
   const esModoReporte = modo === MODO_SELECTOR_REPARTIDOR_REPORTE;
+  const deshabilitado = disabled || cargando || Boolean(error);
 
   return (
     <div className="selector-repartidor-pedido">
@@ -21,10 +24,14 @@ export default function SelectorRepartidorPedido({
         id={id}
         value={value}
         onChange={(evento) => onChange(evento.target.value)}
-        disabled={disabled}
+        disabled={deshabilitado}
       >
         <option value="">
-          {esModoReporte ? 'Todos los repartidores' : 'Seleccionar repartidor…'}
+          {cargando
+            ? 'Cargando repartidores…'
+            : esModoReporte
+              ? 'Todos los repartidores'
+              : 'Seleccionar repartidor…'}
         </option>
         {repartidores.map((repartidor) => (
           <option key={repartidor.id} value={repartidor.id}>
@@ -40,6 +47,11 @@ export default function SelectorRepartidorPedido({
           <option value={REPARTIDOR_EXTERNO_ID}>Repartidor externo</option>
         )}
       </select>
+      {error ? (
+        <p className="selector-repartidor-pedido-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

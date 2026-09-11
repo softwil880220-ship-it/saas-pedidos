@@ -103,6 +103,12 @@
   margin-top: 0.75rem;
 }
 
+.selector-repartidor-pedido-error {
+  margin: 0.35rem 0 0;
+  color: #b42318;
+  font-size: 0.85rem;
+}
+
 .selector-repartidor-pedido {
   display: flex;
   flex-direction: column;

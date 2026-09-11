@@ -5,6 +5,8 @@ export default function ListaPedidosRecogerDomicilio({
   productos,
   variantesCtx,
   repartidores,
+  repartidoresCargando = false,
+  repartidoresError = null,
   pedidoResaltadoId,
   editandoPedidoId,
   bloqueadoPorJornada,
@@ -31,6 +33,8 @@ export default function ListaPedidosRecogerDomicilio({
           productos={productos}
           variantesCtx={variantesCtx}
           repartidores={repartidores}
+          repartidoresCargando={repartidoresCargando}
+          repartidoresError={repartidoresError}
           resaltado={pedidoResaltadoId === pedido.id}
           otroEditando={editandoPedidoId != null && editandoPedidoId !== pedido.id}
           estaEditando={editandoPedidoId === pedido.id}

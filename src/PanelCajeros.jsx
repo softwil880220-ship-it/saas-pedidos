@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { clasificarErrorPanelCajeros } from './panelCajerosHelpers';
 import { supabase } from './supabase';
 import useEsMobile from './useEsMobile';
 import './PanelCajeros.css';
@@ -67,11 +68,9 @@ export default function PanelCajeros({ negocioId }) {
       },
     });
 
-    if (errorInvoke) {
-      setError(errorInvoke.message);
-      setUsuarios([]);
-    } else if (data?.success === false) {
-      setError(data.error);
+    const errorClasificado = clasificarErrorPanelCajeros({ errorInvoke, data, negocioId });
+    if (errorClasificado) {
+      setError(errorClasificado.mensaje);
       setUsuarios([]);
     } else {
       setUsuarios(data?.data ?? []);
@@ -109,10 +108,9 @@ export default function PanelCajeros({ negocioId }) {
       },
     });
 
-    if (errorInvoke) {
-      setError(errorInvoke.message);
-    } else if (data?.success === false) {
-      setError(data.error);
+    const errorClasificado = clasificarErrorPanelCajeros({ errorInvoke, data, negocioId });
+    if (errorClasificado) {
+      setError(errorClasificado.mensaje);
     } else {
       setUsuarios((prev) =>
         prev.map((item) => (item.id === usuario.id ? { ...item, activo } : item))
@@ -158,14 +156,9 @@ export default function PanelCajeros({ negocioId }) {
       },
     });
 
-    if (errorInvoke) {
-      setErrorFormulario(errorInvoke.message);
-      setGuardando(false);
-      return;
-    }
-
-    if (data?.success === false) {
-      setErrorFormulario(data.error);
+    const errorClasificado = clasificarErrorPanelCajeros({ errorInvoke, data, negocioId });
+    if (errorClasificado) {
+      setErrorFormulario(errorClasificado.mensaje);
       setGuardando(false);
       return;
     }
@@ -207,7 +200,7 @@ export default function PanelCajeros({ negocioId }) {
 
       {cargando ? (
         <p className="panel-cajeros-cargando">Cargando usuarios...</p>
-      ) : usuarios.length === 0 ? (
+      ) : error ? null : usuarios.length === 0 ? (
         <div className="panel-cajeros-vacio">
           <p>Aún no tienes usuarios registrados</p>
           <button type="button" className="panel-cajeros-agregar-btn" onClick={abrirModal}>

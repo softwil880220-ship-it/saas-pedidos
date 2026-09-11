@@ -130,7 +130,11 @@ export default function VistaRecogerDomicilio({
     zonasActivas,
   });
 
-  const { repartidores } = useRepartidoresNegocio(negocioId);
+  const {
+    repartidores,
+    cargando: repartidoresCargando,
+    error: repartidoresError,
+  } = useRepartidoresNegocio(negocioId);
 
   useEffect(() => {
     if (!negocioId) {
@@ -1104,6 +1108,8 @@ export default function VistaRecogerDomicilio({
             productos={productos}
             variantesCtx={variantesCtx}
             repartidores={repartidores}
+            repartidoresCargando={repartidoresCargando}
+            repartidoresError={repartidoresError}
             pedidoResaltadoId={pedidoResaltadoId}
             editandoPedidoId={editandoPedidoId}
             bloqueadoPorJornada={bloqueadoPorJornada}
@@ -1130,6 +1136,8 @@ export default function VistaRecogerDomicilio({
             productos={productos}
             variantesCtx={variantesCtx}
             repartidores={repartidores}
+            repartidoresCargando={repartidoresCargando}
+            repartidoresError={repartidoresError}
             pedidoResaltadoId={pedidoResaltadoId}
             editandoPedidoId={editandoPedidoId}
             bloqueadoPorJornada={bloqueadoPorJornada}
@@ -1156,6 +1164,8 @@ export default function VistaRecogerDomicilio({
             productos={productos}
             variantesCtx={variantesCtx}
             repartidores={repartidores}
+            repartidoresCargando={repartidoresCargando}
+            repartidoresError={repartidoresError}
             pedidoResaltadoId={pedidoResaltadoId}
             editandoPedidoId={editandoPedidoId}
             bloqueadoPorJornada={bloqueadoPorJornada}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from './supabase';
+import { queryConNegocio } from './tenantHelpers';
 
 export default function useRepartidoresNegocio(negocioId) {
   const [repartidores, setRepartidores] = useState([]);
@@ -16,24 +17,21 @@ export default function useRepartidoresNegocio(negocioId) {
     setCargando(true);
     setError(null);
 
-    const { data, error: errorInvoke } = await supabase.functions.invoke('panel-cajeros', {
-      body: {
-        action: 'list',
-        negocio_id: negocioId,
-      },
-    });
+    const { data, error: errorQuery } = await queryConNegocio(
+      supabase
+        .from('usuarios_negocio')
+        .select('id, nombre')
+        .eq('activo', true)
+        .eq('rol', 'repartidor')
+        .order('nombre', { ascending: true }),
+      negocioId
+    );
 
-    if (errorInvoke) {
-      setError(errorInvoke.message);
-      setRepartidores([]);
-    } else if (data?.success === false) {
-      setError(data.error);
+    if (errorQuery) {
+      setError(errorQuery.message);
       setRepartidores([]);
     } else {
-      const lista = Array.isArray(data?.data) ? data.data : [];
-      setRepartidores(
-        lista.filter((usuario) => usuario.rol === 'repartidor' && usuario.activo !== false)
-      );
+      setRepartidores(Array.isArray(data) ? data : []);
     }
 
     setCargando(false);
