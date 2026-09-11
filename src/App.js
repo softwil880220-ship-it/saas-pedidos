@@ -141,6 +141,13 @@ const MODOS = [
   { value: 'mesas', label: 'Mesas' },
 ];
 
+const MODULO_POR_MODO = {
+  presencial: 'habilitar_caja',
+  mostrador: 'habilitar_mostrador',
+  whatsapp: 'habilitar_recoger_domicilio',
+  mesas: 'habilitar_mesas',
+};
+
 function crearCatalogoTabs(categorias) {
   const tabs = [
     { value: 'productos', label: 'Productos' },
@@ -930,7 +937,7 @@ const ROLES_VENTAS_TOTALES_DASHBOARD = ['dueno', 'administrador'];
 
 function Dashboard() {
   const location = useLocation();
-  const { negocioId, session, rol, usuario } = useAuth();
+  const { negocioId, session, rol, usuario, modulosNegocio } = useAuth();
   const puedeVerVentasTotalesDashboard = ROLES_VENTAS_TOTALES_DASHBOARD.includes(rol);
   const puedeGestionarJornadaDashboard = puedeGestionarJornada(rol);
   const esMobileDashboard = useEsMobile(720);
@@ -2014,10 +2021,14 @@ function Dashboard() {
   const esModoMesas = modo === 'mesas';
   const esModoMostrador = modo === 'mostrador';
   const esMesero = rol === 'mesero';
-  const modosVisibles = useMemo(
-    () => (esMesero ? MODOS.filter(({ value }) => value === 'mesas') : MODOS),
-    [esMesero]
-  );
+  const modosVisibles = useMemo(() => {
+    const base = esMesero
+      ? MODOS.filter(({ value }) => value === 'mesas')
+      : MODOS;
+    return base.filter(
+      ({ value }) => modulosNegocio[MODULO_POR_MODO[value]] === true
+    );
+  }, [esMesero, modulosNegocio]);
 
   useEffect(() => {
     if (!esMesero || modo === 'mesas') {
@@ -2027,6 +2038,18 @@ function Dashboard() {
     persistirModoPedidos('mesas');
     setModo('mesas');
   }, [esMesero, modo]);
+
+  useEffect(() => {
+    if (modosVisibles.length === 0) {
+      return;
+    }
+
+    if (!modosVisibles.some(({ value }) => value === modo)) {
+      const fallback = modosVisibles[0].value;
+      persistirModoPedidos(fallback);
+      setModo(fallback);
+    }
+  }, [modosVisibles, modo]);
 
   const eliminarPedido = async (id, autorizadoPor = null) => {
     const { error } = await queryConNegocio(
