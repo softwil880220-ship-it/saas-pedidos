@@ -9,7 +9,7 @@ import ModalAutorizacionPin from './ModalAutorizacionPin.jsx';
 import useCarritoPedido from './useCarritoPedido';
 import { supabase } from './supabase';
 import { queryConNegocio } from './tenantHelpers';
-import { useMostradorPedidos } from './useMostradorPedidos';
+import { usePedidosRealtime } from './usePedidosRealtime';
 import {
   CLIENTE_MOSTRADOR,
   cargarCarritoMostradorDisponible,
@@ -26,6 +26,8 @@ import {
   construirUpdateEntregadoMostradorPendientes,
   formatearMoneda,
   obtenerFechaHoyClave,
+  pedidoEntregadoMostradorHoy,
+  pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
 import { registrarPedidoMostrador } from './registrarPedidoMostrador';
 
@@ -164,15 +166,44 @@ export default function VistaMostrador({
 
   const hoyClave = obtenerFechaHoyClave();
 
+  const filtrarPendientes = useCallback(
+    (pedido) => pedidoPendienteEntregaMostrador(pedido),
+    []
+  );
+
+  const compararPendientes = useCallback(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+    []
+  );
+
   const {
-    pedidosPendientes,
-    pedidosEntregadosHoy,
-    setPedidos: setPedidosMostrador,
+    pedidos: pedidosPendientes,
+    setPedidos: setPedidosPendientes,
     error: errorPedidosPendientes,
     cargando: cargandoPedidosPendientes,
-  } = useMostradorPedidos({
+  } = usePedidosRealtime({
+    channelName: 'mostrador-pendientes',
     negocioId,
-    hoyClave,
+    filtrar: filtrarPendientes,
+    comparar: compararPendientes,
+  });
+
+  const filtrarEntregados = useCallback(
+    (pedido) => pedidoEntregadoMostradorHoy(pedido, hoyClave),
+    [hoyClave]
+  );
+
+  const compararEntregados = useCallback(
+    (a, b) =>
+      new Date(b.mostrador_entregado_at || 0) - new Date(a.mostrador_entregado_at || 0),
+    []
+  );
+
+  const { pedidos: pedidosEntregadosHoy } = usePedidosRealtime({
+    channelName: 'mostrador-entregados-hoy',
+    negocioId,
+    filtrar: filtrarEntregados,
+    comparar: compararEntregados,
   });
 
   const cerrarMensajeExito = () => {
@@ -260,7 +291,7 @@ export default function VistaMostrador({
       formaPago: formaPagoGuardada,
     });
 
-    setPedidosMostrador((prev) => {
+    setPedidosPendientes((prev) => {
       const existe = prev.some((item) => item.id === data.id);
       return existe ? prev : [data, ...prev];
     });
@@ -278,7 +309,7 @@ export default function VistaMostrador({
     );
 
     if (!error) {
-      setPedidosMostrador((prev) => prev.filter((item) => item.id !== pedido.id));
+      setPedidosPendientes((prev) => prev.filter((item) => item.id !== pedido.id));
     }
 
     setActualizandoEntregaId(null);
@@ -359,7 +390,7 @@ export default function VistaMostrador({
     );
 
     if (!error) {
-      setPedidosMostrador((prev) => prev.filter((item) => item.id !== pedido.id));
+      setPedidosPendientes((prev) => prev.filter((item) => item.id !== pedido.id));
       if (editandoPedidoId === pedido.id) {
         cancelarEdicionPedido();
       }
@@ -430,7 +461,7 @@ export default function VistaMostrador({
       return;
     }
 
-    setPedidosMostrador((prev) =>
+    setPedidosPendientes((prev) =>
       prev.map((item) => (item.id === data.id ? data : item))
     );
     setEditandoPedidoId(null);

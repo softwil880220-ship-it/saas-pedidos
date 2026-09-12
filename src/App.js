@@ -18,10 +18,6 @@ import useEsMobile from './useEsMobile';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
-  aplicarFiltrosQueryDashboard,
-  pedidoCoincideFiltroDashboard,
-} from './pedidosQueryHelpers';
-import {
   COCINAS,
   COCINAS_OPCIONES,
   determinarStatusInicialPresencial,
@@ -953,6 +949,15 @@ function Dashboard() {
     return estadoInicialCaptura.modo ?? 'presencial';
   });
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
+  const {
+    pedidos,
+    setPedidos,
+    error: errorPedidos,
+    cargando: cargandoPedidos,
+  } = usePedidosRealtime({
+    channelName: 'dashboard-pedidos',
+    negocioId,
+  });
   const { productos, setProductos } = useProductosRealtime({
     channelName: 'dashboard-productos',
     negocioId,
@@ -996,38 +1001,6 @@ function Dashboard() {
   const [cargandoJornada, setCargandoJornada] = useState(false);
   const [accionJornadaEnProgreso, setAccionJornadaEnProgreso] = useState(false);
   const [errorJornada, setErrorJornada] = useState(null);
-
-  const filtrarPedidosDashboard = useCallback(
-    (pedido) =>
-      pedidoCoincideFiltroDashboard(pedido, {
-        jornadaId: jornadaAbierta?.id ?? null,
-        jornadaAbiertaEn: jornadaAbierta?.abierta_en ?? null,
-        filtroFechaClave: filtroFecha,
-      }),
-    [jornadaAbierta?.id, jornadaAbierta?.abierta_en, filtroFecha]
-  );
-
-  const aplicarFiltrosQueryPedidosDashboard = useCallback(
-    (query) =>
-      aplicarFiltrosQueryDashboard(query, {
-        jornadaId: jornadaAbierta?.id ?? null,
-        filtroFechaClave: filtroFecha,
-      }),
-    [jornadaAbierta?.id, filtroFecha]
-  );
-
-  const {
-    pedidos,
-    setPedidos,
-    error: errorPedidos,
-    cargando: cargandoPedidos,
-  } = usePedidosRealtime({
-    channelName: 'dashboard-pedidos',
-    negocioId,
-    filtrar: filtrarPedidosDashboard,
-    aplicarFiltrosQuery: aplicarFiltrosQueryPedidosDashboard,
-  });
-
   const [modalConfirmarCerrarJornadaAbierto, setModalConfirmarCerrarJornadaAbierto] =
     useState(false);
   const [modalMesasAbiertasJornadaAbierto, setModalMesasAbiertasJornadaAbierto] =
