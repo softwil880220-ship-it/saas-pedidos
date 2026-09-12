@@ -183,6 +183,8 @@ function useSupabaseRealtime({
   comparar = null,
   ordenInicial = { column: 'created_at', ascending: false },
   ordenarLista = null,
+  select = '*',
+  aplicarFiltrosQuery = null,
 }) {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -339,9 +341,12 @@ function useSupabaseRealtime({
 
       fetchEnVuelo = true;
 
-      let query = supabase.from(table).select('*');
-      if (table === 'pedidos') {
+      let query = supabase.from(table).select(select);
+      if (table === 'pedidos' && !aplicarFiltrosQuery) {
         query = query.is('deleted_at', null);
+      }
+      if (aplicarFiltrosQuery) {
+        query = aplicarFiltrosQuery(query);
       }
 
       const { data, error } = await queryConNegocio(query, negocioId).order(
@@ -544,6 +549,8 @@ function useSupabaseRealtime({
     ordenInicial.column,
     ordenInicial.ascending,
     ordenarLista,
+    select,
+    aplicarFiltrosQuery,
   ]);
 
   return { items, setItems, cargando, error };
@@ -555,6 +562,8 @@ export function usePedidosRealtime(options = {}) {
     negocioId = null,
     filtrar = null,
     comparar = null,
+    select = '*',
+    aplicarFiltrosQuery = null,
   } = options;
 
   const ordenarLista = useCallback(
@@ -571,6 +580,8 @@ export function usePedidosRealtime(options = {}) {
     comparar,
     ordenInicial: { column: 'created_at', ascending: false },
     ordenarLista,
+    select,
+    aplicarFiltrosQuery,
   });
 
   return { pedidos: items, setPedidos: setItems, cargando, error };
