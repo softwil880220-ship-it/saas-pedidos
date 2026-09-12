@@ -949,7 +949,12 @@ function Dashboard() {
     return estadoInicialCaptura.modo ?? 'presencial';
   });
   const [filtroFecha, setFiltroFecha] = useState(obtenerFechaHoy);
-  const { pedidos, setPedidos } = usePedidosRealtime({
+  const {
+    pedidos,
+    setPedidos,
+    error: errorPedidos,
+    cargando: cargandoPedidos,
+  } = usePedidosRealtime({
     channelName: 'dashboard-pedidos',
     negocioId,
   });
@@ -1241,12 +1246,8 @@ function Dashboard() {
       const { mostrarCarga = true, sincronizarTotales = true } = opciones;
 
       if (!negocioId) {
-        setJornadaAbierta(null);
         if (mostrarCarga) {
-          setCargandoJornada(false);
-        }
-        if (sincronizarTotales) {
-          await sincronizarTotalesJornadaAbierta(null);
+          setCargandoJornada(true);
         }
         return;
       }
@@ -3241,7 +3242,11 @@ function Dashboard() {
                     aria-hidden="true"
                   />
                   <p className="header-jornada-texto">
-                    {jornadaAbierta ? 'Jornada abierta' : 'Jornada cerrada'}
+                    {jornadaAbierta
+                      ? 'Jornada abierta'
+                      : errorJornada
+                        ? 'No se pudo verificar la jornada'
+                        : 'Jornada cerrada'}
                   </p>
                 </div>
                 {puedeGestionarJornadaDashboard ? (
@@ -3273,8 +3278,22 @@ function Dashboard() {
               </p>
             ) : null}
           </div>
+          {errorPedidos ? (
+            <p className="header-jornada-error" role="alert">
+              {errorPedidos}
+            </p>
+          ) : null}
           {puedeVerVentasTotalesDashboard ? (
-            jornadaAbierta ? (
+            errorJornada ? (
+              <p className="header-jornada-error" role="alert">
+                {errorJornada}
+              </p>
+            ) : jornadaAbierta ? (
+              cargandoPedidos ? (
+                <p className="header-jornada-cerrada-mensaje" role="status">
+                  Cargando ventas...
+                </p>
+              ) : errorPedidos ? null : (
           <div className="header-stats">
             <div className="header-stat header-stat-principal">
               <span className="header-stat-label">Ventas de la jornada</span>
@@ -3317,6 +3336,7 @@ function Dashboard() {
               </div>
             </div>
           </div>
+              )
             ) : (
               <p className="header-jornada-cerrada-mensaje" role="status">
                 Abre una jornada para empezar a vender

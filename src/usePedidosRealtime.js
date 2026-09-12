@@ -4,6 +4,15 @@ import { perteneceANegocio, queryConNegocio } from './tenantHelpers';
 
 const REALTIME_EVENTOS = ['INSERT', 'UPDATE', 'DELETE'];
 const CANAL_SUSCRITO_UMBRAL_MS = 30000;
+const REINTENTO_FETCH_INICIAL_MS = 3000;
+
+export const MENSAJE_ERROR_CARGA_PEDIDOS = 'No se pudieron cargar los pedidos.';
+export const MENSAJE_ERROR_CARGA_PEDIDOS_REINTENTANDO =
+  'No se pudieron cargar los pedidos. Reintentando...';
+
+function mensajeErrorFetch(error) {
+  return error?.message || MENSAJE_ERROR_CARGA_PEDIDOS;
+}
 
 function ordenarPedidosDesc(pedidos) {
   return [...pedidos].sort(
@@ -177,6 +186,7 @@ function useSupabaseRealtime({
 }) {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
 
   const aplicarFiltroYOrden = useCallback(
     (lista) => {
@@ -191,8 +201,7 @@ function useSupabaseRealtime({
 
   useEffect(() => {
     if (!negocioId) {
-      setItems([]);
-      setCargando(false);
+      setCargando(true);
       return undefined;
     }
 
@@ -211,6 +220,8 @@ function useSupabaseRealtime({
     let esArranqueInicial = true;
     let ultimosItemsConocidos = [];
     let subscribeTimeoutId = null;
+    let reintentoInicialTimeoutId = null;
+    let reintentoInicialUsado = false;
     let canalEstadoActual = null;
 
     const contextoLog = { table, channelName, negocioId };
@@ -227,6 +238,13 @@ function useSupabaseRealtime({
       if (subscribeTimeoutId != null) {
         clearTimeout(subscribeTimeoutId);
         subscribeTimeoutId = null;
+      }
+    };
+
+    const limpiarReintentoInicial = () => {
+      if (reintentoInicialTimeoutId != null) {
+        clearTimeout(reintentoInicialTimeoutId);
+        reintentoInicialTimeoutId = null;
       }
     };
 
@@ -256,6 +274,10 @@ function useSupabaseRealtime({
 
       if (esArranqueInicial) {
         setCargando(false);
+      }
+
+      if (!fetchResultado?.error) {
+        setError(null);
       }
     };
 
@@ -341,6 +363,26 @@ function useSupabaseRealtime({
           motivo,
           error,
         });
+
+        if (esArranqueInicial && !reintentoInicialUsado) {
+          reintentoInicialUsado = true;
+          setError(MENSAJE_ERROR_CARGA_PEDIDOS_REINTENTANDO);
+          reintentoInicialTimeoutId = setTimeout(() => {
+            if (!sesionValida(generation)) {
+              return;
+            }
+
+            fetchCompletado = false;
+            bufferFinalizado = false;
+            modo = 'buffering';
+            void ejecutarFetch(generation, 'initial_retry', { esArranque: true });
+          }, REINTENTO_FETCH_INICIAL_MS);
+          return;
+        }
+
+        setError(mensajeErrorFetch(error));
+      } else {
+        setError(null);
       }
 
       finalizarBufferSiListo(generation, { requiereCanal: esArranque });
@@ -453,8 +495,11 @@ function useSupabaseRealtime({
       canalDegradado = false;
       eventBuffer.length = 0;
       ultimosItemsConocidos = [];
+      reintentoInicialUsado = false;
+      limpiarReintentoInicial();
 
       setCargando(true);
+      setError(null);
       conectarRealtime(generation);
       void ejecutarFetch(generation, 'initial', { esArranque: true });
     };
@@ -483,6 +528,7 @@ function useSupabaseRealtime({
     return () => {
       activo = false;
       limpiarSubscribeTimeout();
+      limpiarReintentoInicial();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (channel) {
         supabase.removeChannel(channel);
@@ -500,7 +546,7 @@ function useSupabaseRealtime({
     ordenarLista,
   ]);
 
-  return { items, setItems, cargando };
+  return { items, setItems, cargando, error };
 }
 
 export function usePedidosRealtime(options = {}) {
@@ -517,7 +563,7 @@ export function usePedidosRealtime(options = {}) {
     [comparar]
   );
 
-  const { items, setItems, cargando } = useSupabaseRealtime({
+  const { items, setItems, cargando, error } = useSupabaseRealtime({
     table: 'pedidos',
     channelName,
     negocioId,
@@ -527,13 +573,13 @@ export function usePedidosRealtime(options = {}) {
     ordenarLista,
   });
 
-  return { pedidos: items, setPedidos: setItems, cargando };
+  return { pedidos: items, setPedidos: setItems, cargando, error };
 }
 
 export function useProductosRealtime(options = {}) {
   const { channelName = 'productos', negocioId = null, comparar = null } = options;
 
-  const { items, setItems, cargando } = useSupabaseRealtime({
+  const { items, setItems, cargando, error } = useSupabaseRealtime({
     table: 'productos',
     channelName,
     negocioId,
@@ -544,5 +590,5 @@ export function useProductosRealtime(options = {}) {
       : ordenarProductosAsc,
   });
 
-  return { productos: items, setProductos: setItems, cargando };
+  return { productos: items, setProductos: setItems, cargando, error };
 }

@@ -176,13 +176,17 @@ export default function VistaMostrador({
     []
   );
 
-  const { pedidos: pedidosPendientes, setPedidos: setPedidosPendientes } =
-    usePedidosRealtime({
-      channelName: 'mostrador-pendientes',
-      negocioId,
-      filtrar: filtrarPendientes,
-      comparar: compararPendientes,
-    });
+  const {
+    pedidos: pedidosPendientes,
+    setPedidos: setPedidosPendientes,
+    error: errorPedidosPendientes,
+    cargando: cargandoPedidosPendientes,
+  } = usePedidosRealtime({
+    channelName: 'mostrador-pendientes',
+    negocioId,
+    filtrar: filtrarPendientes,
+    comparar: compararPendientes,
+  });
 
   const filtrarEntregados = useCallback(
     (pedido) => pedidoEntregadoMostradorHoy(pedido, hoyClave),
@@ -680,7 +684,13 @@ export default function VistaMostrador({
             </span>
           </header>
 
-          {pedidosPendientes.length === 0 ? (
+          {errorPedidosPendientes ? (
+            <p className="formulario-error-guardar" role="alert">
+              {errorPedidosPendientes}
+            </p>
+          ) : cargandoPedidosPendientes ? (
+            <p className="mostrador-pendientes-vacio">Cargando pedidos pendientes...</p>
+          ) : pedidosPendientes.length === 0 ? (
             <p className="mostrador-pendientes-vacio">
               No hay pedidos pendientes de entrega.
             </p>
