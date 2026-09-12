@@ -588,15 +588,19 @@ export function construirUpdateMostradorEntregado(pedido) {
   };
 }
 
-export function construirUpdateEntregadoMostradorPendientes(pedido) {
+export function construirPayloadEntregadoMostrador(mostradorEntregadoAt) {
+  return {
+    status: 'entregado',
+    mostrador_entregado_at: mostradorEntregadoAt ?? new Date().toISOString(),
+  };
+}
+
+export function construirUpdateEntregadoMostradorPendientes(pedido, mostradorEntregadoAt) {
   if (!pedidoPendienteEntregaMostrador(pedido)) {
     return null;
   }
 
-  return {
-    status: 'entregado',
-    mostrador_entregado_at: new Date().toISOString(),
-  };
+  return construirPayloadEntregadoMostrador(mostradorEntregadoAt);
 }
 
 export function botonesMostradorCocina(mostradorFlujoCocina, pedido) {

@@ -1,5 +1,6 @@
 import { queryConNegocio, payloadConNegocio } from './tenantHelpers';
 import { redondearMoneda } from './pedidoCarritoCalculos';
+import { construirPayloadEntregadoMostrador } from './pedidosShared';
 
 export const JORNADA_ESTADO_ABIERTA = 'abierta';
 export const JORNADA_ESTADO_CERRADA = 'cerrada';
@@ -121,17 +122,43 @@ export async function abrirJornada(supabase, negocioId, usuarioNegocioId) {
   return { data: data ?? null, error };
 }
 
+export async function marcarPendientesMostradorEntregadosJornada(
+  supabase,
+  negocioId,
+  jornadaId,
+  mostradorEntregadoAt
+) {
+  if (!negocioId || !jornadaId || !mostradorEntregadoAt) {
+    return { error: new Error('No se pudo identificar la jornada para cerrar pendientes.') };
+  }
+
+  const { error } = await queryConNegocio(
+    supabase
+      .from('pedidos')
+      .update(construirPayloadEntregadoMostrador(mostradorEntregadoAt))
+      .eq('jornada_id', jornadaId)
+      .eq('tipo', 'mostrador')
+      .neq('status', 'entregado')
+      .is('deleted_at', null),
+    negocioId
+  );
+
+  return { error: error ?? null };
+}
+
 export async function cerrarJornada(supabase, negocioId, jornadaId, usuarioNegocioId) {
   if (!negocioId || !jornadaId || !usuarioNegocioId) {
     return { data: null, error: new Error('No se pudo identificar la jornada o el usuario.') };
   }
+
+  const cerradaEn = new Date().toISOString();
 
   const { data, error } = await queryConNegocio(
     supabase
       .from('jornadas')
       .update({
         estado: JORNADA_ESTADO_CERRADA,
-        cerrada_en: new Date().toISOString(),
+        cerrada_en: cerradaEn,
         cerrada_por: usuarioNegocioId,
       })
       .eq('id', jornadaId)
@@ -141,7 +168,27 @@ export async function cerrarJornada(supabase, negocioId, jornadaId, usuarioNegoc
     negocioId
   );
 
-  return { data: data ?? null, error };
+  if (error) {
+    return { data: null, error };
+  }
+
+  if (!data) {
+    return { data: null, error: null };
+  }
+
+  const timestampCierre = data.cerrada_en ?? cerradaEn;
+  const { error: errorPendientesMostrador } = await marcarPendientesMostradorEntregadosJornada(
+    supabase,
+    negocioId,
+    jornadaId,
+    timestampCierre
+  );
+
+  if (errorPendientesMostrador) {
+    return { data, error: errorPendientesMostrador };
+  }
+
+  return { data, error: null };
 }
 
 export function construirRetirosDetalleSnapshot(filas) {
