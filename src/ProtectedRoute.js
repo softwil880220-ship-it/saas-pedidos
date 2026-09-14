@@ -5,6 +5,7 @@ export default function ProtectedRoute({
   children,
   rolesPermitidos,
   requiereHabilitarClientes = false,
+  requiereHabilitarInventario = false,
 }) {
   const { session, usuario, rol, cargando, modulosNegocio } = useAuth();
   const location = useLocation();
@@ -34,6 +35,10 @@ export default function ProtectedRoute({
   }
 
   if (requiereHabilitarClientes && !modulosNegocio.habilitar_clientes) {
+    return <Navigate to={rutaPorRol(rol)} replace />;
+  }
+
+  if (requiereHabilitarInventario && !modulosNegocio.habilitar_inventario) {
     return <Navigate to={rutaPorRol(rol)} replace />;
   }
 

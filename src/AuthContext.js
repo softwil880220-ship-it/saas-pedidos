@@ -10,6 +10,7 @@ const MODULOS_NEGOCIO_VACIOS = {
   habilitar_recoger_domicilio: false,
   habilitar_mesas: false,
   habilitar_clientes: false,
+  habilitar_inventario: false,
 };
 
 function modulosNegocioDesdeFila(negocio) {
@@ -21,6 +22,7 @@ function modulosNegocioDesdeFila(negocio) {
     habilitar_recoger_domicilio: negocio.habilitar_recoger_domicilio === true,
     habilitar_mesas: negocio.habilitar_mesas === true,
     habilitar_clientes: negocio.habilitar_clientes === true,
+    habilitar_inventario: negocio.habilitar_inventario === true,
   };
 }
 
@@ -61,7 +63,8 @@ async function cargarUsuario(authUserId) {
         habilitar_mostrador,
         habilitar_recoger_domicilio,
         habilitar_mesas,
-        habilitar_clientes
+        habilitar_clientes,
+        habilitar_inventario
       )
     `
     )

@@ -41,7 +41,7 @@ const TABS_REPARTIDOR_VALIDOS = new Set(['por-entregar', 'entregados']);
 
 export const CLIENTE_MOSTRADOR = 'Mostrador';
 
-const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'clientes', 'reportes', 'equipo']);
+const SECCIONES_DASHBOARD = new Set(['pedidos', 'catalogo', 'clientes', 'inventario', 'reportes', 'equipo']);
 
 const CLIENTE_PUBLICO = 'Público general';
 const FORMA_PAGO_DEFAULT_CAJA = 'efectivo';
@@ -600,6 +600,7 @@ export function cargarSeccionActiva() {
 export function seccionDesdeRuta(pathname) {
   if (pathname === '/catalogo') return 'catalogo';
   if (pathname === '/clientes') return 'clientes';
+  if (pathname === '/inventario') return 'inventario';
   if (pathname === '/reportes') return 'reportes';
   if (pathname === '/equipo') return 'equipo';
   if (pathname === '/') return 'pedidos';
@@ -609,6 +610,7 @@ export function seccionDesdeRuta(pathname) {
 export function rutaSeccionActiva(seccion) {
   if (seccion === 'catalogo') return '/catalogo';
   if (seccion === 'clientes') return '/clientes';
+  if (seccion === 'inventario') return '/inventario';
   if (seccion === 'reportes') return '/reportes';
   if (seccion === 'equipo') return '/equipo';
   return '/';

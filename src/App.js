@@ -40,6 +40,7 @@ import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
 import VistaEquipo from './VistaEquipo';
 import VistaClientes from './VistaClientes';
+import VistaInventario from './VistaInventario';
 import {
   agruparPedidosPorDia,
   formatearEncabezadoGrupoJornada,
@@ -4738,6 +4739,17 @@ function App() {
                 requiereHabilitarClientes
               >
                 <VistaClientes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/inventario"
+            element={
+              <ProtectedRoute
+                rolesPermitidos={['dueno', 'administrador']}
+                requiereHabilitarInventario
+              >
+                <VistaInventario />
               </ProtectedRoute>
             }
           />
