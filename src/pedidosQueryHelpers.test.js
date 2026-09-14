@@ -1,7 +1,52 @@
 import {
+  canalModuloHabilitado,
+  modoDashboardDesdeTipoPedido,
+  pedidoCanalHabilitado,
   pedidoCoincideFiltroDashboard,
   pedidoCoincideFiltroMostrador,
 } from './pedidosQueryHelpers';
+
+describe('modoDashboardDesdeTipoPedido', () => {
+  test('mapea tipos de pedido al modo del dashboard', () => {
+    expect(modoDashboardDesdeTipoPedido('presencial')).toBe('presencial');
+    expect(modoDashboardDesdeTipoPedido('mostrador')).toBe('mostrador');
+    expect(modoDashboardDesdeTipoPedido('mesa')).toBe('mesas');
+    expect(modoDashboardDesdeTipoPedido('whatsapp')).toBe('whatsapp');
+    expect(modoDashboardDesdeTipoPedido(null)).toBe('whatsapp');
+    expect(modoDashboardDesdeTipoPedido('')).toBe('whatsapp');
+  });
+});
+
+describe('pedidoCanalHabilitado', () => {
+  const modulosNegocio = {
+    habilitar_caja: true,
+    habilitar_mostrador: true,
+    habilitar_recoger_domicilio: false,
+    habilitar_mesas: false,
+  };
+
+  test('permite pedidos de canales habilitados', () => {
+    expect(
+      pedidoCanalHabilitado({ tipo: 'presencial' }, modulosNegocio)
+    ).toBe(true);
+    expect(
+      pedidoCanalHabilitado({ tipo: 'mostrador' }, modulosNegocio)
+    ).toBe(true);
+  });
+
+  test('bloquea pedidos de canales deshabilitados', () => {
+    expect(
+      pedidoCanalHabilitado({ tipo: 'whatsapp' }, modulosNegocio)
+    ).toBe(false);
+    expect(pedidoCanalHabilitado({ tipo: 'mesa' }, modulosNegocio)).toBe(false);
+    expect(pedidoCanalHabilitado({ tipo: null }, modulosNegocio)).toBe(false);
+  });
+
+  test('canalModuloHabilitado refleja el mismo flag', () => {
+    expect(canalModuloHabilitado('presencial', modulosNegocio)).toBe(true);
+    expect(canalModuloHabilitado('mesas', modulosNegocio)).toBe(false);
+  });
+});
 
 describe('pedidoCoincideFiltroMostrador', () => {
   const hoyClave = '2026-09-12';

@@ -7,6 +7,37 @@ import {
   pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
 
+export const MODULO_POR_MODO = {
+  presencial: 'habilitar_caja',
+  mostrador: 'habilitar_mostrador',
+  whatsapp: 'habilitar_recoger_domicilio',
+  mesas: 'habilitar_mesas',
+};
+
+export function modoDashboardDesdeTipoPedido(tipo) {
+  if (tipo == null || tipo === '' || tipo === 'whatsapp') {
+    return 'whatsapp';
+  }
+
+  if (tipo === 'presencial' || tipo === 'mostrador' || tipo === 'mesa') {
+    return tipo === 'mesa' ? 'mesas' : tipo;
+  }
+
+  return null;
+}
+
+export function canalModuloHabilitado(modo, modulosNegocio) {
+  const flag = MODULO_POR_MODO[modo];
+  if (!flag) return false;
+  return modulosNegocio?.[flag] === true;
+}
+
+export function pedidoCanalHabilitado(pedido, modulosNegocio) {
+  const modo = modoDashboardDesdeTipoPedido(pedido?.tipo);
+  if (!modo) return false;
+  return canalModuloHabilitado(modo, modulosNegocio);
+}
+
 export const COLUMNAS_PEDIDOS_MOSTRADOR = [
   'id',
   'negocio_id',

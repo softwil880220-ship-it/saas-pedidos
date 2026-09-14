@@ -18,7 +18,9 @@ import useEsMobile from './useEsMobile';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
+  MODULO_POR_MODO,
   aplicarFiltrosQueryDashboard,
+  pedidoCanalHabilitado,
   pedidoCoincideFiltroDashboard,
 } from './pedidosQueryHelpers';
 import {
@@ -141,12 +143,25 @@ const MODOS = [
   { value: 'mesas', label: 'Mesas' },
 ];
 
-const MODULO_POR_MODO = {
-  presencial: 'habilitar_caja',
-  mostrador: 'habilitar_mostrador',
-  whatsapp: 'habilitar_recoger_domicilio',
-  mesas: 'habilitar_mesas',
-};
+const MODOS_DESGLOSE_HEADER_PRESENCIAL = ['presencial', 'mostrador'];
+const MODOS_DESGLOSE_HEADER_ENTREGA = ['whatsapp', 'mesas'];
+
+function renderDesgloseVentasHeader(modos, totalesPorModo, className) {
+  if (modos.length === 0) {
+    return null;
+  }
+
+  return (
+    <p className={className}>
+      {modos.map(({ value, label }, index) => (
+        <span key={value}>
+          {index > 0 ? ' | ' : null}
+          {label}: {formatearMoneda(totalesPorModo[value])}
+        </span>
+      ))}
+    </p>
+  );
+}
 
 function crearCatalogoTabs(categorias) {
   const tabs = [
@@ -1968,39 +1983,59 @@ function Dashboard() {
         )
       )
     : [];
-  const pedidosHoyCaja = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'presencial');
-  const pedidosHoyMostrador = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'mostrador');
-  const pedidosHoyRecogerDomicilio = pedidosHoyTodos.filter((pedido) => esPedidoWhatsapp(pedido));
-  const pedidosHoyMesas = pedidosHoyTodos.filter((pedido) => pedido.tipo === 'mesa');
+  const pedidosHoyCanalesHabilitados = useMemo(
+    () => pedidosHoyTodos.filter((pedido) => pedidoCanalHabilitado(pedido, modulosNegocio)),
+    [pedidosHoyTodos, modulosNegocio]
+  );
+  const pedidosHoyCaja = pedidosHoyCanalesHabilitados.filter(
+    (pedido) => pedido.tipo === 'presencial'
+  );
+  const pedidosHoyMostrador = pedidosHoyCanalesHabilitados.filter(
+    (pedido) => pedido.tipo === 'mostrador'
+  );
+  const pedidosHoyRecogerDomicilio = pedidosHoyCanalesHabilitados.filter((pedido) =>
+    esPedidoWhatsapp(pedido)
+  );
+  const pedidosHoyMesas = pedidosHoyCanalesHabilitados.filter((pedido) => pedido.tipo === 'mesa');
 
   const totalVentasHoyCaja = totalVentasPedidos(pedidosHoyCaja);
   const totalVentasHoyMostrador = totalVentasPedidos(pedidosHoyMostrador);
   const totalVentasHoyRecogerDomicilio = totalVentasPedidos(pedidosHoyRecogerDomicilio);
   const totalVentasHoyMesas = totalVentasPedidos(pedidosHoyMesas);
+  const totalVentasHoyPorModo = useMemo(
+    () => ({
+      presencial: totalVentasHoyCaja,
+      mostrador: totalVentasHoyMostrador,
+      whatsapp: totalVentasHoyRecogerDomicilio,
+      mesas: totalVentasHoyMesas,
+    }),
+    [totalVentasHoyCaja, totalVentasHoyMostrador, totalVentasHoyRecogerDomicilio, totalVentasHoyMesas]
+  );
   const totalVentasHoyTotal =
     totalVentasHoyCaja +
     totalVentasHoyMostrador +
     totalVentasHoyRecogerDomicilio +
     totalVentasHoyMesas;
+  const foliosMesasParaArqueo = modulosNegocio.habilitar_mesas === true ? foliosMesasCerradosHoy : [];
   const ventasPedidosPorFormaPago = useMemo(
-    () => calcularVentasPorFormaPago(pedidosHoyTodos),
-    [pedidosHoyTodos]
+    () => calcularVentasPorFormaPago(pedidosHoyCanalesHabilitados),
+    [pedidosHoyCanalesHabilitados]
   );
   const ventasMesasFoliosPorFormaPago = useMemo(
-    () => calcularVentasMesasFoliosPorFormaPago(foliosMesasCerradosHoy),
-    [foliosMesasCerradosHoy]
+    () => calcularVentasMesasFoliosPorFormaPago(foliosMesasParaArqueo),
+    [foliosMesasParaArqueo]
   );
   const ventasBrutasPorFormaPago = useMemo(
     () => combinarVentasPorFormaPago(ventasPedidosPorFormaPago, ventasMesasFoliosPorFormaPago),
     [ventasPedidosPorFormaPago, ventasMesasFoliosPorFormaPago]
   );
   const propinasDelDiaMesas = useMemo(
-    () => sumarCampoFoliosMesas(foliosMesasCerradosHoy, 'propina_monto_aplicado'),
-    [foliosMesasCerradosHoy]
+    () => sumarCampoFoliosMesas(foliosMesasParaArqueo, 'propina_monto_aplicado'),
+    [foliosMesasParaArqueo]
   );
   const descuentosDelDiaMesas = useMemo(
-    () => sumarCampoFoliosMesas(foliosMesasCerradosHoy, 'descuento_monto_aplicado'),
-    [foliosMesasCerradosHoy]
+    () => sumarCampoFoliosMesas(foliosMesasParaArqueo, 'descuento_monto_aplicado'),
+    [foliosMesasParaArqueo]
   );
   const retirosDelDia = useMemo(
     () =>
@@ -3330,14 +3365,20 @@ function Dashboard() {
               <span className="header-stat-value header-stat-value-total">
                 {formatearMoneda(totalVentasHoyTotal)}
               </span>
-              <p className="header-stat-desglose">
-                Caja: {formatearMoneda(totalVentasHoyCaja)} | Mostrador:{' '}
-                {formatearMoneda(totalVentasHoyMostrador)}
-              </p>
-              <p className="header-stat-desglose header-stat-desglose-whatsapp">
-                Para recoger/domicilio: {formatearMoneda(totalVentasHoyRecogerDomicilio)} | Mesas:{' '}
-                {formatearMoneda(totalVentasHoyMesas)}
-              </p>
+              {renderDesgloseVentasHeader(
+                modosVisibles.filter(({ value }) =>
+                  MODOS_DESGLOSE_HEADER_PRESENCIAL.includes(value)
+                ),
+                totalVentasHoyPorModo,
+                'header-stat-desglose'
+              )}
+              {renderDesgloseVentasHeader(
+                modosVisibles.filter(({ value }) =>
+                  MODOS_DESGLOSE_HEADER_ENTREGA.includes(value)
+                ),
+                totalVentasHoyPorModo,
+                'header-stat-desglose header-stat-desglose-whatsapp'
+              )}
               <div className="header-acciones-caja">
                 <button
                   type="button"
