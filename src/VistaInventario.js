@@ -1,10 +1,19 @@
+import { useMemo, useState } from 'react';
 import './App.css';
+import './VistaClientes.css';
+import './VistaInventario.css';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import DashboardNav from './DashboardNav';
+import PanelInsumos from './PanelInsumos';
 import { useAuth } from './AuthContext';
 
+const INVENTARIO_TABS = [{ value: 'insumos', label: 'Catálogo de insumos' }];
+
 export default function VistaInventario() {
-  const { rol } = useAuth();
+  const { negocioId, rol } = useAuth();
+  const [tabActivo, setTabActivo] = useState('insumos');
+
+  const tabs = useMemo(() => INVENTARIO_TABS, []);
 
   return (
     <div className="dashboard">
@@ -13,7 +22,20 @@ export default function VistaInventario() {
       <main className="dashboard-main">
         <DashboardNav activo="inventario" rol={rol} />
 
-        <p>Módulo Inventario — en construcción</p>
+        <nav className="clientes-seccion-nav" aria-label="Secciones de inventario">
+          {tabs.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              className={`clientes-seccion-tab${tabActivo === value ? ' activo' : ''}`}
+              onClick={() => setTabActivo(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {tabActivo === 'insumos' ? <PanelInsumos negocioId={negocioId} /> : null}
       </main>
     </div>
   );
