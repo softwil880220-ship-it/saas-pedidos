@@ -5264,7 +5264,7 @@ function App() {
             path="/inventario"
             element={
               <ProtectedRoute
-                rolesPermitidos={['dueno', 'administrador']}
+                rolesPermitidos={['dueno', 'administrador', 'cajero']}
                 requiereHabilitarInventario
               >
                 <VistaInventario />
