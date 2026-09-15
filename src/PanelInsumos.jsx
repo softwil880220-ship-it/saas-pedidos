@@ -150,28 +150,32 @@ export default function PanelInsumos({ negocioId }) {
     }
   };
 
-  const desactivarInsumo = async (insumo) => {
-    if (insumo.activo === false) return;
+  const toggleInsumoActivo = async (insumo) => {
+    const nuevoActivo = insumo.activo === false;
 
     setDesactivandoId(insumo.id);
 
     const { data, error } = await queryConNegocio(
-      supabase.from('insumos').update({ activo: false }).eq('id', insumo.id),
+      supabase.from('insumos').update({ activo: nuevoActivo }).eq('id', insumo.id),
       negocioId
     )
       .select()
       .single();
 
     if (error) {
-      console.error('[insumos] error al desactivar', error);
+      console.error('[insumos] error al cambiar estado activo', error);
     } else if (data) {
-      setInsumos((prev) =>
-        mostrarInactivos
-          ? prev.map((entry) => (String(entry.id) === String(data.id) ? data : entry))
-          : prev.filter((entry) => String(entry.id) !== String(data.id))
-      );
+      setInsumos((prev) => {
+        if (mostrarInactivos) {
+          return prev.map((entry) => (String(entry.id) === String(data.id) ? data : entry));
+        }
 
-      if (editandoInsumoId === insumo.id) {
+        return nuevoActivo
+          ? [...prev.filter((entry) => String(entry.id) !== String(data.id)), data]
+          : prev.filter((entry) => String(entry.id) !== String(data.id));
+      });
+
+      if (editandoInsumoId === insumo.id && !nuevoActivo) {
         resetInsumoForm();
       }
     }
@@ -263,16 +267,20 @@ export default function PanelInsumos({ negocioId }) {
                   >
                     Editar
                   </button>
-                  {insumo.activo !== false ? (
-                    <button
-                      type="button"
-                      className="eliminar-btn"
-                      disabled={desactivandoId === insumo.id}
-                      onClick={() => desactivarInsumo(insumo)}
-                    >
-                      {desactivandoId === insumo.id ? 'Desactivando…' : 'Desactivar'}
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="eliminar-btn"
+                    disabled={desactivandoId === insumo.id}
+                    onClick={() => toggleInsumoActivo(insumo)}
+                  >
+                    {desactivandoId === insumo.id
+                      ? insumo.activo === false
+                        ? 'Activando…'
+                        : 'Desactivando…'
+                      : insumo.activo === false
+                        ? 'Activar'
+                        : 'Desactivar'}
+                  </button>
                 </div>
               </article>
             ))}
