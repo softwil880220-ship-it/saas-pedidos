@@ -13,6 +13,7 @@ export default function EntradaPesoMonto({
   onChangeCantidad,
   productoNombre,
   idBase,
+  ocultarMonto = false,
 }) {
   const [campoActivo, setCampoActivo] = useState(null);
 
@@ -79,20 +80,22 @@ export default function EntradaPesoMonto({
         </div>
       </div>
 
-      <div className="formulario-campo pedido-linea-subtotal">
-        <label htmlFor={`${idBase}-monto`}>Monto ($)</label>
-        <input
-          id={`${idBase}-monto`}
-          type="number"
-          min="0"
-          step="0.01"
-          inputMode="decimal"
-          value={montoTexto}
-          onFocus={() => setCampoActivo('monto')}
-          onChange={handleMontoChange}
-          aria-label={`Monto de ${productoNombre}`}
-        />
-      </div>
+      {ocultarMonto ? null : (
+        <div className="formulario-campo pedido-linea-subtotal">
+          <label htmlFor={`${idBase}-monto`}>Monto ($)</label>
+          <input
+            id={`${idBase}-monto`}
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={montoTexto}
+            onFocus={() => setCampoActivo('monto')}
+            onChange={handleMontoChange}
+            aria-label={`Monto de ${productoNombre}`}
+          />
+        </div>
+      )}
     </div>
   );
 }

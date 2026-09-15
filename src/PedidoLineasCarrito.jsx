@@ -18,9 +18,13 @@ import { contarArticulosLineasDetalle } from './pedidoDesglose';
 import VariantesPedido from './VariantesPedido.jsx';
 import EntradaPesoMonto from './EntradaPesoMonto.jsx';
 
-function etiquetaResumenLineas(cantidad, totalPedido) {
+function etiquetaResumenLineas(cantidad, totalPedido, ocultarPrecios = false) {
   const etiquetaCantidad =
     cantidad === 1 ? '1 producto' : `${cantidad} productos`;
+
+  if (ocultarPrecios) {
+    return etiquetaCantidad;
+  }
 
   return `${etiquetaCantidad} · ${formatearMoneda(totalPedido)}`;
 }
@@ -32,6 +36,8 @@ export default function PedidoLineasCarrito({
   totalPedido,
   colapsablePorDefecto = false,
   etiquetaResumenColapsado,
+  etiquetaEncabezado = 'Productos del pedido',
+  ocultarPrecios = false,
   onAjustarCantidad,
   onActualizarCantidad,
   onEliminarLinea,
@@ -41,7 +47,11 @@ export default function PedidoLineasCarrito({
   const [expandido, setExpandido] = useState(!colapsablePorDefecto);
   const resumenColapsado =
     etiquetaResumenColapsado ??
-    etiquetaResumenLineas(contarArticulosLineasDetalle(lineas, productos), totalPedido);
+    etiquetaResumenLineas(
+      contarArticulosLineasDetalle(lineas, productos),
+      totalPedido,
+      ocultarPrecios
+    );
 
   return (
     <>
@@ -60,7 +70,7 @@ export default function PedidoLineasCarrito({
           </button>
         ) : (
           <div className="pedido-lineas-encabezado">
-            <span>Productos del pedido</span>
+            <span>{etiquetaEncabezado}</span>
           </div>
         )}
 
@@ -105,14 +115,16 @@ export default function PedidoLineasCarrito({
             const ctxRender = { ...variantesCtx, productos };
             const keyRender = keyRenderLineaCarrito(linea, ctxRender, indice);
             const textoLinea =
-              esPorPeso && subtotal > 0
+              esPorPeso && !ocultarPrecios && subtotal > 0
                 ? formatearLineaProductoVenta({
                     nombre: productoSeleccionado.nombre,
                     cantidad: linea.cantidad,
                     unidadVenta: productoSeleccionado.unidad_venta,
                     subtotal,
                   })
-                : null;
+                : esPorPeso && ocultarPrecios && parseInt(linea.cantidad, 10) > 0
+                  ? `${linea.cantidad} g`
+                  : null;
 
             return (
               <div key={keyRender} className="pedido-linea-contenedor">
@@ -132,7 +144,9 @@ export default function PedidoLineasCarrito({
                     <span className="pedido-linea-producto-label">Producto</span>
                     <span className="pedido-linea-producto-nombre">
                       {productoSeleccionado
-                        ? `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} ${etiquetaPrecioProducto(productoSeleccionado)}`
+                        ? ocultarPrecios
+                          ? productoSeleccionado.nombre
+                          : `${productoSeleccionado.nombre} — ${formatearMoneda(productoSeleccionado.precio)} ${etiquetaPrecioProducto(productoSeleccionado)}`
                         : ''}
                     </span>
                     {textoLinea ? (
@@ -149,6 +163,7 @@ export default function PedidoLineasCarrito({
                       }
                       productoNombre={productoSeleccionado.nombre}
                       idBase={`cantidad-${keyRender}`}
+                      ocultarMonto={ocultarPrecios}
                     />
                   ) : (
                     <>
@@ -183,15 +198,17 @@ export default function PedidoLineasCarrito({
                         </button>
                       </div>
                   </div>
-                  <div className="formulario-campo pedido-linea-subtotal">
-                    <label htmlFor={`subtotal-${linea.id}`}>Subtotal</label>
-                    <input
-                      id={`subtotal-${linea.id}`}
-                      type="text"
-                      value={subtotal > 0 ? formatearMoneda(subtotal) : ''}
-                      readOnly
-                    />
-                  </div>
+                  {ocultarPrecios ? null : (
+                    <div className="formulario-campo pedido-linea-subtotal">
+                      <label htmlFor={`subtotal-${linea.id}`}>Subtotal</label>
+                      <input
+                        id={`subtotal-${linea.id}`}
+                        type="text"
+                        value={subtotal > 0 ? formatearMoneda(subtotal) : ''}
+                        readOnly
+                      />
+                    </div>
+                  )}
                     </>
                   )}
                 </div>
@@ -210,10 +227,12 @@ export default function PedidoLineasCarrito({
       </div>
 
       <div className="pedido-acciones">
-        <div className="pedido-total-pedido">
-          <span className="pedido-total-label">Total del pedido</span>
-          <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
-        </div>
+        {ocultarPrecios ? null : (
+          <div className="pedido-total-pedido">
+            <span className="pedido-total-label">Total del pedido</span>
+            <span className="pedido-total-valor">{formatearMoneda(totalPedido)}</span>
+          </div>
+        )}
         {children}
       </div>
     </>
