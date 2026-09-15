@@ -8,6 +8,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import './App.css';
+import './PanelClientes.css';
 import { AuthProvider, useAuth } from './AuthContext';
 import ProtectedRoute from './ProtectedRoute';
 import VistaLogin from './VistaLogin';
@@ -117,6 +118,18 @@ import {
   normalizarUnidadVenta,
   parseCantidadPieza,
 } from './productoUnidadVenta';
+import {
+  cargarRecetaProductoForm,
+  recetaInsumoVacio,
+  sincronizarProductoRecetas,
+  validarRecetaInsumos,
+} from './productoRecetaHelpers';
+import {
+  cargarRecetaVarianteForm,
+  recetaInsumoVacio as recetaInsumoVarianteVacio,
+  sincronizarRecetaVariante,
+  validarRecetaInsumos as validarRecetaInsumosVariante,
+} from './varianteRecetaHelpers';
 import {
   TAB_CATEGORIAS_VARIANTES,
   catalogosVariantesOrdenadosDesde,
@@ -1057,13 +1070,62 @@ function Dashboard() {
     cocina: COCINAS.COCINA1,
     unidadVenta: 'pieza',
     variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
+    recetaInsumos: [],
   });
-  const [varianteForm, setVarianteForm] = useState({ nombre: '', precio: '0' });
+  const [insumosActivosCatalogo, setInsumosActivosCatalogo] = useState([]);
+  const [insumosRecetaReferenciados, setInsumosRecetaReferenciados] = useState([]);
+  const [productoRecetaError, setProductoRecetaError] = useState(null);
+  const insumosDisponiblesReceta = useMemo(() => {
+    const porId = new Map();
+
+    insumosActivosCatalogo.forEach((insumo) => {
+      porId.set(String(insumo.id), insumo);
+    });
+
+    insumosRecetaReferenciados.forEach((insumo) => {
+      if (insumo?.id) {
+        porId.set(String(insumo.id), insumo);
+      }
+    });
+
+    return [...porId.values()].sort((a, b) =>
+      String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+    );
+  }, [insumosActivosCatalogo, insumosRecetaReferenciados]);
+  const [varianteForm, setVarianteForm] = useState({
+    nombre: '',
+    precio: '0',
+    recetaInsumos: [],
+  });
+  const [insumosRecetaVarianteReferenciados, setInsumosRecetaVarianteReferenciados] =
+    useState([]);
+  const [varianteRecetaError, setVarianteRecetaError] = useState(null);
+  const [cargandoEdicionVariante, setCargandoEdicionVariante] = useState(false);
+  const edicionVarianteEnCursoRef = useRef(null);
+  const insumosDisponiblesVarianteReceta = useMemo(() => {
+    const porId = new Map();
+
+    insumosActivosCatalogo.forEach((insumo) => {
+      porId.set(String(insumo.id), insumo);
+    });
+
+    insumosRecetaVarianteReferenciados.forEach((insumo) => {
+      if (insumo?.id) {
+        porId.set(String(insumo.id), insumo);
+      }
+    });
+
+    return [...porId.values()].sort((a, b) =>
+      String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+    );
+  }, [insumosActivosCatalogo, insumosRecetaVarianteReferenciados]);
   const [categoriaVarianteForm, setCategoriaVarianteForm] = useState({ nombre: '', orden: '0' });
   const [editandoCategoriaVarianteId, setEditandoCategoriaVarianteId] = useState(null);
   const [guardandoCategoriaVariante, setGuardandoCategoriaVariante] = useState(false);
   const [editandoVariante, setEditandoVariante] = useState(null);
   const [editandoProductoId, setEditandoProductoId] = useState(null);
+  const [cargandoEdicionProducto, setCargandoEdicionProducto] = useState(false);
+  const edicionProductoEnCursoRef = useRef(null);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [guardandoVariante, setGuardandoVariante] = useState(false);
@@ -1188,6 +1250,8 @@ function Dashboard() {
   }, [negocioId, setPedidos]);
 
   const resetFormulariosCatalogo = () => {
+    edicionProductoEnCursoRef.current = null;
+    setCargandoEdicionProducto(false);
     setEditandoProductoId(null);
     setEditandoVariante(null);
     setEditandoCategoriaVarianteId(null);
@@ -1197,8 +1261,15 @@ function Dashboard() {
       categoria: '',
       cocina: COCINAS.COCINA1,
       variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
+      recetaInsumos: [],
     });
-    setVarianteForm({ nombre: '', precio: '0' });
+    setProductoRecetaError(null);
+    setInsumosRecetaReferenciados([]);
+    edicionVarianteEnCursoRef.current = null;
+    setCargandoEdicionVariante(false);
+    setVarianteRecetaError(null);
+    setInsumosRecetaVarianteReferenciados([]);
+    setVarianteForm({ nombre: '', precio: '0', recetaInsumos: [] });
     setCategoriaVarianteForm({ nombre: '', orden: '0' });
   };
 
@@ -1424,6 +1495,42 @@ function Dashboard() {
   }, [seccion, negocioId, recargarCatalogos]);
 
   useEffect(() => {
+    if (!negocioId || modulosNegocio.habilitar_inventario !== true) {
+      setInsumosActivosCatalogo([]);
+      return;
+    }
+
+    let activo = true;
+
+    const cargarInsumosActivos = async () => {
+      const { data, error } = await queryConNegocio(
+        supabase
+          .from('insumos')
+          .select('id, nombre, unidad_medida')
+          .eq('activo', true)
+          .order('nombre'),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (error) {
+        console.error('[producto_receta] error al cargar insumos activos', error);
+        setInsumosActivosCatalogo([]);
+        return;
+      }
+
+      setInsumosActivosCatalogo(data || []);
+    };
+
+    void cargarInsumosActivos();
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId, modulosNegocio.habilitar_inventario]);
+
+  useEffect(() => {
     if (seccion !== 'catalogo') {
       resetFormulariosCatalogo();
     }
@@ -1642,7 +1749,11 @@ function Dashboard() {
   };
 
   const resetProductoForm = () => {
+    edicionProductoEnCursoRef.current = null;
+    setCargandoEdicionProducto(false);
     setEditandoProductoId(null);
+    setProductoRecetaError(null);
+    setInsumosRecetaReferenciados([]);
     setProductoForm({
       nombre: '',
       precio: '',
@@ -1650,32 +1761,162 @@ function Dashboard() {
       cocina: COCINAS.COCINA1,
       unidadVenta: 'pieza',
       variantesActivas: crearVariantesActivasFormVacias(categoriasVariantes),
+      recetaInsumos: [],
     });
+  };
+
+  const agregarRecetaInsumoFila = () => {
+    setProductoRecetaError(null);
+    setProductoForm((prev) => ({
+      ...prev,
+      recetaInsumos: [...(prev.recetaInsumos || []), recetaInsumoVacio()],
+    }));
+  };
+
+  const quitarRecetaInsumoFila = (indice) => {
+    setProductoRecetaError(null);
+    setProductoForm((prev) => ({
+      ...prev,
+      recetaInsumos: (prev.recetaInsumos || []).filter((_, i) => i !== indice),
+    }));
+  };
+
+  const actualizarRecetaInsumoFila = (indice, campo, valor) => {
+    setProductoRecetaError(null);
+    setProductoForm((prev) => ({
+      ...prev,
+      recetaInsumos: (prev.recetaInsumos || []).map((fila, i) =>
+        i === indice ? { ...fila, [campo]: valor } : fila
+      ),
+    }));
   };
 
   const resetVarianteForm = () => {
+    edicionVarianteEnCursoRef.current = null;
+    setCargandoEdicionVariante(false);
     setEditandoVariante(null);
-    setVarianteForm({ nombre: '', precio: '0' });
+    setVarianteRecetaError(null);
+    setInsumosRecetaVarianteReferenciados([]);
+    setVarianteForm({ nombre: '', precio: '0', recetaInsumos: [] });
   };
 
-  const iniciarEdicionProducto = (producto) => {
-    setEditandoProductoId(producto.id);
-    setProductoForm({
-      nombre: producto.nombre,
-      precio: String(producto.precio),
-      categoria: producto.categoria || '',
-      cocina: normalizarCocinaProducto(producto.cocina),
-      unidadVenta: normalizarUnidadVenta(producto.unidad_venta),
-      variantesActivas: variantesActivasFormDesdeProducto(producto, variantesCtx),
-    });
+  const agregarVarianteRecetaInsumoFila = () => {
+    setVarianteRecetaError(null);
+    setVarianteForm((prev) => ({
+      ...prev,
+      recetaInsumos: [...(prev.recetaInsumos || []), recetaInsumoVarianteVacio()],
+    }));
   };
 
-  const iniciarEdicionVariante = (categoriaId, item) => {
-    setEditandoVariante({ categoria: String(categoriaId), id: item.id });
-    setVarianteForm({
-      nombre: item.nombre,
-      precio: String(item.precio),
-    });
+  const quitarVarianteRecetaInsumoFila = (indice) => {
+    setVarianteRecetaError(null);
+    setVarianteForm((prev) => ({
+      ...prev,
+      recetaInsumos: (prev.recetaInsumos || []).filter((_, i) => i !== indice),
+    }));
+  };
+
+  const actualizarVarianteRecetaInsumoFila = (indice, campo, valor) => {
+    setVarianteRecetaError(null);
+    setVarianteForm((prev) => ({
+      ...prev,
+      recetaInsumos: (prev.recetaInsumos || []).map((fila, i) =>
+        i === indice ? { ...fila, [campo]: valor } : fila
+      ),
+    }));
+  };
+
+  const iniciarEdicionProducto = async (producto) => {
+    const productoId = producto.id;
+    const requiereCargaReceta = modulosNegocio.habilitar_inventario === true;
+
+    edicionProductoEnCursoRef.current = productoId;
+    if (requiereCargaReceta) {
+      setCargandoEdicionProducto(true);
+    }
+
+    setEditandoProductoId(productoId);
+    setProductoRecetaError(null);
+
+    try {
+      let recetaInsumos = [];
+      let insumosReferenciados = [];
+
+      if (requiereCargaReceta) {
+        const recetaCargada = await cargarRecetaProductoForm(supabase, productoId, negocioId);
+
+        if (edicionProductoEnCursoRef.current !== productoId) {
+          return;
+        }
+
+        recetaInsumos = recetaCargada.filas;
+        insumosReferenciados = recetaCargada.insumosReferenciados;
+      }
+
+      if (edicionProductoEnCursoRef.current !== productoId) {
+        return;
+      }
+
+      setInsumosRecetaReferenciados(insumosReferenciados);
+      setProductoForm({
+        nombre: producto.nombre,
+        precio: String(producto.precio),
+        categoria: producto.categoria || '',
+        cocina: normalizarCocinaProducto(producto.cocina),
+        unidadVenta: normalizarUnidadVenta(producto.unidad_venta),
+        variantesActivas: variantesActivasFormDesdeProducto(producto, variantesCtx),
+        recetaInsumos,
+      });
+    } finally {
+      if (requiereCargaReceta && edicionProductoEnCursoRef.current === productoId) {
+        setCargandoEdicionProducto(false);
+      }
+    }
+  };
+
+  const iniciarEdicionVariante = async (categoriaId, item) => {
+    const itemId = item.id;
+    const categoriaIdStr = String(categoriaId);
+    const requiereCargaReceta = modulosNegocio.habilitar_inventario === true;
+
+    edicionVarianteEnCursoRef.current = itemId;
+    if (requiereCargaReceta) {
+      setCargandoEdicionVariante(true);
+    }
+
+    setEditandoVariante({ categoria: categoriaIdStr, id: itemId });
+    setVarianteRecetaError(null);
+
+    try {
+      let recetaInsumos = [];
+      let insumosReferenciados = [];
+
+      if (requiereCargaReceta) {
+        const recetaCargada = await cargarRecetaVarianteForm(supabase, itemId, negocioId);
+
+        if (edicionVarianteEnCursoRef.current !== itemId) {
+          return;
+        }
+
+        recetaInsumos = recetaCargada.filas;
+        insumosReferenciados = recetaCargada.insumosReferenciados;
+      }
+
+      if (edicionVarianteEnCursoRef.current !== itemId) {
+        return;
+      }
+
+      setInsumosRecetaVarianteReferenciados(insumosReferenciados);
+      setVarianteForm({
+        nombre: item.nombre,
+        precio: String(item.precio),
+        recetaInsumos,
+      });
+    } finally {
+      if (requiereCargaReceta && edicionVarianteEnCursoRef.current === itemId) {
+        setCargandoEdicionVariante(false);
+      }
+    }
   };
 
   const handleVarianteFormChange = (e) => {
@@ -1793,7 +2034,20 @@ function Dashboard() {
 
   const handleProductoSubmit = async (e) => {
     e.preventDefault();
+    setProductoRecetaError(null);
     setGuardandoProducto(true);
+
+    let recetaFilasValidas = [];
+
+    if (modulosNegocio.habilitar_inventario === true) {
+      const validacionReceta = validarRecetaInsumos(productoForm.recetaInsumos);
+      if (!validacionReceta.valido) {
+        setProductoRecetaError(validacionReceta.mensaje);
+        setGuardandoProducto(false);
+        return;
+      }
+      recetaFilasValidas = validacionReceta.filas;
+    }
 
     const payload = {
       nombre: productoForm.nombre.trim(),
@@ -1820,6 +2074,15 @@ function Dashboard() {
           productoForm.variantesActivas
         );
 
+        if (modulosNegocio.habilitar_inventario === true) {
+          await sincronizarProductoRecetas(
+            supabase,
+            data.id,
+            recetaFilasValidas,
+            negocioId
+          );
+        }
+
         setProductos((prev) =>
           prev
             .map((p) => (String(p.id) === String(data.id) ? data : p))
@@ -1842,6 +2105,15 @@ function Dashboard() {
         productoForm.variantesActivas
       );
 
+      if (modulosNegocio.habilitar_inventario === true) {
+        await sincronizarProductoRecetas(
+          supabase,
+          data.id,
+          recetaFilasValidas,
+          negocioId
+        );
+      }
+
       setProductos((prev) => {
         const idStr = String(data.id);
         const yaExiste = prev.some((producto) => String(producto.id) === idStr);
@@ -1854,6 +2126,11 @@ function Dashboard() {
         return next.sort((a, b) => a.id - b.id);
       });
       resetProductoForm();
+    } catch (errorReceta) {
+      console.error('[producto_receta] error al sincronizar receta', errorReceta);
+      setProductoRecetaError(
+        errorReceta?.message || 'No se pudo guardar la receta del producto.'
+      );
     } finally {
       setGuardandoProducto(false);
     }
@@ -1861,7 +2138,20 @@ function Dashboard() {
 
   const handleVarianteSubmit = async (e, categoriaId) => {
     e.preventDefault();
+    setVarianteRecetaError(null);
     const categoriaIdStr = String(categoriaId);
+
+    let recetaFilasValidas = [];
+
+    if (modulosNegocio.habilitar_inventario === true) {
+      const validacionReceta = validarRecetaInsumosVariante(varianteForm.recetaInsumos);
+      if (!validacionReceta.valido) {
+        setVarianteRecetaError(validacionReceta.mensaje);
+        return;
+      }
+      recetaFilasValidas = validacionReceta.filas;
+    }
+
     setGuardandoVariante(true);
 
     const payload = {
@@ -1872,44 +2162,67 @@ function Dashboard() {
     const editandoId =
       editandoVariante?.categoria === categoriaIdStr ? editandoVariante.id : null;
 
-    if (editandoId) {
-      const { data, error } = await supabase
-        .from('items_variantes')
-        .update(payload)
-        .eq('id', editandoId)
-        .select()
-        .single();
+    try {
+      let data;
 
-      setGuardandoVariante(false);
+      if (editandoId) {
+        const { data: dataUpdate, error } = await supabase
+          .from('items_variantes')
+          .update(payload)
+          .eq('id', editandoId)
+          .select()
+          .single();
 
-      if (!error && data) {
-        setCatalogosVariantes((prev) => ({
-          ...prev,
-          [categoriaIdStr]: ordenarItemsVariantes(
-            (prev[categoriaIdStr] || []).map((item) =>
-              String(item.id) === String(data.id) ? data : item
-            )
-          ),
-        }));
-        resetVarianteForm();
+        if (error || !dataUpdate) {
+          return;
+        }
+
+        data = dataUpdate;
+      } else {
+        const { data: dataInsert, error } = await supabase
+          .from('items_variantes')
+          .insert({ ...payload, categoria_id: categoriaId, activo: true })
+          .select()
+          .single();
+
+        if (error || !dataInsert) {
+          return;
+        }
+
+        data = dataInsert;
       }
-      return;
-    }
 
-    const { data, error } = await supabase
-      .from('items_variantes')
-      .insert({ ...payload, categoria_id: categoriaId, activo: true })
-      .select()
-      .single();
+      if (modulosNegocio.habilitar_inventario === true) {
+        await sincronizarRecetaVariante(supabase, data.id, recetaFilasValidas, negocioId);
+      }
 
-    setGuardandoVariante(false);
+      setCatalogosVariantes((prev) => {
+        const itemsActuales = prev[categoriaIdStr] || [];
 
-    if (!error && data) {
-      setCatalogosVariantes((prev) => ({
-        ...prev,
-        [categoriaIdStr]: ordenarItemsVariantes([...(prev[categoriaIdStr] || []), data]),
-      }));
+        if (editandoId) {
+          return {
+            ...prev,
+            [categoriaIdStr]: ordenarItemsVariantes(
+              itemsActuales.map((item) =>
+                String(item.id) === String(data.id) ? data : item
+              )
+            ),
+          };
+        }
+
+        return {
+          ...prev,
+          [categoriaIdStr]: ordenarItemsVariantes([...itemsActuales, data]),
+        };
+      });
       resetVarianteForm();
+    } catch (errorReceta) {
+      console.error('[variante_receta] error al sincronizar receta', errorReceta);
+      setVarianteRecetaError(
+        errorReceta?.message || 'No se pudo guardar la receta del extra.'
+      );
+    } finally {
+      setGuardandoVariante(false);
     }
   };
 
@@ -4258,7 +4571,20 @@ function Dashboard() {
                     <h2 className="formulario-titulo">
                       {editandoProductoId ? 'Editar producto' : 'Agregar producto'}
                     </h2>
-                    <form className="formulario" onSubmit={handleProductoSubmit}>
+                    <form
+                      className="formulario"
+                      onSubmit={handleProductoSubmit}
+                      aria-busy={cargandoEdicionProducto}
+                    >
+                        {cargandoEdicionProducto ? (
+                          <p className="producto-formulario-cargando" role="status">
+                            Cargando datos del producto...
+                          </p>
+                        ) : null}
+                        <fieldset
+                          disabled={cargandoEdicionProducto}
+                          className="producto-formulario-campos"
+                        >
                         <div className="formulario-campo">
                           <label htmlFor="nombre">Nombre</label>
                           <input
@@ -4390,10 +4716,98 @@ function Dashboard() {
                           </div>
                         </fieldset>
                         )}
+                        {modulosNegocio.habilitar_inventario === true ? (
+                          <div className="panel-clientes-subseccion producto-receta-inventario">
+                            <h4 className="producto-receta-titulo">Receta</h4>
+                            <p className="producto-variantes-activas-descripcion">
+                              Insumos y cantidades que se descuentan al vender una unidad de
+                              este producto.
+                            </p>
+                            {productoRecetaError ? (
+                              <p className="panel-clientes-error">{productoRecetaError}</p>
+                            ) : null}
+                            {insumosDisponiblesReceta.length === 0 ? (
+                              <p className="producto-variantes-activas-vacio">
+                                No hay insumos activos. Agrégalos en Inventario → Catálogo de
+                                insumos.
+                              </p>
+                            ) : null}
+                            {(productoForm.recetaInsumos || []).map((fila, indice) => {
+                              const insumoSeleccionado = insumosDisponiblesReceta.find(
+                                (insumo) => String(insumo.id) === String(fila.insumo_id)
+                              );
+
+                              return (
+                                <div
+                                  key={`receta-${indice}`}
+                                  className="panel-clientes-fila-extra producto-receta-fila"
+                                >
+                                  <label>
+                                    Insumo
+                                    <select
+                                      value={fila.insumo_id || ''}
+                                      onChange={(event) =>
+                                        actualizarRecetaInsumoFila(
+                                          indice,
+                                          'insumo_id',
+                                          event.target.value
+                                        )
+                                      }
+                                    >
+                                      <option value="">Seleccionar insumo…</option>
+                                      {insumosDisponiblesReceta.map((insumo) => (
+                                        <option key={insumo.id} value={insumo.id}>
+                                          {insumo.nombre} ({insumo.unidad_medida})
+                                          {insumo.activo === false ? ' — inactivo' : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    Cantidad por producto
+                                    {insumoSeleccionado
+                                      ? ` (${insumoSeleccionado.unidad_medida})`
+                                      : ''}
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      value={fila.cantidad_por_producto}
+                                      onChange={(event) =>
+                                        actualizarRecetaInsumoFila(
+                                          indice,
+                                          'cantidad_por_producto',
+                                          event.target.value
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                  <div className="panel-clientes-fila-extra-acciones">
+                                    <button
+                                      type="button"
+                                      className="panel-clientes-eliminar-btn"
+                                      onClick={() => quitarRecetaInsumoFila(indice)}
+                                    >
+                                      Quitar
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              className="panel-clientes-secundario-btn"
+                              onClick={agregarRecetaInsumoFila}
+                              disabled={insumosDisponiblesReceta.length === 0}
+                            >
+                              Agregar insumo
+                            </button>
+                          </div>
+                        ) : null}
                         <button
                           type="submit"
                           className="guardar-btn"
-                          disabled={guardandoProducto}
+                          disabled={guardandoProducto || cargandoEdicionProducto}
                         >
                           {guardandoProducto
                             ? 'Guardando...'
@@ -4401,10 +4815,12 @@ function Dashboard() {
                               ? 'Guardar cambios'
                               : 'Agregar producto'}
                         </button>
+                        </fieldset>
                         <button
                           type="button"
                           className="cancelar-btn"
                           onClick={resetProductoForm}
+                          disabled={guardandoProducto}
                         >
                           Cancelar
                         </button>
@@ -4434,7 +4850,9 @@ function Dashboard() {
                             <button
                               type="button"
                               className="editar-btn"
-                              onClick={() => iniciarEdicionProducto(producto)}
+                              onClick={() => {
+                                void iniciarEdicionProducto(producto);
+                              }}
                             >
                               Editar
                             </button>
@@ -4573,7 +4991,17 @@ function Dashboard() {
                       <form
                         className="formulario"
                         onSubmit={(e) => handleVarianteSubmit(e, categoria.id)}
+                        aria-busy={cargandoEdicionVariante}
                       >
+                          {cargandoEdicionVariante ? (
+                            <p className="producto-formulario-cargando" role="status">
+                              Cargando datos del extra...
+                            </p>
+                          ) : null}
+                          <fieldset
+                            disabled={cargandoEdicionVariante}
+                            className="producto-formulario-campos"
+                          >
                           <div className="formulario-campo">
                             <label htmlFor={`${categoriaId}-nombre`}>Nombre</label>
                             <input
@@ -4598,10 +5026,98 @@ function Dashboard() {
                               required
                             />
                           </div>
+                          {modulosNegocio.habilitar_inventario === true ? (
+                            <div className="panel-clientes-subseccion producto-receta-inventario">
+                              <h4 className="producto-receta-titulo">Receta</h4>
+                              <p className="producto-variantes-activas-descripcion">
+                                Insumos y cantidades que se descuentan cada vez que un cliente
+                                selecciona este extra.
+                              </p>
+                              {varianteRecetaError ? (
+                                <p className="panel-clientes-error">{varianteRecetaError}</p>
+                              ) : null}
+                              {insumosDisponiblesVarianteReceta.length === 0 ? (
+                                <p className="producto-variantes-activas-vacio">
+                                  No hay insumos activos. Agrégalos en Inventario → Catálogo de
+                                  insumos.
+                                </p>
+                              ) : null}
+                              {(varianteForm.recetaInsumos || []).map((fila, indice) => {
+                                const insumoSeleccionado = insumosDisponiblesVarianteReceta.find(
+                                  (insumo) => String(insumo.id) === String(fila.insumo_id)
+                                );
+
+                                return (
+                                  <div
+                                    key={`variante-receta-${indice}`}
+                                    className="panel-clientes-fila-extra producto-receta-fila"
+                                  >
+                                    <label>
+                                      Insumo
+                                      <select
+                                        value={fila.insumo_id || ''}
+                                        onChange={(event) =>
+                                          actualizarVarianteRecetaInsumoFila(
+                                            indice,
+                                            'insumo_id',
+                                            event.target.value
+                                          )
+                                        }
+                                      >
+                                        <option value="">Seleccionar insumo…</option>
+                                        {insumosDisponiblesVarianteReceta.map((insumo) => (
+                                          <option key={insumo.id} value={insumo.id}>
+                                            {insumo.nombre} ({insumo.unidad_medida})
+                                            {insumo.activo === false ? ' — inactivo' : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label>
+                                      Cantidad por extra
+                                      {insumoSeleccionado
+                                        ? ` (${insumoSeleccionado.unidad_medida})`
+                                        : ''}
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={fila.cantidad_por_extra}
+                                        onChange={(event) =>
+                                          actualizarVarianteRecetaInsumoFila(
+                                            indice,
+                                            'cantidad_por_extra',
+                                            event.target.value
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <div className="panel-clientes-fila-extra-acciones">
+                                      <button
+                                        type="button"
+                                        className="panel-clientes-eliminar-btn"
+                                        onClick={() => quitarVarianteRecetaInsumoFila(indice)}
+                                      >
+                                        Quitar
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <button
+                                type="button"
+                                className="panel-clientes-secundario-btn"
+                                onClick={agregarVarianteRecetaInsumoFila}
+                                disabled={insumosDisponiblesVarianteReceta.length === 0}
+                              >
+                                Agregar insumo
+                              </button>
+                            </div>
+                          ) : null}
                           <button
                             type="submit"
                             className="guardar-btn"
-                            disabled={guardandoVariante}
+                            disabled={guardandoVariante || cargandoEdicionVariante}
                           >
                             {guardandoVariante
                               ? 'Guardando...'
@@ -4609,10 +5125,12 @@ function Dashboard() {
                                 ? 'Guardar cambios'
                                 : `Agregar ${nombreSingular}`}
                           </button>
+                          </fieldset>
                           <button
                             type="button"
                             className="cancelar-btn"
                             onClick={resetVarianteForm}
+                            disabled={guardandoVariante}
                           >
                             Cancelar
                           </button>
@@ -4643,7 +5161,7 @@ function Dashboard() {
                                 className="editar-btn"
                                 onClick={() => {
                                   setCatalogoTab(categoriaId);
-                                  iniciarEdicionVariante(categoriaId, item);
+                                  void iniciarEdicionVariante(categoriaId, item);
                                 }}
                               >
                                 Editar
