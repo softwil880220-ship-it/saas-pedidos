@@ -11,6 +11,7 @@ import { cargarJornadaAbierta } from './jornadaHelpers';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import { formatearClaveFecha, obtenerRangoFechaClave } from './pedidosShared';
 import { supabase } from './supabase';
+import { InventarioCorteHistorialLista } from './InventarioCorteHistorial';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const MENSAJE_SNAPSHOT_SIN_JORNADA_ABIERTA =
@@ -81,28 +82,6 @@ function formatearDiferenciaSnapshot(diferencia) {
 
   const signo = diferencia > 0 ? '+' : '';
   return `${signo}${diferencia}`;
-}
-
-function normalizarDetalleSnapshot(detalle) {
-  if (Array.isArray(detalle)) {
-    return detalle;
-  }
-
-  if (detalle && Array.isArray(detalle.insumos)) {
-    return detalle.insumos;
-  }
-
-  return [];
-}
-
-function claseDiferenciaCorteHistorial(diferencia) {
-  if (!Number.isFinite(diferencia) || diferencia === 0) {
-    return 'reportes-arqueo-diferencia';
-  }
-
-  return diferencia < 0
-    ? 'reportes-arqueo-diferencia reportes-arqueo-diferencia-negativa'
-    : 'reportes-arqueo-diferencia reportes-arqueo-diferencia-positiva';
 }
 
 function sumarCargasPorTipo(cargas, tipo) {
@@ -778,93 +757,11 @@ export default function PanelSnapshot({ negocioId, rol }) {
         ) : snapshots.length === 0 ? (
           <p className="dashboard-vacio">No hay cortes registrados en esta jornada.</p>
         ) : (
-          <div className="reportes-arqueos-lista">
-            {snapshots.map((snapshot) => {
-              const autorizadoId = snapshot.autorizado_por || snapshot.creado_por;
-              const etiquetaAutor =
-                snapshot.autorizado_por != null
-                  ? `Autorizado por ${resolverNombreUsuario(autorizadoId)}`
-                  : `Registrado por ${resolverNombreUsuario(autorizadoId)}`;
-              const filasDetalle = [...normalizarDetalleSnapshot(snapshot.detalle)].sort(
-                (a, b) => {
-                  const nombreA =
-                    insumosPorId[String(a?.insumo_id)]?.nombre || String(a?.insumo_id || '');
-                  const nombreB =
-                    insumosPorId[String(b?.insumo_id)]?.nombre || String(b?.insumo_id || '');
-                  return nombreA.localeCompare(nombreB, 'es');
-                }
-              );
-
-              return (
-                <article key={snapshot.id} className="reportes-arqueo-card">
-                  <header className="reportes-arqueo-cabecera">
-                    <div className="reportes-arqueo-cabecera-info">
-                      <span className="inventario-corte-card-titulo">Corte de inventario</span>
-                      <time className="reportes-arqueo-fecha">
-                        {formatearFechaHoraSnapshot(snapshot.created_at)}
-                      </time>
-                      <span className="reportes-arqueo-usuario">{etiquetaAutor}</span>
-                    </div>
-                  </header>
-
-                  {filasDetalle.length > 0 ? (
-                    <div className="inventario-corte-desglose-scroll">
-                      <div className="reportes-arqueo-desglose inventario-corte-desglose">
-                        <div className="reportes-arqueo-desglose-encabezado inventario-corte-desglose-encabezado">
-                          <span>Insumo</span>
-                          <span>Carga inicial</span>
-                          <span>Compra adicional</span>
-                          <span>Consumido</span>
-                          <span>Conteo físico</span>
-                          <span>Merma explicada</span>
-                          <span>Diferencia</span>
-                        </div>
-                        {filasDetalle.map((fila) => {
-                          const insumo = insumosPorId[String(fila?.insumo_id)];
-                          const unidad = insumo?.unidad_medida || '';
-                          const nombreInsumo = insumo?.nombre || 'Insumo desconocido';
-                          const consumido =
-                            (Number(fila?.consumo_venta) || 0) +
-                            (Number(fila?.consumo_empleados) || 0);
-                          const diferencia = Number(fila?.diferencia);
-
-                          return (
-                            <div
-                              key={`${snapshot.id}-${fila?.insumo_id}`}
-                              className="reportes-arqueo-desglose-fila inventario-corte-desglose-fila"
-                            >
-                              <span>{nombreInsumo}</span>
-                              <span>
-                                {formatearCantidadInventario(fila?.carga_inicial, unidad)}
-                              </span>
-                              <span>
-                                {formatearCantidadInventario(fila?.compra_adicional, unidad)}
-                              </span>
-                              <span>{formatearCantidadInventario(consumido, unidad)}</span>
-                              <span>
-                                {formatearCantidadInventario(fila?.contado_fisico, unidad)}
-                              </span>
-                              <span>
-                                {formatearCantidadInventario(fila?.merma_explicada, unidad)}
-                              </span>
-                              <span className={claseDiferenciaCorteHistorial(diferencia)}>
-                                {formatearDiferenciaSnapshot(diferencia)}
-                                {Number.isFinite(diferencia) && unidad ? ` ${unidad}` : ''}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="reportes-arqueo-retiros-vacio">
-                      Sin detalle de insumos guardado.
-                    </p>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+          <InventarioCorteHistorialLista
+            snapshots={snapshots}
+            insumosPorId={insumosPorId}
+            resolverNombreUsuario={resolverNombreUsuario}
+          />
         )}
       </section>
 

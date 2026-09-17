@@ -1,10 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
+import './VistaInventario.css';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
+import { InventarioCorteHistorialLista } from './InventarioCorteHistorial';
+import SelectorEmpleadoReporte from './SelectorEmpleadoReporte';
 import SelectorRepartidorPedido, {
   MODO_SELECTOR_REPARTIDOR_REPORTE,
 } from './SelectorRepartidorPedido';
+import {
+  agruparConsumoPersonalPorProducto,
+  calcularResumenConsumoPersonal,
+  calcularResumenCortesInventario,
+  consultarConsumoInternoPorJornadaReporte,
+  consultarConsumoInternoReporte,
+  consultarSnapshotsInventarioPorJornadaReporte,
+  consultarSnapshotsInventarioReporte,
+  etiquetaEmpleadoConsumoPersonal,
+  enriquecerConsumosInternosReporte,
+  fechasRangoDesdeJornadaAbierta,
+  inventarioReportePeriodoActivo,
+  filtrarConsumoInternoPorEmpleado,
+  filtrarSnapshotsInventarioReporte,
+  listarConsumoPersonalDetallado,
+  periodoTarjetaConsumoPersonal as construirPeriodoTarjetaConsumoPersonal,
+} from './reportesInventarioHelpers';
+import {
+  exportarConsumoPersonalPdf,
+  exportarCortesInventarioPdf,
+} from './reportesInventarioPdf';
 import {
   agruparEntregasPorJornada,
   agruparEntregasPorRepartidor,
@@ -58,10 +82,12 @@ import {
 import { formatearMoneda } from './pedidosShared';
 import { concentradoCobrosPorFormaPago } from './repartidorHelpers';
 import useRepartidoresNegocio from './useRepartidoresNegocio';
+import { useProductosRealtime } from './usePedidosRealtime';
+import useVariantesCtx from './useVariantesCtx';
 import { supabase } from './supabase';
 import { useAuth } from './AuthContext';
 import { queryConNegocio } from './tenantHelpers';
-import { JORNADA_ESTADO_CERRADA } from './jornadaHelpers';
+import { cargarJornadaAbierta, JORNADA_ESTADO_CERRADA } from './jornadaHelpers';
 import {
   cargarFiltrosReportes,
   persistirFiltrosReportes,
@@ -73,6 +99,8 @@ const REPORTES_TABS = [
   { value: 'arqueos', label: 'Arqueos de caja' },
   { value: 'retiros', label: 'Retiros de efectivo' },
   { value: 'fondos-fijos', label: 'Fondos fijos' },
+  { value: 'consumo-personal', label: 'Consumo de personal' },
+  { value: 'cortes-inventario', label: 'Cortes de inventario' },
 ];
 
 const STORAGE_KEY_TAB_REPORTES = 'pos_tab_reportes';
@@ -269,9 +297,33 @@ export default function VistaReportes() {
   const [jornadaFocoOrigen, setJornadaFocoOrigen] = useState(null);
   const [filtroRepartidorEntregas, setFiltroRepartidorEntregas] = useState('');
   const [activandoJornadaActual, setActivandoJornadaActual] = useState(false);
+  const [jornadaFocoInventarioId, setJornadaFocoInventarioId] = useState(null);
+  const [jornadaFocoInventarioOrigen, setJornadaFocoInventarioOrigen] = useState(null);
+  const [activandoJornadaInventarioActual, setActivandoJornadaInventarioActual] = useState(false);
+  const [empleadosReporte, setEmpleadosReporte] = useState([]);
+  const [cargandoEmpleadosReporte, setCargandoEmpleadosReporte] = useState(false);
+  const [filtroEmpleadoConsumoPersonal, setFiltroEmpleadoConsumoPersonal] = useState('');
+  const [consumosPersonal, setConsumosPersonal] = useState([]);
+  const [cargandoConsumosPersonal, setCargandoConsumosPersonal] = useState(false);
+  const [errorConsumosPersonal, setErrorConsumosPersonal] = useState(null);
+  const [snapshotsInventario, setSnapshotsInventario] = useState([]);
+  const [cargandoSnapshotsInventario, setCargandoSnapshotsInventario] = useState(false);
+  const [errorSnapshotsInventario, setErrorSnapshotsInventario] = useState(null);
+  const [insumosInventarioReporte, setInsumosInventarioReporte] = useState([]);
+  const [nombresUsuariosInventarioReporte, setNombresUsuariosInventarioReporte] = useState({});
 
   const { repartidores } = useRepartidoresNegocio(
     tabReportes === 'entregas' ? negocioId : null
+  );
+
+  const tabConsumoPersonalActivo = tabReportes === 'consumo-personal';
+  const { productos: productosConsumoReporte } = useProductosRealtime({
+    channelName: 'reportes-consumo-productos',
+    negocioId: tabConsumoPersonalActivo ? negocioId : null,
+  });
+  const { variantesCtx: variantesCtxConsumoReporte } = useVariantesCtx(
+    tabConsumoPersonalActivo ? negocioId : null,
+    productosConsumoReporte
   );
 
   const configPeriodo = useMemo(
@@ -306,7 +358,9 @@ export default function VistaReportes() {
       (tabReportes !== 'ventas' &&
         tabReportes !== 'entregas' &&
         tabReportes !== 'arqueos' &&
-        tabReportes !== 'retiros')
+        tabReportes !== 'retiros' &&
+        tabReportes !== 'consumo-personal' &&
+        tabReportes !== 'cortes-inventario')
     ) {
       return undefined;
     }
@@ -632,6 +686,190 @@ export default function VistaReportes() {
   useEffect(() => {
     let activo = true;
 
+    if (tabReportes !== 'consumo-personal' || !negocioId) {
+      return undefined;
+    }
+
+    const cargarEmpleados = async () => {
+      setCargandoEmpleadosReporte(true);
+
+      const { data, error } = await queryConNegocio(
+        supabase.from('empleados').select('id, nombre').eq('activo', true).order('nombre'),
+        negocioId
+      );
+
+      if (!activo) return;
+
+      if (error) {
+        setEmpleadosReporte([]);
+      } else {
+        setEmpleadosReporte(data || []);
+      }
+
+      setCargandoEmpleadosReporte(false);
+    };
+
+    void cargarEmpleados();
+
+    return () => {
+      activo = false;
+    };
+  }, [tabReportes, negocioId]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (
+      tabReportes !== 'consumo-personal' ||
+      !negocioId ||
+      !inventarioReportePeriodoActivo({
+        jornadaFocoId: jornadaFocoInventarioId,
+        rangoInvalido: reporteDeshabilitado,
+      })
+    ) {
+      if (tabReportes === 'consumo-personal') {
+        setConsumosPersonal([]);
+        setCargandoConsumosPersonal(false);
+        setErrorConsumosPersonal(null);
+      }
+      return undefined;
+    }
+
+    const cargarConsumos = async () => {
+      setCargandoConsumosPersonal(true);
+      setErrorConsumosPersonal(null);
+
+      const { data, error } = jornadaFocoInventarioId
+        ? await consultarConsumoInternoPorJornadaReporte(
+            supabase,
+            negocioId,
+            jornadaFocoInventarioId
+          )
+        : await (async () => {
+            const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+            return consultarConsumoInternoReporte(supabase, negocioId, inicio, fin);
+          })();
+
+      if (!activo) return;
+
+      if (error) {
+        setErrorConsumosPersonal('No se pudo cargar el consumo de personal.');
+        setConsumosPersonal([]);
+      } else {
+        setConsumosPersonal(data || []);
+      }
+
+      setCargandoConsumosPersonal(false);
+    };
+
+    void cargarConsumos();
+
+    return () => {
+      activo = false;
+    };
+  }, [
+    tabReportes,
+    negocioId,
+    configPeriodo,
+    reporteDeshabilitado,
+    jornadaFocoInventarioId,
+  ]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (tabReportes !== 'cortes-inventario' || !negocioId) {
+      return undefined;
+    }
+
+    const cargarCatalogosInventario = async () => {
+      const [insumosResult, usuariosResult] = await Promise.all([
+        queryConNegocio(
+          supabase.from('insumos').select('id, nombre, unidad_medida').order('nombre'),
+          negocioId
+        ),
+        queryConNegocio(supabase.from('usuarios_negocio').select('id, nombre'), negocioId),
+      ]);
+
+      if (!activo) return;
+
+      setInsumosInventarioReporte(insumosResult.error ? [] : insumosResult.data || []);
+      setNombresUsuariosInventarioReporte(
+        usuariosResult.error
+          ? {}
+          : Object.fromEntries((usuariosResult.data || []).map((entry) => [String(entry.id), entry.nombre]))
+      );
+    };
+
+    void cargarCatalogosInventario();
+
+    return () => {
+      activo = false;
+    };
+  }, [tabReportes, negocioId]);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (
+      tabReportes !== 'cortes-inventario' ||
+      !negocioId ||
+      !inventarioReportePeriodoActivo({
+        jornadaFocoId: jornadaFocoInventarioId,
+        rangoInvalido: reporteDeshabilitado,
+      })
+    ) {
+      if (tabReportes === 'cortes-inventario') {
+        setSnapshotsInventario([]);
+        setCargandoSnapshotsInventario(false);
+        setErrorSnapshotsInventario(null);
+      }
+      return undefined;
+    }
+
+    const cargarSnapshots = async () => {
+      setCargandoSnapshotsInventario(true);
+      setErrorSnapshotsInventario(null);
+
+      const { data, error } = jornadaFocoInventarioId
+        ? await consultarSnapshotsInventarioPorJornadaReporte(
+            supabase,
+            negocioId,
+            jornadaFocoInventarioId
+          )
+        : await (async () => {
+            const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+            return consultarSnapshotsInventarioReporte(supabase, negocioId, inicio, fin);
+          })();
+
+      if (!activo) return;
+
+      if (error) {
+        setErrorSnapshotsInventario('No se pudieron cargar los cortes de inventario.');
+        setSnapshotsInventario([]);
+      } else {
+        setSnapshotsInventario(data || []);
+      }
+
+      setCargandoSnapshotsInventario(false);
+    };
+
+    void cargarSnapshots();
+
+    return () => {
+      activo = false;
+    };
+  }, [
+    tabReportes,
+    negocioId,
+    configPeriodo,
+    reporteDeshabilitado,
+    jornadaFocoInventarioId,
+  ]);
+
+  useEffect(() => {
+    let activo = true;
+
     if (tabReportes !== 'entregas' || !negocioId) {
       return undefined;
     }
@@ -730,6 +968,114 @@ export default function VistaReportes() {
   const fondosFijosFiltrados = useMemo(
     () => filtrarPorPeriodoCreatedAt(fondosFijosHistorial, configPeriodo),
     [fondosFijosHistorial, configPeriodo]
+  );
+
+  const empleadosReportePorId = useMemo(
+    () =>
+      Object.fromEntries((empleadosReporte || []).map((empleado) => [String(empleado.id), empleado])),
+    [empleadosReporte]
+  );
+
+  const productosConsumoReportePorId = useMemo(
+    () =>
+      Object.fromEntries(
+        (productosConsumoReporte || []).map((producto) => [String(producto.id), producto])
+      ),
+    [productosConsumoReporte]
+  );
+
+  const consumosPersonalEnriquecidos = useMemo(
+    () =>
+      enriquecerConsumosInternosReporte(
+        consumosPersonal,
+        productosConsumoReportePorId,
+        empleadosReportePorId
+      ),
+    [consumosPersonal, productosConsumoReportePorId, empleadosReportePorId]
+  );
+
+  const consumosPersonalVisibles = useMemo(
+    () =>
+      filtrarConsumoInternoPorEmpleado(
+        consumosPersonalEnriquecidos,
+        filtroEmpleadoConsumoPersonal
+      ),
+    [consumosPersonalEnriquecidos, filtroEmpleadoConsumoPersonal]
+  );
+
+  const consumoPersonalPorProducto = useMemo(
+    () =>
+      agruparConsumoPersonalPorProducto(consumosPersonalVisibles, variantesCtxConsumoReporte),
+    [consumosPersonalVisibles, variantesCtxConsumoReporte]
+  );
+
+  const consumoPersonalDetallado = useMemo(
+    () => listarConsumoPersonalDetallado(consumosPersonalVisibles, variantesCtxConsumoReporte),
+    [consumosPersonalVisibles, variantesCtxConsumoReporte]
+  );
+
+  const resumenConsumoPersonal = useMemo(
+    () => calcularResumenConsumoPersonal(consumosPersonalVisibles, consumoPersonalPorProducto),
+    [consumosPersonalVisibles, consumoPersonalPorProducto]
+  );
+
+  const empleadoConsumoPersonalEtiqueta = useMemo(
+    () => etiquetaEmpleadoConsumoPersonal(filtroEmpleadoConsumoPersonal, empleadosReportePorId),
+    [filtroEmpleadoConsumoPersonal, empleadosReportePorId]
+  );
+
+  const jornadaFocoInventario = jornadaFocoInventarioId
+    ? jornadasPorId[jornadaFocoInventarioId]
+    : null;
+
+  const inventarioReporteActivo = inventarioReportePeriodoActivo({
+    jornadaFocoId: jornadaFocoInventarioId,
+    rangoInvalido: reporteDeshabilitado,
+  });
+
+  const periodoTarjetaConsumoPersonal = useMemo(
+    () =>
+      construirPeriodoTarjetaConsumoPersonal(
+        configPeriodo,
+        jornadaFocoInventario,
+        jornadaFocoInventarioOrigen
+      ),
+    [configPeriodo, jornadaFocoInventario, jornadaFocoInventarioOrigen]
+  );
+
+  const etiquetaJornadaFocoInventario = jornadaFocoInventario
+    ? formatearEtiquetaJornadaFocoReporte(jornadaFocoInventario, jornadaFocoInventarioOrigen)
+    : null;
+
+  const etiquetaBannerJornadaInventario = jornadaFocoInventario ? 'Jornada en curso:' : null;
+
+  const insumosInventarioReportePorId = useMemo(
+    () =>
+      Object.fromEntries(
+        (insumosInventarioReporte || []).map((insumo) => [String(insumo.id), insumo])
+      ),
+    [insumosInventarioReporte]
+  );
+
+  const snapshotsInventarioFiltrados = useMemo(
+    () =>
+      jornadaFocoInventarioId
+        ? snapshotsInventario
+        : filtrarSnapshotsInventarioReporte(snapshotsInventario, configPeriodo),
+    [snapshotsInventario, configPeriodo, jornadaFocoInventarioId]
+  );
+
+  const resumenCortesInventario = useMemo(
+    () => calcularResumenCortesInventario(snapshotsInventarioFiltrados),
+    [snapshotsInventarioFiltrados]
+  );
+
+  const resolverNombreUsuarioInventarioReporte = useCallback(
+    (usuarioId) => {
+      if (!usuarioId) return '—';
+      return nombresUsuariosInventarioReporte[String(usuarioId)] || 'Usuario desconocido';
+    },
+    [nombresUsuariosInventarioReporte]
   );
 
   const pedidosFiltrados = useMemo(
@@ -848,6 +1194,8 @@ export default function VistaReportes() {
     setFechaHasta('');
     setJornadaFocoId(null);
     setJornadaFocoOrigen(null);
+    setJornadaFocoInventarioId(null);
+    setJornadaFocoInventarioOrigen(null);
   };
 
   const seleccionarMes = () => {
@@ -856,6 +1204,8 @@ export default function VistaReportes() {
     setFechaHasta('');
     setJornadaFocoId(null);
     setJornadaFocoOrigen(null);
+    setJornadaFocoInventarioId(null);
+    setJornadaFocoInventarioOrigen(null);
   };
 
   const exportarPdf = () => {
@@ -900,6 +1250,71 @@ export default function VistaReportes() {
       jornadaFoco,
       jornadaFocoOrigen,
       repartidorEtiqueta: repartidorEntregasEtiqueta,
+    });
+  };
+
+  const activarJornadaActualReportesInventario = async () => {
+    if (!negocioId || activandoJornadaInventarioActual) return;
+
+    setActivandoJornadaInventarioActual(true);
+
+    const { data: jornada, error: errorJornada } = await cargarJornadaAbierta(
+      supabase,
+      negocioId
+    );
+
+    setActivandoJornadaInventarioActual(false);
+
+    if (errorJornada) {
+      setJornadaFocoInventarioId(null);
+      setJornadaFocoInventarioOrigen(null);
+      setErrorConsumosPersonal('No se pudo cargar la jornada abierta.');
+      setErrorSnapshotsInventario('No se pudo cargar la jornada abierta.');
+      return;
+    }
+
+    if (!jornada?.id) {
+      setJornadaFocoInventarioId(null);
+      setJornadaFocoInventarioOrigen(null);
+      setErrorConsumosPersonal('No hay jornada abierta.');
+      setErrorSnapshotsInventario('No hay jornada abierta.');
+      return;
+    }
+
+    setJornadasPorId((prev) => ({
+      ...prev,
+      [jornada.id]: {
+        ...(prev[jornada.id] || {}),
+        ...jornada,
+      },
+    }));
+
+    const { fechaDesde: desde, fechaHasta: hasta } = fechasRangoDesdeJornadaAbierta(jornada);
+    setFechaDesde(desde);
+    setFechaHasta(hasta);
+    setJornadaFocoInventarioId(jornada.id);
+    setJornadaFocoInventarioOrigen(ORIGEN_JORNADA_FOCO_ABIERTA);
+    setErrorConsumosPersonal(null);
+    setErrorSnapshotsInventario(null);
+  };
+
+  const exportarPdfConsumoPersonal = () => {
+    exportarConsumoPersonalPdf({
+      configPeriodo,
+      resumen: resumenConsumoPersonal,
+      filasPorProducto: consumoPersonalPorProducto,
+      filasDetalladas: consumoPersonalDetallado,
+      empleadoEtiqueta: empleadoConsumoPersonalEtiqueta,
+    });
+  };
+
+  const exportarPdfCortesInventario = () => {
+    exportarCortesInventarioPdf({
+      configPeriodo,
+      resumen: resumenCortesInventario,
+      snapshots: snapshotsInventarioFiltrados,
+      insumosPorId: insumosInventarioReportePorId,
+      resolverNombreUsuario: resolverNombreUsuarioInventarioReporte,
     });
   };
 
@@ -2174,6 +2589,367 @@ export default function VistaReportes() {
                     </div>
                   ))}
                 </div>
+              )}
+            </>
+          ) : null}
+
+          {tabReportes === 'consumo-personal' ? (
+            <>
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+
+                  <div
+                    className={`reportes-rango-personalizado${
+                      usaRangoPersonalizado ? ' activo' : ' desactivado'
+                    }`}
+                  >
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-consumo-personal-fecha-desde"
+                    >
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-consumo-personal-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(evento) => {
+                          setFechaDesde(evento.target.value);
+                          setJornadaFocoInventarioId(null);
+                          setJornadaFocoInventarioOrigen(null);
+                        }}
+                      />
+                    </label>
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-consumo-personal-fecha-hasta"
+                    >
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-consumo-personal-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(evento) => {
+                          setFechaHasta(evento.target.value);
+                          setJornadaFocoInventarioId(null);
+                          setJornadaFocoInventarioOrigen(null);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="reportes-control-grupo reportes-control-grupo-filtro">
+                  <SelectorEmpleadoReporte
+                    id="reportes-consumo-personal-empleado"
+                    empleados={empleadosReporte}
+                    value={filtroEmpleadoConsumoPersonal}
+                    onChange={setFiltroEmpleadoConsumoPersonal}
+                    cargando={cargandoEmpleadosReporte}
+                    disabled={cargandoConsumosPersonal}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className={`reportes-periodo-btn reportes-jornada-actual-btn${
+                    jornadaFocoInventarioId ? ' activo' : ' desactivado'
+                  }`}
+                  onClick={activarJornadaActualReportesInventario}
+                  disabled={activandoJornadaInventarioActual || cargandoConsumosPersonal}
+                >
+                  {activandoJornadaInventarioActual
+                    ? 'Cargando jornada...'
+                    : 'Jornada actual'}
+                </button>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfConsumoPersonal}
+                  disabled={cargandoConsumosPersonal || !inventarioReporteActivo}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+
+              {jornadaFocoInventario ? (
+                <p className="reportes-filtro-activo">
+                  {etiquetaBannerJornadaInventario}{' '}
+                  <strong>{etiquetaJornadaFocoInventario}</strong>
+                </p>
+              ) : null}
+
+              {empleadoConsumoPersonalEtiqueta ? (
+                <p className="reportes-filtro-activo">
+                  Empleado: <strong>{empleadoConsumoPersonalEtiqueta}</strong>
+                </p>
+              ) : null}
+
+              <div className="reportes-resumen">
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Período activo</span>
+                  <div className="reportes-resumen-valor reportes-resumen-valor-periodo">
+                    <span className="reportes-periodo-descripcion">
+                      {periodoTarjetaConsumoPersonal.descripcion}
+                    </span>
+                    <span className="reportes-periodo-fechas">
+                      {periodoTarjetaConsumoPersonal.fechas}
+                    </span>
+                  </div>
+                </article>
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Registros de consumo</span>
+                  <span className="reportes-resumen-valor">
+                    {resumenConsumoPersonal.totalRegistros}
+                  </span>
+                </article>
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Productos distintos</span>
+                  <span className="reportes-resumen-valor">
+                    {resumenConsumoPersonal.totalProductos}
+                  </span>
+                </article>
+              </div>
+
+              {!inventarioReporteActivo ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : cargandoConsumosPersonal ? (
+                <p className="dashboard-vacio">Cargando consumo de personal…</p>
+              ) : errorConsumosPersonal ? (
+                <p className="dashboard-vacio reportes-error">{errorConsumosPersonal}</p>
+              ) : consumoPersonalPorProducto.length === 0 ? (
+                <p className="dashboard-vacio">
+                  {empleadoConsumoPersonalEtiqueta
+                    ? `No hay consumo de personal para ${empleadoConsumoPersonalEtiqueta} en el período seleccionado.`
+                    : jornadaFocoInventarioId
+                      ? 'No hay consumo de personal en la jornada seleccionada.'
+                      : 'No hay consumo de personal en el período seleccionado.'}
+                </p>
+              ) : (
+                <>
+                  <section
+                    className="reportes-por-producto"
+                    aria-labelledby="reportes-consumo-personal-productos-titulo"
+                  >
+                    <h3
+                      id="reportes-consumo-personal-productos-titulo"
+                      className="reportes-por-producto-titulo"
+                    >
+                      Consumo por producto
+                    </h3>
+                    <div className="reportes-tabla reportes-por-producto-tabla reportes-consumo-producto-tabla">
+                      <div className="reportes-tabla-header reportes-por-producto-header">
+                        <span>Producto</span>
+                        <span>Cantidad total</span>
+                        <span>Detalle</span>
+                      </div>
+                      {consumoPersonalPorProducto.map((fila) => (
+                        <div
+                          key={fila.clave}
+                          className="reportes-tabla-fila reportes-por-producto-fila"
+                        >
+                          <span className="reporte-producto-nombre">{fila.nombreProducto}</span>
+                          <span className="reporte-producto-total">{fila.cantidadEtiqueta}</span>
+                          <span className="reporte-producto-cantidad">
+                            {fila.resumenVariantes || '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {consumoPersonalDetallado.length > 0 ? (
+                    <section
+                      className="reportes-por-repartidor"
+                      aria-labelledby="reportes-consumo-personal-empleados-titulo"
+                    >
+                      <h3
+                        id="reportes-consumo-personal-empleados-titulo"
+                        className="reportes-por-producto-titulo"
+                      >
+                        {filtroEmpleadoConsumoPersonal
+                          ? 'Registros de consumo'
+                          : 'Desglose por empleado'}
+                      </h3>
+                      <div
+                        className={`reportes-tabla reportes-por-producto-tabla reportes-consumo-empleado-tabla${
+                          filtroEmpleadoConsumoPersonal
+                            ? ''
+                            : ' reportes-consumo-empleado-tabla-con-empleado'
+                        }`}
+                      >
+                        <div
+                          className={`reportes-tabla-header reportes-por-producto-header reportes-consumo-empleado-header${
+                            filtroEmpleadoConsumoPersonal
+                              ? ' reportes-consumo-empleado-header-filtrado'
+                              : ''
+                          }`}
+                        >
+                          {filtroEmpleadoConsumoPersonal ? null : <span>Empleado</span>}
+                          <span>Cantidad</span>
+                          <span>Producto</span>
+                          <span>Detalle</span>
+                          <span>Fecha y hora</span>
+                        </div>
+                        {consumoPersonalDetallado.map((fila) => (
+                          <div
+                            key={fila.id}
+                            className={`reportes-tabla-fila reportes-por-producto-fila reportes-consumo-empleado-fila${
+                              filtroEmpleadoConsumoPersonal
+                                ? ' reportes-consumo-empleado-fila-filtrado'
+                                : ''
+                            }`}
+                          >
+                            {filtroEmpleadoConsumoPersonal ? null : (
+                              <span className="reporte-producto-nombre">{fila.nombreEmpleado}</span>
+                            )}
+                            <span className="reporte-producto-total">{fila.cantidadEtiqueta}</span>
+                            <span className="reporte-producto-cantidad">{fila.nombreProducto}</span>
+                            <span className="reporte-producto-cantidad">
+                              {fila.resumenVariantes || '—'}
+                            </span>
+                            <span className="reporte-producto-cantidad">{fila.fechaHoraEtiqueta}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </>
+              )}
+            </>
+          ) : null}
+
+          {tabReportes === 'cortes-inventario' ? (
+            <>
+              <div className="reportes-controles">
+                <div className="reportes-control-grupo reportes-control-grupo-periodo">
+                  <span className="reportes-control-etiqueta">Período</span>
+
+                  <div
+                    className={`reportes-rango-personalizado${
+                      usaRangoPersonalizado ? ' activo' : ' desactivado'
+                    }`}
+                  >
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-cortes-inventario-fecha-desde"
+                    >
+                      <span className="reportes-fecha-etiqueta">De:</span>
+                      <input
+                        id="reportes-cortes-inventario-fecha-desde"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaDesde}
+                        onChange={(evento) => {
+                          setFechaDesde(evento.target.value);
+                          setJornadaFocoInventarioId(null);
+                          setJornadaFocoInventarioOrigen(null);
+                        }}
+                      />
+                    </label>
+                    <label
+                      className="reportes-fecha-campo"
+                      htmlFor="reportes-cortes-inventario-fecha-hasta"
+                    >
+                      <span className="reportes-fecha-etiqueta">Hasta:</span>
+                      <input
+                        id="reportes-cortes-inventario-fecha-hasta"
+                        type="date"
+                        className="reportes-fecha-input"
+                        value={fechaHasta}
+                        onChange={(evento) => {
+                          setFechaHasta(evento.target.value);
+                          setJornadaFocoInventarioId(null);
+                          setJornadaFocoInventarioOrigen(null);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {rangoInvalido ? (
+                    <p className="reportes-rango-error" role="alert">
+                      La fecha inicial no puede ser mayor a la fecha final
+                    </p>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className={`reportes-periodo-btn reportes-jornada-actual-btn${
+                    jornadaFocoInventarioId ? ' activo' : ' desactivado'
+                  }`}
+                  onClick={activarJornadaActualReportesInventario}
+                  disabled={activandoJornadaInventarioActual || cargandoSnapshotsInventario}
+                >
+                  {activandoJornadaInventarioActual
+                    ? 'Cargando jornada...'
+                    : 'Jornada actual'}
+                </button>
+
+                <button
+                  type="button"
+                  className="reportes-exportar-btn"
+                  onClick={exportarPdfCortesInventario}
+                  disabled={cargandoSnapshotsInventario || !inventarioReporteActivo}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+
+              {jornadaFocoInventario ? (
+                <p className="reportes-filtro-activo">
+                  {etiquetaBannerJornadaInventario}{' '}
+                  <strong>{etiquetaJornadaFocoInventario}</strong>
+                </p>
+              ) : null}
+
+              <div className="reportes-resumen">
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Período activo</span>
+                  <div className="reportes-resumen-valor reportes-resumen-valor-periodo">
+                    <span className="reportes-periodo-descripcion">
+                      {periodoTarjetaConsumoPersonal.descripcion}
+                    </span>
+                    <span className="reportes-periodo-fechas">
+                      {periodoTarjetaConsumoPersonal.fechas}
+                    </span>
+                  </div>
+                </article>
+                <article className="reportes-resumen-card">
+                  <span className="reportes-resumen-label">Cortes registrados</span>
+                  <span className="reportes-resumen-valor">{resumenCortesInventario.totalCortes}</span>
+                </article>
+              </div>
+
+              {!inventarioReporteActivo ? (
+                <p className="dashboard-vacio reportes-error">
+                  Corrige el rango de fechas para ver el reporte.
+                </p>
+              ) : cargandoSnapshotsInventario ? (
+                <p className="dashboard-vacio">Cargando cortes de inventario…</p>
+              ) : errorSnapshotsInventario ? (
+                <p className="dashboard-vacio reportes-error">{errorSnapshotsInventario}</p>
+              ) : snapshotsInventarioFiltrados.length === 0 ? (
+                <p className="dashboard-vacio">
+                  {jornadaFocoInventarioId
+                    ? 'No hay cortes de inventario en la jornada seleccionada.'
+                    : 'No hay cortes de inventario en el período seleccionado.'}
+                </p>
+              ) : (
+                <InventarioCorteHistorialLista
+                  snapshots={snapshotsInventarioFiltrados}
+                  insumosPorId={insumosInventarioReportePorId}
+                  resolverNombreUsuario={resolverNombreUsuarioInventarioReporte}
+                />
               )}
             </>
           ) : null}

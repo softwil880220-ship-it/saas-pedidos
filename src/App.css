@@ -4503,6 +4503,93 @@
   border-bottom: none;
 }
 
+.reportes-consumo-producto-tabla {
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
+  grid-template-columns: max-content minmax(6.5rem, auto) max-content;
+  column-gap: 0.75rem;
+}
+
+.reportes-consumo-producto-tabla .reportes-por-producto-header,
+.reportes-consumo-producto-tabla .reportes-por-producto-fila {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}
+
+.reportes-consumo-producto-tabla .reportes-por-producto-header > span,
+.reportes-consumo-producto-tabla .reportes-por-producto-fila > span {
+  min-width: 0;
+}
+
+.reportes-consumo-producto-tabla .reportes-por-producto-header > span:nth-child(1),
+.reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(1),
+.reportes-consumo-producto-tabla .reportes-por-producto-header > span:nth-child(3),
+.reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(3) {
+  text-align: left;
+}
+
+.reportes-consumo-producto-tabla .reportes-por-producto-header > span:nth-child(2),
+.reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(2) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.reportes-consumo-empleado-tabla {
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
+  grid-template-columns:
+    minmax(6.5rem, auto)
+    max-content
+    max-content
+    minmax(7.5rem, auto);
+  column-gap: 0.75rem;
+}
+
+.reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado {
+  grid-template-columns:
+    max-content
+    minmax(6.5rem, auto)
+    max-content
+    max-content
+    minmax(7.5rem, auto);
+}
+
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-header,
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}
+
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-header > span,
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila > span {
+  min-width: 0;
+}
+
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-header > span,
+.reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila > span {
+  text-align: left;
+}
+
+.reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+  .reportes-consumo-empleado-header
+  > span:nth-child(1),
+.reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+  .reportes-consumo-empleado-fila
+  > span:nth-child(1),
+.reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+  .reportes-consumo-empleado-header
+  > span:nth-child(2),
+.reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+  .reportes-consumo-empleado-fila
+  > span:nth-child(2) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .reporte-categoria-nombre,
 .reporte-producto-nombre {
   overflow: hidden;
@@ -4648,6 +4735,29 @@
     align-items: stretch;
   }
 
+  .reportes-consumo-producto-tabla,
+  .reportes-consumo-empleado-tabla {
+    display: block;
+    width: 100%;
+    column-gap: 0;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-header,
+  .reportes-consumo-empleado-tabla .reportes-consumo-empleado-header {
+    display: none;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila,
+  .reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span,
+  .reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila > span {
+    text-align: left;
+  }
+
   .reportes-por-categoria-tabla .reporte-categoria-nombre,
   .reportes-por-producto-tabla .reporte-producto-nombre {
     grid-area: auto;
@@ -4661,8 +4771,10 @@
 
   .reportes-por-categoria-tabla .reporte-categoria-cantidad,
   .reportes-por-categoria-tabla .reporte-categoria-total,
-  .reportes-por-producto-tabla .reporte-producto-cantidad,
-  .reportes-por-producto-tabla .reporte-producto-total {
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-cantidad,
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-total {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -4672,12 +4784,14 @@
   }
 
   .reportes-por-categoria-tabla .reporte-categoria-cantidad,
-  .reportes-por-producto-tabla .reporte-producto-cantidad {
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-cantidad {
     color: #64748b;
   }
 
   .reportes-por-categoria-tabla .reporte-categoria-cantidad::before,
-  .reportes-por-producto-tabla .reporte-producto-cantidad::before {
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-cantidad::before {
     content: 'Cantidad vendida';
     font-weight: 600;
     color: #64748b;
@@ -4685,17 +4799,103 @@
   }
 
   .reportes-por-categoria-tabla .reporte-categoria-total,
-  .reportes-por-producto-tabla .reporte-producto-total {
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-total {
     color: #14532d;
     font-weight: 600;
   }
 
   .reportes-por-categoria-tabla .reporte-categoria-total::before,
-  .reportes-por-producto-tabla .reporte-producto-total::before {
+  .reportes-por-producto-tabla:not(.reportes-consumo-producto-tabla):not(.reportes-consumo-empleado-tabla)
+    .reporte-producto-total::before {
     content: 'Total facturado';
     font-weight: 600;
     color: #64748b;
     flex-shrink: 0;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span,
+  .reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila > span {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    font-size: 0.82rem;
+    text-align: right;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span::before,
+  .reportes-consumo-empleado-tabla .reportes-consumo-empleado-fila > span::before {
+    font-weight: 600;
+    color: #64748b;
+    flex-shrink: 0;
+    text-align: left;
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(1)::before {
+    content: 'Producto';
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(2)::before {
+    content: 'Cantidad total';
+  }
+
+  .reportes-consumo-producto-tabla .reportes-por-producto-fila > span:nth-child(3)::before {
+    content: 'Detalle';
+  }
+
+  .reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+    .reportes-consumo-empleado-fila
+    > span:nth-child(1)::before {
+    content: 'Cantidad';
+  }
+
+  .reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+    .reportes-consumo-empleado-fila
+    > span:nth-child(2)::before {
+    content: 'Producto';
+  }
+
+  .reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+    .reportes-consumo-empleado-fila
+    > span:nth-child(3)::before {
+    content: 'Detalle';
+  }
+
+  .reportes-consumo-empleado-tabla:not(.reportes-consumo-empleado-tabla-con-empleado)
+    .reportes-consumo-empleado-fila
+    > span:nth-child(4)::before {
+    content: 'Fecha y hora';
+  }
+
+  .reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+    .reportes-consumo-empleado-fila
+    > span:nth-child(1)::before {
+    content: 'Empleado';
+  }
+
+  .reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+    .reportes-consumo-empleado-fila
+    > span:nth-child(2)::before {
+    content: 'Cantidad';
+  }
+
+  .reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+    .reportes-consumo-empleado-fila
+    > span:nth-child(3)::before {
+    content: 'Producto';
+  }
+
+  .reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+    .reportes-consumo-empleado-fila
+    > span:nth-child(4)::before {
+    content: 'Detalle';
+  }
+
+  .reportes-consumo-empleado-tabla.reportes-consumo-empleado-tabla-con-empleado
+    .reportes-consumo-empleado-fila
+    > span:nth-child(5)::before {
+    content: 'Fecha y hora';
   }
 
   .reportes-arqueo-cabecera {
