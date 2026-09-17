@@ -19,3 +19,140 @@
   border: 0;
   min-width: 0;
 }
+
+.inventario-snapshot-tabla-scroll {
+  overflow-x: auto;
+  margin-bottom: 0.85rem;
+}
+
+.inventario-snapshot-panel .inventario-snapshot-tabla {
+  min-width: 52rem;
+}
+
+.inventario-snapshot-panel .inventario-snapshot-tabla-encabezado,
+.inventario-snapshot-panel .inventario-snapshot-fila {
+  grid-template-columns:
+    minmax(6.5rem, 1.2fr)
+    minmax(4rem, 0.85fr)
+    minmax(4rem, 0.95fr)
+    minmax(4rem, 0.85fr)
+    minmax(4.5rem, 0.95fr)
+    minmax(4.5rem, 0.95fr)
+    minmax(4rem, 0.85fr);
+}
+
+.inventario-snapshot-insumo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.inventario-snapshot-insumo strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.inventario-snapshot-unidad {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.inventario-snapshot-captura .guardar-btn {
+  margin-top: 0.75rem;
+}
+
+.inventario-corte-card-titulo {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #14532d;
+}
+
+.inventario-corte-desglose-scroll {
+  overflow-x: auto;
+  margin-bottom: 0.85rem;
+}
+
+.inventario-corte-desglose {
+  min-width: 52rem;
+}
+
+.inventario-corte-desglose-encabezado,
+.inventario-corte-desglose-fila {
+  grid-template-columns:
+    minmax(6.5rem, 1.2fr)
+    minmax(4rem, 0.85fr)
+    minmax(4rem, 0.95fr)
+    minmax(4rem, 0.85fr)
+    minmax(4.5rem, 0.95fr)
+    minmax(4.5rem, 0.95fr)
+    minmax(4rem, 0.85fr);
+}
+
+@media (max-width: 720px) {
+  .inventario-corte-desglose-scroll {
+    overflow-x: visible;
+  }
+
+  .inventario-corte-desglose {
+    min-width: 0;
+  }
+
+  .inventario-corte-desglose-encabezado {
+    display: none;
+  }
+
+  .inventario-corte-desglose-fila {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .inventario-corte-desglose-fila:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .inventario-corte-desglose-fila span:first-child {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 0.15rem;
+  }
+
+  .inventario-corte-desglose-fila span:not(:first-child) {
+    display: block;
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(2)::before {
+    content: 'Carga inicial: ';
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(3)::before {
+    content: 'Compra adicional: ';
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(4)::before {
+    content: 'Consumido: ';
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(5)::before {
+    content: 'Conteo físico: ';
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(6)::before {
+    content: 'Merma explicada: ';
+  }
+
+  .inventario-corte-desglose-fila span:nth-child(7)::before {
+    content: 'Diferencia: ';
+  }
+
+  .inventario-corte-desglose-fila span:not(:first-child)::before {
+    color: #64748b;
+    font-weight: 600;
+  }
+}

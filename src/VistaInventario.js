@@ -8,6 +8,7 @@ import PanelInsumos from './PanelInsumos';
 import PanelEmpleados from './PanelEmpleados';
 import PanelCargaDiaria from './PanelCargaDiaria';
 import ConsumoInternoPanel from './ConsumoInternoPanel';
+import PanelSnapshot from './PanelSnapshot';
 import { useAuth } from './AuthContext';
 
 const ROLES_SUBTABS_OPERATIVOS = ['dueno', 'administrador', 'cajero'];
@@ -33,6 +34,11 @@ const INVENTARIO_TABS = [
   {
     value: 'consumo-empleados',
     label: 'Consumo de empleados',
+    rolesPermitidos: ROLES_SUBTABS_OPERATIVOS,
+  },
+  {
+    value: 'snapshot',
+    label: 'Corte de inventario',
     rolesPermitidos: ROLES_SUBTABS_OPERATIVOS,
   },
 ];
@@ -133,6 +139,9 @@ export default function VistaInventario() {
         ) : null}
         {tabActivo === 'consumo-empleados' ? (
           <ConsumoInternoPanel negocioId={negocioId} rol={rol} />
+        ) : null}
+        {tabActivo === 'snapshot' ? (
+          <PanelSnapshot negocioId={negocioId} rol={rol} />
         ) : null}
       </main>
     </div>
