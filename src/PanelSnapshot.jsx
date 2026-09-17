@@ -12,6 +12,7 @@ import ModalAutorizacionPin from './ModalAutorizacionPin';
 import { formatearClaveFecha, obtenerRangoFechaClave } from './pedidosShared';
 import { supabase } from './supabase';
 import { InventarioCorteHistorialLista } from './InventarioCorteHistorial';
+import { asegurarJornadaCaptura } from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const MENSAJE_SNAPSHOT_SIN_JORNADA_ABIERTA =
@@ -545,6 +546,8 @@ export default function PanelSnapshot({ negocioId, rol }) {
     setErrorFormulario(null);
 
     try {
+      asegurarJornadaCaptura(jornadaAbierta.id, jornadaAbierta);
+
       const payload = {
         jornada_id: jornadaAbierta.id,
         detalle: construirDetalleSnapshot(),
@@ -569,6 +572,8 @@ export default function PanelSnapshot({ negocioId, rol }) {
 
       setSnapshots((prev) => [data, ...prev]);
       setCapturaPorInsumo(crearCapturaVaciaPorInsumos(insumosOrdenados));
+    } catch (error) {
+      setErrorFormulario(error?.message || 'No se pudo registrar el corte.');
     } finally {
       setGuardando(false);
     }

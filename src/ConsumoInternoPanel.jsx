@@ -6,6 +6,11 @@ import PedidoLineasCarrito from './PedidoLineasCarrito';
 import SelectorProductosPedidoConModal from './SelectorProductosPedidoConModal';
 import { buscarProductoPorId } from './pedidoCarritoCalculos';
 import { supabase } from './supabase';
+import {
+  asegurarEmpleadoEnCatalogo,
+  asegurarJornadaCaptura,
+  asegurarProductosEnCatalogo,
+} from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 import {
   esProductoPorPeso,
@@ -306,6 +311,13 @@ export default function ConsumoInternoPanel({ negocioId, rol }) {
     setErrorFormulario(null);
 
     try {
+      asegurarJornadaCaptura(jornadaAbierta.id, jornadaAbierta);
+      asegurarEmpleadoEnCatalogo(empleadoId, empleados);
+      asegurarProductosEnCatalogo(
+        lineasValidas.map((linea) => linea.productoId),
+        productos
+      );
+
       const filas = lineasValidas.map((linea) => {
         const payload = {
           jornada_id: jornadaAbierta.id,
@@ -339,6 +351,8 @@ export default function ConsumoInternoPanel({ negocioId, rol }) {
       setConsumos((prev) => [...data, ...prev]);
       carrito.resetCarrito({ limpiarStorage: false });
       setEmpleadoId('');
+    } catch (error) {
+      setErrorFormulario(error?.message || 'No se pudo registrar el consumo.');
     } finally {
       setGuardando(false);
     }

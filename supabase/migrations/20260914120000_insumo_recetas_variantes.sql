@@ -45,6 +45,12 @@ WITH CHECK (
     WHERE iv.id = item_variante_id
       AND cv.negocio_id = negocio_id
   )
+  AND EXISTS (
+    SELECT 1
+    FROM public.insumos i
+    WHERE i.id = insumo_id
+      AND i.negocio_id = negocio_id
+  )
 );
 
 CREATE POLICY tenant_update_insumo_recetas_variantes
@@ -63,6 +69,12 @@ WITH CHECK (
     INNER JOIN public.categorias_variantes cv ON cv.id = iv.categoria_id
     WHERE iv.id = item_variante_id
       AND cv.negocio_id = negocio_id
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM public.insumos i
+    WHERE i.id = insumo_id
+      AND i.negocio_id = negocio_id
   )
 );
 

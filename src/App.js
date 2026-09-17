@@ -2079,7 +2079,8 @@ function Dashboard() {
             supabase,
             data.id,
             recetaFilasValidas,
-            negocioId
+            negocioId,
+            insumosDisponiblesReceta
           );
         }
 
@@ -2110,7 +2111,8 @@ function Dashboard() {
           supabase,
           data.id,
           recetaFilasValidas,
-          negocioId
+          negocioId,
+          insumosDisponiblesReceta
         );
       }
 
@@ -2193,7 +2195,13 @@ function Dashboard() {
       }
 
       if (modulosNegocio.habilitar_inventario === true) {
-        await sincronizarRecetaVariante(supabase, data.id, recetaFilasValidas, negocioId);
+        await sincronizarRecetaVariante(
+          supabase,
+          data.id,
+          recetaFilasValidas,
+          negocioId,
+          insumosDisponiblesVarianteReceta
+        );
       }
 
       setCatalogosVariantes((prev) => {

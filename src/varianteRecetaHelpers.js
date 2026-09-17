@@ -1,3 +1,4 @@
+import { asegurarInsumosRecetaEnCatalogo } from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 export function recetaInsumoVacio() {
@@ -97,10 +98,15 @@ export async function sincronizarRecetaVariante(
   supabase,
   itemVarianteId,
   recetaInsumos,
-  negocioId
+  negocioId,
+  catalogoInsumos = []
 ) {
   if (!itemVarianteId || !negocioId) {
     return;
+  }
+
+  if (recetaInsumos.length > 0) {
+    asegurarInsumosRecetaEnCatalogo(recetaInsumos, catalogoInsumos);
   }
 
   const { error: errorDelete } = await queryConNegocio(

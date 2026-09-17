@@ -3,6 +3,10 @@ import { useAuth } from './AuthContext';
 import { cargarJornadaAbierta } from './jornadaHelpers';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import { supabase } from './supabase';
+import {
+  asegurarIdEnCatalogoNegocio,
+  asegurarJornadaCaptura,
+} from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
 const MENSAJE_CARGA_SIN_JORNADA_ABIERTA =
@@ -221,6 +225,9 @@ export default function PanelCargaDiaria({ negocioId, rol }) {
     setErrorFormulario(null);
 
     try {
+      asegurarJornadaCaptura(jornadaAbierta.id, jornadaAbierta);
+      asegurarIdEnCatalogoNegocio(cargaForm.insumo_id, insumosOrdenados, 'Insumo');
+
       const cantidad = Number.parseFloat(cargaForm.cantidad);
       const payload = {
         jornada_id: jornadaAbierta.id,
@@ -250,6 +257,8 @@ export default function PanelCargaDiaria({ negocioId, rol }) {
 
       setCargas((prev) => [data, ...prev]);
       resetCargaForm();
+    } catch (error) {
+      setErrorFormulario(error?.message || 'No se pudo registrar la carga.');
     } finally {
       setGuardando(false);
     }
