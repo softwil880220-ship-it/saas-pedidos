@@ -668,8 +668,7 @@ export default function PanelSnapshot({ negocioId, rol }) {
                   const consumoVenta = Number(consumoVentaPorInsumo[clave]) || 0;
                   const consumoEmpleados = Number(consumoEmpleadosPorInsumo[clave]) || 0;
                   const consumido = consumoVenta + consumoEmpleados;
-                  const contadoValido = cantidadCapturaValida(captura.contado_fisico);
-                  const diferencia = contadoValido ? diferenciaPorInsumo[clave] ?? 0 : null;
+                  const diferencia = diferenciaPorInsumo[clave] ?? 0;
 
                   return (
                     <div key={insumo.id} className="arqueo-modal-fila inventario-snapshot-fila">
@@ -714,10 +713,8 @@ export default function PanelSnapshot({ negocioId, rol }) {
                         />
                       </div>
                       <span className={claseDiferenciaSnapshot(diferencia)}>
-                        {diferencia == null
-                          ? '—'
-                          : formatearDiferenciaSnapshot(diferencia) +
-                            (insumo.unidad_medida ? ` ${insumo.unidad_medida}` : '')}
+                        {formatearDiferenciaSnapshot(diferencia) +
+                          (insumo.unidad_medida ? ` ${insumo.unidad_medida}` : '')}
                       </span>
                     </div>
                   );
