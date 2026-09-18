@@ -269,15 +269,10 @@ export default function PanelSnapshot({ negocioId, rol }) {
     [contadoFisicoPorInsumo, mermaPorInsumo, teoricoPorInsumo]
   );
 
-  const formularioValido = useMemo(() => {
-    if (insumosOrdenados.length === 0) {
-      return false;
-    }
-
-    return insumosOrdenados.every((insumo) =>
-      cantidadCapturaValida(capturaPorInsumo[String(insumo.id)]?.contado_fisico)
-    );
-  }, [insumosOrdenados, capturaPorInsumo]);
+  const formularioValido = useMemo(
+    () => insumosOrdenados.length > 0,
+    [insumosOrdenados]
+  );
 
   const recargarJornada = useCallback(async () => {
     if (!negocioId) {
@@ -695,7 +690,6 @@ export default function PanelSnapshot({ negocioId, rol }) {
                           onChange={(event) =>
                             handleCapturaChange(clave, 'contado_fisico', event.target.value)
                           }
-                          required
                           aria-label={`Conteo físico de ${insumo.nombre}`}
                         />
                       </div>
