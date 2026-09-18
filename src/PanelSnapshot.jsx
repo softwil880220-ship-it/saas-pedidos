@@ -12,6 +12,10 @@ import ModalAutorizacionPin from './ModalAutorizacionPin';
 import { formatearClaveFecha, obtenerRangoFechaClave } from './pedidosShared';
 import { supabase } from './supabase';
 import { InventarioCorteHistorialLista } from './InventarioCorteHistorial';
+import {
+  formatearCantidadConUnidadMedida,
+  formatearDiferenciaConUnidadMedida,
+} from './inventarioFormatoHelpers';
 import { asegurarJornadaCaptura } from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 
@@ -55,17 +59,6 @@ function cantidadCapturaNumerica(valor) {
   return Number.isFinite(cantidad) && cantidad >= 0 ? cantidad : 0;
 }
 
-function formatearCantidadInventario(valor, unidadMedida) {
-  const cantidad = Number(valor);
-
-  if (!Number.isFinite(cantidad)) {
-    return '—';
-  }
-
-  const texto = Number.isInteger(cantidad) ? String(cantidad) : cantidad.toFixed(2);
-  return unidadMedida ? `${texto} ${unidadMedida}` : texto;
-}
-
 function claseDiferenciaSnapshot(diferencia) {
   if (!Number.isFinite(diferencia) || diferencia === 0) {
     return 'arqueo-modal-diferencia';
@@ -74,15 +67,6 @@ function claseDiferenciaSnapshot(diferencia) {
   return diferencia < 0
     ? 'arqueo-modal-diferencia arqueo-modal-diferencia-negativa'
     : 'arqueo-modal-diferencia arqueo-modal-diferencia-positiva';
-}
-
-function formatearDiferenciaSnapshot(diferencia) {
-  if (!Number.isFinite(diferencia)) {
-    return '—';
-  }
-
-  const signo = diferencia > 0 ? '+' : '';
-  return `${signo}${diferencia}`;
 }
 
 function sumarCargasPorTipo(cargas, tipo) {
@@ -672,13 +656,13 @@ export default function PanelSnapshot({ negocioId, rol }) {
                         <span className="inventario-snapshot-unidad">{insumo.unidad_medida}</span>
                       </div>
                       <span className="arqueo-modal-sistema">
-                        {formatearCantidadInventario(cargaInicial, insumo.unidad_medida)}
+                        {formatearCantidadConUnidadMedida(cargaInicial, insumo.unidad_medida)}
                       </span>
                       <span className="arqueo-modal-sistema">
-                        {formatearCantidadInventario(compraAdicional, insumo.unidad_medida)}
+                        {formatearCantidadConUnidadMedida(compraAdicional, insumo.unidad_medida)}
                       </span>
                       <span className="arqueo-modal-sistema">
-                        {formatearCantidadInventario(consumido, insumo.unidad_medida)}
+                        {formatearCantidadConUnidadMedida(consumido, insumo.unidad_medida)}
                       </span>
                       <div className="arqueo-modal-contado">
                         <input
@@ -707,8 +691,7 @@ export default function PanelSnapshot({ negocioId, rol }) {
                         />
                       </div>
                       <span className={claseDiferenciaSnapshot(diferencia)}>
-                        {formatearDiferenciaSnapshot(diferencia) +
-                          (insumo.unidad_medida ? ` ${insumo.unidad_medida}` : '')}
+                        {formatearDiferenciaConUnidadMedida(diferencia, insumo.unidad_medida)}
                       </span>
                     </div>
                   );

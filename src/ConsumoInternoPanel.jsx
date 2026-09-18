@@ -13,6 +13,10 @@ import {
 } from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
 import {
+  redondearCantidadInventario,
+  textoCantidadInventario,
+} from './inventarioFormatoHelpers';
+import {
   esProductoPorPeso,
   parseCantidadPieza,
   parseGramosLinea,
@@ -62,11 +66,19 @@ function lineaConsumoValida(linea, productos) {
 }
 
 function etiquetaCantidadConsumo(producto, cantidad) {
-  if (esProductoPorPeso(producto)) {
-    return `${cantidad} g`;
+  const cantidadNumerica = redondearCantidadInventario(cantidad);
+
+  if (cantidadNumerica == null) {
+    return '—';
   }
 
-  return cantidad === 1 ? '1 pieza' : `${cantidad} piezas`;
+  if (esProductoPorPeso(producto)) {
+    return `${textoCantidadInventario(cantidadNumerica)} g`;
+  }
+
+  return cantidadNumerica === 1
+    ? '1 pieza'
+    : `${textoCantidadInventario(cantidadNumerica)} piezas`;
 }
 
 function resumenLineaConsumo(variantes, producto, variantesCtx) {

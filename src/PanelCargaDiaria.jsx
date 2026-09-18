@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { cargarJornadaAbierta } from './jornadaHelpers';
 import ModalAutorizacionPin from './ModalAutorizacionPin';
 import { supabase } from './supabase';
+import { formatearCantidadConUnidadMedida } from './inventarioFormatoHelpers';
 import {
   asegurarIdEnCatalogoNegocio,
   asegurarJornadaCaptura,
@@ -404,8 +405,7 @@ export default function PanelCargaDiaria({ negocioId, rol }) {
                 <article key={carga.id} className="pedido-tarjeta">
                   <h2 className="pedido-cliente">{nombreInsumo}</h2>
                   <p className="pedido-producto">
-                    Cantidad: {carga.cantidad}
-                    {unidad ? ` ${unidad}` : ''}
+                    Cantidad: {formatearCantidadConUnidadMedida(carga.cantidad, unidad)}
                   </p>
                   <p className="pedido-producto">
                     Tipo: {ETIQUETAS_TIPO_CARGA[carga.tipo] || carga.tipo}

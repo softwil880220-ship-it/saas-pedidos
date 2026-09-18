@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { normalizarDetalleCorte } from './InventarioCorteHistorial';
+import { formatearCantidadConUnidadMedida } from './inventarioFormatoHelpers';
 import {
   PERIODOS_REPORTE,
   etiquetaPeriodoReporte,
@@ -22,21 +23,14 @@ function filasPdfDetalleCorte(snapshot, insumosPorId) {
     const unidad = insumo?.unidad_medida || '';
     const consumido =
       (Number(fila?.consumo_venta) || 0) + (Number(fila?.consumo_empleados) || 0);
-    const formatear = (valor) => {
-      const cantidad = Number(valor);
-      if (!Number.isFinite(cantidad)) return '—';
-      const texto = Number.isInteger(cantidad) ? String(cantidad) : cantidad.toFixed(2);
-      return unidad ? `${texto} ${unidad}` : texto;
-    };
-
     return [
       insumo?.nombre || 'Insumo',
-      formatear(fila?.carga_inicial),
-      formatear(fila?.compra_adicional),
-      formatear(consumido),
-      formatear(fila?.contado_fisico),
-      formatear(fila?.merma_explicada),
-      formatear(fila?.diferencia),
+      formatearCantidadConUnidadMedida(fila?.carga_inicial, unidad),
+      formatearCantidadConUnidadMedida(fila?.compra_adicional, unidad),
+      formatearCantidadConUnidadMedida(consumido, unidad),
+      formatearCantidadConUnidadMedida(fila?.contado_fisico, unidad),
+      formatearCantidadConUnidadMedida(fila?.merma_explicada, unidad),
+      formatearCantidadConUnidadMedida(fila?.diferencia, unidad),
     ];
   });
 }

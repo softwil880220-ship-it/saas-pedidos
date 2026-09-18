@@ -1,3 +1,7 @@
+import {
+  redondearCantidadInventario,
+  textoCantidadInventario,
+} from './inventarioFormatoHelpers';
 import { esProductoPorPeso } from './productoUnidadVenta';
 import { formatearClaveFecha } from './pedidosShared';
 import {
@@ -118,17 +122,19 @@ function resolverProductoConsumo(consumo) {
 }
 
 export function formatearCantidadConsumoProducto(producto, cantidad) {
-  const cantidadNumerica = Number(cantidad);
+  const cantidadNumerica = redondearCantidadInventario(cantidad);
 
-  if (!Number.isFinite(cantidadNumerica)) {
+  if (cantidadNumerica == null) {
     return '—';
   }
 
   if (esProductoPorPeso(producto)) {
-    return `${cantidadNumerica} g`;
+    return `${textoCantidadInventario(cantidadNumerica)} g`;
   }
 
-  return cantidadNumerica === 1 ? '1 pieza' : `${cantidadNumerica} piezas`;
+  return cantidadNumerica === 1
+    ? '1 pieza'
+    : `${textoCantidadInventario(cantidadNumerica)} piezas`;
 }
 
 export function resumenVariantesConsumo(variantes, producto, variantesCtx) {

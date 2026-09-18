@@ -1,3 +1,8 @@
+import {
+  formatearCantidadConUnidadMedida,
+  formatearDiferenciaConUnidadMedida,
+} from './inventarioFormatoHelpers';
+
 export function normalizarDetalleCorte(detalle) {
   if (Array.isArray(detalle)) {
     return detalle;
@@ -8,26 +13,6 @@ export function normalizarDetalleCorte(detalle) {
   }
 
   return [];
-}
-
-export function formatearCantidadInventarioHistorial(valor, unidadMedida) {
-  const cantidad = Number(valor);
-
-  if (!Number.isFinite(cantidad)) {
-    return '—';
-  }
-
-  const texto = Number.isInteger(cantidad) ? String(cantidad) : cantidad.toFixed(2);
-  return unidadMedida ? `${texto} ${unidadMedida}` : texto;
-}
-
-function formatearDiferenciaCorte(diferencia) {
-  if (!Number.isFinite(diferencia)) {
-    return '—';
-  }
-
-  const signo = diferencia > 0 ? '+' : '';
-  return `${signo}${diferencia}`;
 }
 
 function claseDiferenciaCorteHistorial(diferencia) {
@@ -102,21 +87,20 @@ export function InventarioCorteCard({ snapshot, insumosPorId, resolverNombreUsua
                 >
                   <span>{nombreInsumo}</span>
                   <span>
-                    {formatearCantidadInventarioHistorial(fila?.carga_inicial, unidad)}
+                    {formatearCantidadConUnidadMedida(fila?.carga_inicial, unidad)}
                   </span>
                   <span>
-                    {formatearCantidadInventarioHistorial(fila?.compra_adicional, unidad)}
+                    {formatearCantidadConUnidadMedida(fila?.compra_adicional, unidad)}
                   </span>
-                  <span>{formatearCantidadInventarioHistorial(consumido, unidad)}</span>
+                  <span>{formatearCantidadConUnidadMedida(consumido, unidad)}</span>
                   <span>
-                    {formatearCantidadInventarioHistorial(fila?.contado_fisico, unidad)}
+                    {formatearCantidadConUnidadMedida(fila?.contado_fisico, unidad)}
                   </span>
                   <span>
-                    {formatearCantidadInventarioHistorial(fila?.merma_explicada, unidad)}
+                    {formatearCantidadConUnidadMedida(fila?.merma_explicada, unidad)}
                   </span>
                   <span className={claseDiferenciaCorteHistorial(diferencia)}>
-                    {formatearDiferenciaCorte(diferencia)}
-                    {Number.isFinite(diferencia) && unidad ? ` ${unidad}` : ''}
+                    {formatearDiferenciaConUnidadMedida(diferencia, unidad)}
                   </span>
                 </div>
               );
