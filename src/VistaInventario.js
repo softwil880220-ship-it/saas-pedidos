@@ -17,16 +17,6 @@ const ROLES_CATALOGO_INVENTARIO = ['dueno', 'administrador'];
 
 const INVENTARIO_TABS = [
   {
-    value: 'insumos',
-    label: 'Catálogo de insumos',
-    rolesPermitidos: ROLES_CATALOGO_INVENTARIO,
-  },
-  {
-    value: 'empleados',
-    label: 'Catálogo de empleados',
-    rolesPermitidos: ROLES_CATALOGO_INVENTARIO,
-  },
-  {
     value: 'carga-diaria',
     label: 'Carga diaria',
     rolesPermitidos: ROLES_SUBTABS_OPERATIVOS,
@@ -41,6 +31,16 @@ const INVENTARIO_TABS = [
     label: 'Corte de inventario',
     rolesPermitidos: ROLES_SUBTABS_OPERATIVOS,
   },
+  {
+    value: 'insumos',
+    label: 'Catálogo de insumos',
+    rolesPermitidos: ROLES_CATALOGO_INVENTARIO,
+  },
+  {
+    value: 'empleados',
+    label: 'Catálogo de empleados',
+    rolesPermitidos: ROLES_CATALOGO_INVENTARIO,
+  },
 ];
 
 const STORAGE_KEY_TAB_INVENTARIO = 'pos_tab_inventario';
@@ -52,8 +52,7 @@ function tabsInventarioVisibles(rol) {
 }
 
 function tabInventarioDefault(rol) {
-  if (rol === 'cajero') return 'carga-diaria';
-  return 'insumos';
+  return 'carga-diaria';
 }
 
 function valoresTabInventarioValidos() {
