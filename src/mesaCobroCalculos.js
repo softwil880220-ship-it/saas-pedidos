@@ -127,9 +127,64 @@ function claveLineaConVariantes({ productoId, nombre, precioUnitario, etiquetaVa
   return `variante|${productoId}|${nombre}|${precioUnitario}|${etiquetaVariantes ?? ''}`;
 }
 
+function claveBaseAsociadaAVariante(claveVariante) {
+  if (!String(claveVariante).startsWith('variante|')) {
+    return null;
+  }
+
+  const partes = String(claveVariante).split('|');
+  if (partes.length < 5) {
+    return null;
+  }
+
+  return `base|${partes[1]}|${partes[2]}|${partes[3]}`;
+}
+
+function indiceInsercionGrupoNuevo(ordenClaves, clave, linea) {
+  const claveBase = claveLineaBase(linea);
+
+  if (linea.tieneVariantes) {
+    const indiceBase = ordenClaves.indexOf(claveBase);
+    if (indiceBase < 0) {
+      return ordenClaves.length;
+    }
+
+    let insertarEn = indiceBase + 1;
+    while (
+      insertarEn < ordenClaves.length &&
+      claveBaseAsociadaAVariante(ordenClaves[insertarEn]) === claveBase
+    ) {
+      insertarEn += 1;
+    }
+
+    return insertarEn;
+  }
+
+  const indicePrimeraVariante = ordenClaves.findIndex(
+    (claveOrden) => claveBaseAsociadaAVariante(claveOrden) === clave
+  );
+
+  if (indicePrimeraVariante >= 0) {
+    return indicePrimeraVariante;
+  }
+
+  return ordenClaves.length;
+}
+
+function registrarGrupoConsolidado(ordenClaves, gruposPorClave, clave, grupo, linea) {
+  if (gruposPorClave.has(clave)) {
+    gruposPorClave.set(clave, grupo);
+    return;
+  }
+
+  gruposPorClave.set(clave, grupo);
+  const indice = indiceInsercionGrupoNuevo(ordenClaves, clave, linea);
+  ordenClaves.splice(indice, 0, clave);
+}
+
 export function consolidarProductosRondasMesa(rondas) {
-  const mapaBase = new Map();
-  const mapaVariantes = new Map();
+  const gruposPorClave = new Map();
+  const ordenClaves = [];
 
   (rondas || []).forEach((ronda) => {
     const lineas = Array.isArray(ronda?.lineas_detalle) ? ronda.lineas_detalle : [];
@@ -139,10 +194,10 @@ export function consolidarProductosRondasMesa(rondas) {
 
       if (linea.tieneVariantes) {
         const clave = claveLineaConVariantes(linea);
-        const existente = mapaVariantes.get(clave);
+        const existente = gruposPorClave.get(clave);
 
         if (existente) {
-          mapaVariantes.set(clave, {
+          registrarGrupoConsolidado(ordenClaves, gruposPorClave, clave, {
             ...existente,
             cantidad: existente.cantidad + linea.cantidad,
             subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
@@ -161,11 +216,11 @@ export function consolidarProductosRondasMesa(rondas) {
                 ),
               },
             ],
-          });
+          }, linea);
           return;
         }
 
-        mapaVariantes.set(clave, {
+        registrarGrupoConsolidado(ordenClaves, gruposPorClave, clave, {
           clave,
           nombre: linea.nombre,
           cantidad: linea.cantidad,
@@ -180,15 +235,15 @@ export function consolidarProductosRondasMesa(rondas) {
               subtotal: linea.subtotalExtras,
             },
           ],
-        });
+        }, linea);
         return;
       }
 
       const clave = claveLineaBase(linea);
-      const existente = mapaBase.get(clave);
+      const existente = gruposPorClave.get(clave);
 
       if (existente) {
-        mapaBase.set(clave, {
+        registrarGrupoConsolidado(ordenClaves, gruposPorClave, clave, {
           ...existente,
           cantidad: existente.cantidad + linea.cantidad,
           subtotal: redondearMoneda(Number(existente.subtotal || 0) + Number(linea.subtotal || 0)),
@@ -199,11 +254,11 @@ export function consolidarProductosRondasMesa(rondas) {
                 cantidad: existente.cantidad + linea.cantidad,
               })
             : existente.textoLinea,
-        });
+        }, linea);
         return;
       }
 
-      mapaBase.set(clave, {
+      registrarGrupoConsolidado(ordenClaves, gruposPorClave, clave, {
         clave,
         nombre: linea.nombre,
         cantidad: linea.cantidad,
@@ -213,13 +268,11 @@ export function consolidarProductosRondasMesa(rondas) {
         subtotalBase: linea.subtotalBase,
         textoLinea: linea.textoLinea,
         extrasLineas: [],
-      });
+      }, linea);
     });
   });
 
-  return [...mapaBase.values(), ...mapaVariantes.values()].sort((a, b) =>
-    a.nombre.localeCompare(b.nombre, 'es')
-  );
+  return ordenClaves.map((clave) => gruposPorClave.get(clave));
 }
 
 export function calcularSubtotalConsolidadoMesa(productosConsolidados) {

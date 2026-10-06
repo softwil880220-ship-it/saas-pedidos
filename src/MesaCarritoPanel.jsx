@@ -126,10 +126,12 @@ export default function MesaCarritoPanel({
     productosConsolidados: productosConsolidadosFolio,
     subtotal: subtotalFolio,
     cargando: cargandoPedidosFolio,
+    resolverNombreCaptura,
   } = usePedidosFolioMesa({
     negocioId,
     numeroMesa,
     abiertaEn: abiertaEnFolio,
+    jornadaId: jornadaAbierta?.id ?? null,
     activo: Boolean(folioId) && Boolean(abiertaEnFolio) && !folioAjenoEnmascarado,
   });
   const tieneRondasVigentes = pedidosFolioMesa.length > 0;
@@ -770,7 +772,8 @@ export default function MesaCarritoPanel({
     rondasEnviadas > 0 &&
     carritoActivoVacio &&
     !enviandoCocina &&
-    !modalCobroAbierto;
+    !modalCobroAbierto &&
+    !cargandoPedidosFolio;
 
   const handleConfirmarCobro = async (datosCobro) => {
     if (rol === 'mesero') {
@@ -834,9 +837,10 @@ export default function MesaCarritoPanel({
         <>
           <MesaRondasEnviadas
             negocioId={negocioId}
-            numeroMesa={numeroMesa}
-            abiertaEn={abiertaEnFolio}
             visible={Boolean(folioId) && !folioAjenoEnmascarado}
+            rondas={pedidosFolioMesa}
+            cargandoRondas={cargandoPedidosFolio}
+            resolverNombreCaptura={resolverNombreCaptura}
             productos={productos}
             productosOrdenados={productosOrdenados}
             frecuenciaCategorias={frecuenciaCategorias}
@@ -907,6 +911,10 @@ export default function MesaCarritoPanel({
                   onClick={() => {
                     if (!jornadaAbierta?.id) {
                       setErrorJornadaCerradaMesa(MENSAJE_JORNADA_CERRADA_COBRAR_MESA);
+                      return;
+                    }
+
+                    if (cargandoPedidosFolio) {
                       return;
                     }
 

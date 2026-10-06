@@ -11,8 +11,6 @@ import { calcularNumeroRondaSiguienteDesdePedidos } from './pedidosShared';
 import { sincronizarNumeroRondaSiguienteFolio } from './pedidoCarritoStorage';
 import { queryConNegocio } from './tenantHelpers';
 import { supabase } from './supabase';
-import { useRondasMesaEnviadas } from './useRondasMesaEnviadas';
-
 function etiquetaResumenRondas(cantidad) {
   if (cantidad === 1) {
     return '1 ronda enviada';
@@ -26,9 +24,10 @@ const MENSAJE_JORNADA_CERRADA_EDITAR_PEDIDOS_MESA =
 
 export default function MesaRondasEnviadas({
   negocioId,
-  numeroMesa,
-  abiertaEn,
   visible,
+  rondas,
+  cargandoRondas,
+  resolverNombreCaptura,
   productos,
   productosOrdenados,
   frecuenciaCategorias,
@@ -46,12 +45,7 @@ export default function MesaRondasEnviadas({
   const [rondaPendienteAutorizacion, setRondaPendienteAutorizacion] = useState(null);
   const [accionPendientePin, setAccionPendientePin] = useState(null);
 
-  const { rondas, cargando, resolverNombreCaptura } = useRondasMesaEnviadas({
-    negocioId,
-    numeroMesa,
-    abiertaEn,
-    activo: visible && Boolean(abiertaEn),
-  });
+  const cargando = cargandoRondas;
 
   if (!visible) {
     return null;

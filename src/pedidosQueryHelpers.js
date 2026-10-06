@@ -1,9 +1,11 @@
 import { pedidoPerteneceJornada } from './jornadaHelpers';
 import {
+  clienteEtiquetaMesa,
   esPedidoMostrador,
   formatearClaveFecha,
   obtenerRangoFechaClave,
   pedidoEntregadoMostradorHoy,
+  pedidoEsRondaMesaEnviada,
   pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
 
@@ -71,6 +73,37 @@ export function pedidoCoincideFiltroMostrador(pedido, hoyClave) {
   }
 
   return pedidoEntregadoMostradorHoy(pedido, hoyClave);
+}
+
+export function pedidoCoincideFiltroMesaFolio(pedido, { numeroMesa, abiertaEn }) {
+  return pedidoEsRondaMesaEnviada(pedido, { numeroMesa, abiertaEn });
+}
+
+export function aplicarFiltrosQueryMesaFolio(
+  query,
+  { numeroMesa, abiertaEn, jornadaId = null }
+) {
+  const abiertaEnDate = abiertaEn ? new Date(abiertaEn) : null;
+
+  if (
+    numeroMesa == null ||
+    !abiertaEnDate ||
+    Number.isNaN(abiertaEnDate.getTime())
+  ) {
+    return query.eq('tipo', 'mesa').eq('cliente', '__mesa_folio_sin_rango__');
+  }
+
+  let filtered = query
+    .eq('tipo', 'mesa')
+    .eq('cliente', clienteEtiquetaMesa(numeroMesa))
+    .is('deleted_at', null)
+    .gte('created_at', abiertaEnDate.toISOString());
+
+  if (jornadaId) {
+    filtered = filtered.or(`jornada_id.eq.${jornadaId},jornada_id.is.null`);
+  }
+
+  return filtered;
 }
 
 export function aplicarFiltrosQueryMostrador(query, hoyClave) {
