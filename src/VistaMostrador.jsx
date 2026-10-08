@@ -25,7 +25,6 @@ import {
 import {
   construirUpdateEntregadoMostradorPendientes,
   formatearMoneda,
-  obtenerFechaHoyClave,
 } from './pedidosShared';
 import { registrarPedidoMostrador } from './registrarPedidoMostrador';
 
@@ -162,8 +161,6 @@ export default function VistaMostrador({
     };
   }, [mensajeExito]);
 
-  const hoyClave = obtenerFechaHoyClave();
-
   const {
     pedidosPendientes,
     pedidosEntregadosHoy,
@@ -172,7 +169,7 @@ export default function VistaMostrador({
     cargando: cargandoPedidosPendientes,
   } = useMostradorPedidos({
     negocioId,
-    hoyClave,
+    jornadaAbierta,
   });
 
   const cerrarMensajeExito = () => {

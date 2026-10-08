@@ -20,9 +20,10 @@ import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
 import {
   MODULO_POR_MODO,
-  aplicarFiltrosQueryDashboard,
+  aplicarFiltrosQueryDashboardOperativo,
+  filtrarPedidosListaCaja,
   pedidoCanalHabilitado,
-  pedidoCoincideFiltroDashboard,
+  pedidoCoincideFiltroDashboardOperativo,
 } from './pedidosQueryHelpers';
 import {
   COCINAS,
@@ -1028,21 +1029,24 @@ function Dashboard() {
 
   const filtrarPedidosDashboard = useCallback(
     (pedido) =>
-      pedidoCoincideFiltroDashboard(pedido, {
+      pedidoCoincideFiltroDashboardOperativo(pedido, {
         jornadaId: jornadaAbierta?.id ?? null,
         jornadaAbiertaEn: jornadaAbierta?.abierta_en ?? null,
         filtroFechaClave: filtroFecha,
+        hoyClave: obtenerFechaHoy(),
       }),
     [jornadaAbierta?.id, jornadaAbierta?.abierta_en, filtroFecha]
   );
 
   const aplicarFiltrosQueryPedidosDashboard = useCallback(
     (query) =>
-      aplicarFiltrosQueryDashboard(query, {
+      aplicarFiltrosQueryDashboardOperativo(query, {
         jornadaId: jornadaAbierta?.id ?? null,
+        jornadaAbiertaEn: jornadaAbierta?.abierta_en ?? null,
         filtroFechaClave: filtroFecha,
+        hoyClave: obtenerFechaHoy(),
       }),
-    [jornadaAbierta?.id, filtroFecha]
+    [jornadaAbierta?.id, jornadaAbierta?.abierta_en, filtroFecha]
   );
 
   const {
@@ -2382,11 +2386,11 @@ function Dashboard() {
     };
   }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
 
-  const pedidosPorFecha = pedidosModoActual.filter(
-    (pedido) =>
-      pedido.created_at &&
-      formatearClaveFecha(new Date(pedido.created_at)) === filtroFecha
-  );
+  const pedidosPorFecha = filtrarPedidosListaCaja(pedidosModoActual, {
+    filtroFechaClave: filtroFecha,
+    hoyClave,
+    jornada: jornadaAbierta,
+  });
 
   const pedidosFiltradosPresencial = pedidosPorFecha;
   const pedidosAgrupadosPresencial = agruparPedidosPorFecha(pedidosFiltradosPresencial);
@@ -4534,10 +4538,15 @@ function Dashboard() {
                   {formatearMoneda(totalVentasFechaFiltro)}
                 </p>
               )}
+              {esFiltroHoy && jornadaAbierta?.id ? (
+                <p className="filtro-fecha-total" role="status">
+                  Mostrando ventas de la jornada actual
+                </p>
+              ) : null}
             </section>
 
             <section className="dashboard-lista">
-              {pedidosModoActual.length === 0 ? (
+              {pedidosModoActual.length === 0 && pedidosFiltradosPresencial.length === 0 ? (
                 <p className="dashboard-vacio">No hay ventas registradas aún</p>
               ) : (
                 renderPedidosLista(

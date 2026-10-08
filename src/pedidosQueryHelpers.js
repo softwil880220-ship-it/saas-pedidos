@@ -4,7 +4,6 @@ import {
   esPedidoMostrador,
   formatearClaveFecha,
   obtenerRangoFechaClave,
-  pedidoEntregadoMostradorHoy,
   pedidoEsRondaMesaEnviada,
   pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
@@ -63,7 +62,19 @@ export const COLUMNAS_PEDIDOS_MOSTRADOR = [
   'jornada_id',
 ].join(', ');
 
-export function pedidoCoincideFiltroMostrador(pedido, hoyClave) {
+export function pedidoEntregadoMostradorEnJornada(pedido, jornada) {
+  if (!esPedidoMostrador(pedido) || pedido.deleted_at != null) {
+    return false;
+  }
+
+  if (pedido.status !== 'entregado') {
+    return false;
+  }
+
+  return pedidoPerteneceJornada(pedido, jornada);
+}
+
+export function pedidoCoincideFiltroMostrador(pedido, { jornada = null } = {}) {
   if (!esPedidoMostrador(pedido) || pedido.deleted_at != null) {
     return false;
   }
@@ -72,7 +83,42 @@ export function pedidoCoincideFiltroMostrador(pedido, hoyClave) {
     return true;
   }
 
-  return pedidoEntregadoMostradorHoy(pedido, hoyClave);
+  if (!jornada?.id) {
+    return false;
+  }
+
+  return pedidoEntregadoMostradorEnJornada(pedido, jornada);
+}
+
+export function pedidoPresencialEnFechaCalendario(pedido, filtroFechaClave) {
+  if (pedido?.tipo !== 'presencial' || pedido.deleted_at != null || !pedido.created_at) {
+    return false;
+  }
+
+  return formatearClaveFecha(new Date(pedido.created_at)) === filtroFechaClave;
+}
+
+export function pedidoCoincideFiltroListaCaja(
+  pedido,
+  { filtroFechaClave, hoyClave, jornada = null }
+) {
+  if (pedido?.tipo !== 'presencial' || pedido.deleted_at != null) {
+    return false;
+  }
+
+  if (filtroFechaClave !== hoyClave) {
+    return pedidoPresencialEnFechaCalendario(pedido, filtroFechaClave);
+  }
+
+  if (!jornada?.id) {
+    return false;
+  }
+
+  return pedidoPerteneceJornada(pedido, jornada);
+}
+
+export function filtrarPedidosListaCaja(pedidos, opciones) {
+  return (pedidos || []).filter((pedido) => pedidoCoincideFiltroListaCaja(pedido, opciones));
 }
 
 export function pedidoCoincideFiltroMesaFolio(pedido, { numeroMesa, abiertaEn }) {
@@ -106,15 +152,47 @@ export function aplicarFiltrosQueryMesaFolio(
   return filtered;
 }
 
-export function aplicarFiltrosQueryMostrador(query, hoyClave) {
-  const { inicio, fin } = obtenerRangoFechaClave(hoyClave);
+/** Fetch intencionalmente vacío (p. ej. jornada cerrada); evita filtros con ids imposibles. */
+export function aplicarFiltrosQueryPedidosVacios(query) {
+  return query.limit(0);
+}
 
-  return query
-    .eq('tipo', 'mostrador')
-    .is('deleted_at', null)
-    .or(
-      `status.neq.entregado,and(status.eq.entregado,mostrador_entregado_at.gte.${inicio.toISOString()},mostrador_entregado_at.lte.${fin.toISOString()})`
+export function aplicarFiltrosQueryMostrador(query, { jornadaId = null } = {}) {
+  const queryBase = query.eq('tipo', 'mostrador').is('deleted_at', null);
+
+  if (!jornadaId) {
+    return queryBase.neq('status', 'entregado');
+  }
+
+  return queryBase.or(
+    `status.neq.entregado,and(status.eq.entregado,jornada_id.eq.${jornadaId})`
+  );
+}
+
+export function aplicarFiltrosQueryListaCaja(
+  query,
+  { jornadaId = null, jornadaAbiertaEn = null, filtroFechaClave, hoyClave }
+) {
+  const querySinEliminados = query.is('deleted_at', null).eq('tipo', 'presencial');
+
+  if (filtroFechaClave !== hoyClave) {
+    const { inicio, fin } = obtenerRangoFechaClave(filtroFechaClave);
+    return querySinEliminados
+      .gte('created_at', inicio.toISOString())
+      .lte('created_at', fin.toISOString());
+  }
+
+  if (!jornadaId) {
+    return aplicarFiltrosQueryPedidosVacios(querySinEliminados);
+  }
+
+  if (jornadaAbiertaEn) {
+    return querySinEliminados.or(
+      `jornada_id.eq.${jornadaId},and(jornada_id.is.null,created_at.gte.${new Date(jornadaAbiertaEn).toISOString()})`
     );
+  }
+
+  return querySinEliminados.eq('jornada_id', jornadaId);
 }
 
 export function pedidoCoincideFiltroDashboard(
@@ -137,6 +215,63 @@ export function pedidoCoincideFiltroDashboard(
   }
 
   return false;
+}
+
+export function pedidoCoincideFiltroDashboardOperativo(
+  pedido,
+  { jornadaId = null, jornadaAbiertaEn = null, filtroFechaClave, hoyClave }
+) {
+  if (pedido?.deleted_at != null) {
+    return false;
+  }
+
+  if (pedidoCoincideFiltroListaCaja(pedido, {
+    filtroFechaClave,
+    hoyClave,
+    jornada: jornadaId ? { id: jornadaId, abierta_en: jornadaAbiertaEn } : null,
+  })) {
+    return true;
+  }
+
+  if (
+    jornadaId &&
+    pedidoPerteneceJornada(pedido, { id: jornadaId, abierta_en: jornadaAbiertaEn })
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function aplicarFiltrosQueryDashboardOperativo(
+  query,
+  { jornadaId = null, jornadaAbiertaEn = null, filtroFechaClave, hoyClave }
+) {
+  const { inicio, fin } = obtenerRangoFechaClave(filtroFechaClave);
+  const base = query.is('deleted_at', null);
+
+  if (filtroFechaClave !== hoyClave) {
+    if (jornadaId) {
+      return base.or(
+        `jornada_id.eq.${jornadaId},and(tipo.eq.presencial,created_at.gte.${inicio.toISOString()},created_at.lte.${fin.toISOString()})`
+      );
+    }
+
+    return base
+      .eq('tipo', 'presencial')
+      .gte('created_at', inicio.toISOString())
+      .lte('created_at', fin.toISOString());
+  }
+
+  if (!jornadaId) {
+    return aplicarFiltrosQueryPedidosVacios(base);
+  }
+
+  const presencialJornada = jornadaAbiertaEn
+    ? `and(tipo.eq.presencial,or(jornada_id.eq.${jornadaId},and(jornada_id.is.null,created_at.gte.${new Date(jornadaAbiertaEn).toISOString()})))`
+    : `and(tipo.eq.presencial,jornada_id.eq.${jornadaId})`;
+
+  return base.or(`jornada_id.eq.${jornadaId},${presencialJornada}`);
 }
 
 export function aplicarFiltrosQueryDashboard(query, { jornadaId = null, filtroFechaClave }) {

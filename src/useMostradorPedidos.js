@@ -3,23 +3,31 @@ import {
   COLUMNAS_PEDIDOS_MOSTRADOR,
   aplicarFiltrosQueryMostrador,
   pedidoCoincideFiltroMostrador,
+  pedidoEntregadoMostradorEnJornada,
 } from './pedidosQueryHelpers';
 import {
   obtenerFechaHoyClave,
-  pedidoEntregadoMostradorHoy,
   pedidoPendienteEntregaMostrador,
 } from './pedidosShared';
 import { usePedidosRealtime } from './usePedidosRealtime';
 
-export function useMostradorPedidos({ negocioId, hoyClave = obtenerFechaHoyClave() }) {
+export function useMostradorPedidos({ negocioId, jornadaAbierta = null }) {
+  const jornada = useMemo(
+    () =>
+      jornadaAbierta?.id
+        ? { id: jornadaAbierta.id, abierta_en: jornadaAbierta.abierta_en ?? null }
+        : null,
+    [jornadaAbierta?.id, jornadaAbierta?.abierta_en]
+  );
+
   const filtrar = useCallback(
-    (pedido) => pedidoCoincideFiltroMostrador(pedido, hoyClave),
-    [hoyClave]
+    (pedido) => pedidoCoincideFiltroMostrador(pedido, { jornada }),
+    [jornada]
   );
 
   const aplicarFiltrosQuery = useCallback(
-    (query) => aplicarFiltrosQueryMostrador(query, hoyClave),
-    [hoyClave]
+    (query) => aplicarFiltrosQueryMostrador(query, { jornadaId: jornada?.id ?? null }),
+    [jornada?.id]
   );
 
   const compararPendientes = useCallback(
@@ -52,9 +60,9 @@ export function useMostradorPedidos({ negocioId, hoyClave = obtenerFechaHoyClave
   const pedidosEntregadosHoy = useMemo(
     () =>
       pedidos
-        .filter((pedido) => pedidoEntregadoMostradorHoy(pedido, hoyClave))
+        .filter((pedido) => pedidoEntregadoMostradorEnJornada(pedido, jornada))
         .sort(compararEntregados),
-    [pedidos, hoyClave, compararEntregados]
+    [pedidos, jornada, compararEntregados]
   );
 
   return {
