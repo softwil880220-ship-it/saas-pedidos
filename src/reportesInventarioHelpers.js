@@ -1,4 +1,5 @@
 import {
+  formatearEtiquetaCantidadPiezas,
   redondearCantidadInventario,
   textoCantidadInventario,
 } from './inventarioFormatoHelpers';
@@ -132,9 +133,7 @@ export function formatearCantidadConsumoProducto(producto, cantidad) {
     return `${textoCantidadInventario(cantidadNumerica)} g`;
   }
 
-  return cantidadNumerica === 1
-    ? '1 pieza'
-    : `${textoCantidadInventario(cantidadNumerica)} piezas`;
+  return formatearEtiquetaCantidadPiezas(cantidadNumerica);
 }
 
 export function resumenVariantesConsumo(variantes, producto, variantesCtx) {

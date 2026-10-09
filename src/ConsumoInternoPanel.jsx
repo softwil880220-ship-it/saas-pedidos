@@ -12,10 +12,7 @@ import {
   asegurarProductosEnCatalogo,
 } from './inventarioTenantHelpers';
 import { payloadConNegocio, queryConNegocio } from './tenantHelpers';
-import {
-  redondearCantidadInventario,
-  textoCantidadInventario,
-} from './inventarioFormatoHelpers';
+import { formatearCantidadConsumoProducto } from './reportesInventarioHelpers';
 import {
   esProductoPorPeso,
   parseCantidadPieza,
@@ -63,22 +60,6 @@ function cantidadNumericaLinea(linea, productos) {
 function lineaConsumoValida(linea, productos) {
   if (!linea?.productoId) return false;
   return cantidadNumericaLinea(linea, productos) > 0;
-}
-
-function etiquetaCantidadConsumo(producto, cantidad) {
-  const cantidadNumerica = redondearCantidadInventario(cantidad);
-
-  if (cantidadNumerica == null) {
-    return '—';
-  }
-
-  if (esProductoPorPeso(producto)) {
-    return `${textoCantidadInventario(cantidadNumerica)} g`;
-  }
-
-  return cantidadNumerica === 1
-    ? '1 pieza'
-    : `${textoCantidadInventario(cantidadNumerica)} piezas`;
 }
 
 function resumenLineaConsumo(variantes, producto, variantesCtx) {
@@ -547,7 +528,7 @@ export default function ConsumoInternoPanel({ negocioId, rol }) {
                     Empleado: {empleado?.nombre || '—'}
                   </p>
                   <p className="pedido-producto">
-                    Cantidad: {etiquetaCantidadConsumo(producto, consumo.cantidad)}
+                    Cantidad: {formatearCantidadConsumoProducto(producto, consumo.cantidad)}
                   </p>
                   {resumenVariantes ? (
                     <p className="pedido-producto">Detalle: {resumenVariantes}</p>

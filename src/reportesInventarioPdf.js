@@ -1,7 +1,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { normalizarDetalleCorte } from './InventarioCorteHistorial';
-import { formatearCantidadConUnidadMedida } from './inventarioFormatoHelpers';
+import {
+  formatearCantidadConUnidadMedida,
+  formatearDiferenciaConUnidadMedida,
+} from './inventarioFormatoHelpers';
 import {
   PERIODOS_REPORTE,
   etiquetaPeriodoReporte,
@@ -30,7 +33,7 @@ function filasPdfDetalleCorte(snapshot, insumosPorId) {
       formatearCantidadConUnidadMedida(consumido, unidad),
       formatearCantidadConUnidadMedida(fila?.contado_fisico, unidad),
       formatearCantidadConUnidadMedida(fila?.merma_explicada, unidad),
-      formatearCantidadConUnidadMedida(fila?.diferencia, unidad),
+      formatearDiferenciaConUnidadMedida(fila?.diferencia, unidad),
     ];
   });
 }
