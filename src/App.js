@@ -97,7 +97,9 @@ import {
   formatearHoraJornada,
   jornadaEstaCerrada,
   MENSAJE_JORNADA_YA_ABIERTA,
+  MENSAJE_SOLO_MODIFICAR_VENTAS_JORNADA_ACTUAL,
   normalizarMeridianoHoraEs,
+  pedidoPermiteModificacionJornadaActual,
   pedidoPerteneceJornada,
   puedeGestionarJornada,
 } from './jornadaHelpers';
@@ -849,17 +851,6 @@ function obtenerFechaHoy() {
 
 function pedidoPerteneceJornadaDashboard(pedido, jornadaId, hoyClave, abiertaEn) {
   return pedidoPerteneceJornada(pedido, { id: jornadaId, abierta_en: abiertaEn });
-}
-
-function formatearFechaCortaFiltro(claveFecha) {
-  const [year, month, day] = claveFecha.split('-').map(Number);
-  const fecha = new Date(year, month - 1, day);
-  const texto = fecha.toLocaleDateString('es-MX', {
-    day: 'numeric',
-    month: 'short',
-  });
-
-  return texto.replace(/\.$/, '');
 }
 
 function formatearHoraRelojDashboard(fecha = new Date()) {
@@ -2387,7 +2378,7 @@ function Dashboard() {
   }, [ventasBrutasPorFormaPago, retirosDelDia, fondoFijoDelDia]);
 
   const pedidosPorFecha = filtrarPedidosListaCaja(pedidosModoActual, {
-    filtroFechaClave: filtroFecha,
+    filtroFechaClave: hoyClave,
     hoyClave,
     jornada: jornadaAbierta,
   });
@@ -2395,12 +2386,6 @@ function Dashboard() {
   const pedidosFiltradosPresencial = pedidosPorFecha;
   const pedidosAgrupadosPresencial = agruparPedidosPorFecha(pedidosFiltradosPresencial);
 
-  const totalVentasFechaFiltro = pedidosPorFecha.reduce(
-    (suma, pedido) => suma + Number(pedido.total),
-    0
-  );
-
-  const esFiltroHoy = filtroFecha === hoyClave;
   const esModoPresencial = modo === 'presencial';
   const esModoWhatsapp = modo === 'whatsapp';
   const esModoMesas = modo === 'mesas';
@@ -2423,6 +2408,12 @@ function Dashboard() {
     persistirModoPedidos('mesas');
     setModo('mesas');
   }, [esMesero, modo]);
+
+  useEffect(() => {
+    if (esModoPresencial && filtroFecha !== hoyClave) {
+      setFiltroFecha(hoyClave);
+    }
+  }, [esModoPresencial, filtroFecha, hoyClave]);
 
   useEffect(() => {
     if (modosVisibles.length === 0) {
@@ -2862,6 +2853,14 @@ function Dashboard() {
       return;
     }
 
+    if (!pedidoPermiteModificacionJornadaActual(pedido, jornadaAbierta)) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_SOLO_MODIFICAR_VENTAS_JORNADA_ACTUAL,
+        TITULO_MODAL_VENTA_SIN_JORNADA
+      );
+      return;
+    }
+
     void intentarEditarPedido(pedido);
   };
 
@@ -2869,6 +2868,14 @@ function Dashboard() {
     if (ventaCajaBloqueadaPorJornadaCerrada) {
       abrirModalPedidoBloqueadoArqueo(
         MENSAJE_ELIMINAR_VENTA_SIN_JORNADA,
+        TITULO_MODAL_VENTA_SIN_JORNADA
+      );
+      return;
+    }
+
+    if (!pedidoPermiteModificacionJornadaActual(pedido, jornadaAbierta)) {
+      abrirModalPedidoBloqueadoArqueo(
+        MENSAJE_SOLO_MODIFICAR_VENTAS_JORNADA_ACTUAL,
         TITULO_MODAL_VENTA_SIN_JORNADA
       );
       return;
@@ -4513,37 +4520,11 @@ function Dashboard() {
 
             {esModoPresencial && (
             <>
-            <section className="dashboard-filtros dashboard-filtros-fecha">
-              <div className="filtro-fecha-campo">
-                <label htmlFor="filtro-fecha">Ver pedidos del</label>
-                <input
-                  id="filtro-fecha"
-                  type="date"
-                  className="filtro-fecha-input"
-                  value={filtroFecha}
-                  max={hoyClave}
-                  onChange={(e) => setFiltroFecha(e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                className={`filtro-btn${filtroFecha === hoyClave ? ' activo' : ''}`}
-                onClick={() => setFiltroFecha(hoyClave)}
-              >
-                Hoy
-              </button>
-              {!esFiltroHoy && (
-                <p className="filtro-fecha-total">
-                  Total del {formatearFechaCortaFiltro(filtroFecha)}:{' '}
-                  {formatearMoneda(totalVentasFechaFiltro)}
-                </p>
-              )}
-              {esFiltroHoy && jornadaAbierta?.id ? (
-                <p className="filtro-fecha-total" role="status">
-                  Mostrando ventas de la jornada actual
-                </p>
-              ) : null}
-            </section>
+            {jornadaAbierta?.id ? (
+              <p className="filtro-fecha-total dashboard-filtros-jornada-actual" role="status">
+                Mostrando ventas de la jornada actual
+              </p>
+            ) : null}
 
             <section className="dashboard-lista">
               {pedidosModoActual.length === 0 && pedidosFiltradosPresencial.length === 0 ? (

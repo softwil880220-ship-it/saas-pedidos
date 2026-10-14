@@ -40,6 +40,13 @@ export function pedidoPerteneceJornada(pedido, jornada) {
   );
 }
 
+export const MENSAJE_SOLO_MODIFICAR_VENTAS_JORNADA_ACTUAL =
+  'Solo se pueden modificar ventas de la jornada actual';
+
+export function pedidoPermiteModificacionJornadaActual(pedido, jornadaAbierta) {
+  return pedidoPerteneceJornada(pedido, jornadaAbierta);
+}
+
 export function normalizarMeridianoHoraEs(texto) {
   return String(texto ?? '')
     .replace(/\s*a\.?\s*m\.?\.?/gi, ' a.m.')
