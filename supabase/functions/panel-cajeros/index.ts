@@ -139,7 +139,7 @@ async function handleList(
 }
 
 function pinValido(pin: string): boolean {
-  return /^\d{4,6}$/.test(pin);
+  return /^\d{6}$/.test(pin);
 }
 
 async function handleCreate(
@@ -167,7 +167,7 @@ async function handleCreate(
 
   if (!pinValido(pin)) {
     return jsonResponse(
-      { success: false, error: 'El PIN debe ser numérico de 4 a 6 dígitos.' },
+      { success: false, error: 'El PIN de acceso debe tener exactamente 6 dígitos.' },
       400
     );
   }

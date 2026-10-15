@@ -28,7 +28,7 @@ function etiquetaRol(rol) {
 }
 
 function pinValido(pin) {
-  return /^\d{4,6}$/.test(pin);
+  return /^\d{6}$/.test(pin);
 }
 
 function formularioVacio() {
@@ -139,7 +139,7 @@ export default function PanelCajeros({ negocioId }) {
     }
 
     if (!pinValido(pin)) {
-      setErrorFormulario('El PIN debe ser numérico de 4 a 6 dígitos.');
+      setErrorFormulario('El PIN de acceso debe tener exactamente 6 dígitos.');
       return;
     }
 
@@ -319,13 +319,13 @@ export default function PanelCajeros({ negocioId }) {
               </label>
 
               <label className="panel-cajeros-modal-campo" htmlFor="panel-cajeros-pin">
-                <span>PIN (4-6 dígitos)</span>
+                <span>PIN de acceso (6 dígitos)</span>
                 <input
                   id="panel-cajeros-pin"
                   type="password"
                   inputMode="numeric"
                   autoComplete="new-password"
-                  pattern="\d{4,6}"
+                  pattern="\d{6}"
                   maxLength={6}
                   value={formulario.pin}
                   onChange={(event) =>
@@ -336,6 +336,16 @@ export default function PanelCajeros({ negocioId }) {
                   }
                   required
                 />
+                <span
+                  style={{
+                    fontSize: '0.78rem',
+                    color: '#64748b',
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Es la contraseña con la que el usuario inicia sesión. No es el PIN de seguridad.
+                </span>
               </label>
 
               {errorFormulario ? (
