@@ -40,6 +40,7 @@ import VistaCocina from './VistaCocina';
 import VistaCocina2 from './VistaCocina2';
 import VistaRepartidor from './VistaRepartidor';
 import VistaReportes from './VistaReportes';
+import VistaAnalitica from './VistaAnalitica';
 import VistaEquipo from './VistaEquipo';
 import VistaClientes from './VistaClientes';
 import VistaInventario from './VistaInventario';
@@ -5274,6 +5275,14 @@ function App() {
             element={
               <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
                 <VistaReportes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analitica"
+            element={
+              <ProtectedRoute rolesPermitidos={['dueno', 'administrador']}>
+                <VistaAnalitica />
               </ProtectedRoute>
             }
           />

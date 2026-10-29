@@ -7,6 +7,7 @@ export const DASHBOARD_NAV_ITEMS = [
   { id: 'clientes', label: 'Clientes', path: '/clientes', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'inventario', label: 'Inventario', path: '/inventario', rolesPermitidos: ['dueno', 'administrador', 'cajero'] },
   { id: 'reportes', label: 'Reportes', path: '/reportes', rolesPermitidos: ['dueno', 'administrador'] },
+  { id: 'analitica', label: 'Analítica', path: '/analitica', rolesPermitidos: ['dueno', 'administrador'] },
   { id: 'equipo', label: 'Equipo', path: '/equipo', rolesPermitidos: ['dueno', 'administrador'] },
 ];
 
