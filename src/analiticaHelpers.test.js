@@ -1,4 +1,17 @@
-import { calcularAvance, calcularParticipacion, etiquetaMes, ordenarPorVentas, validarMonto } from './analiticaHelpers';
+import {
+  ALTURA_BARRA_MAX,
+  ALTURA_BARRA_MIN,
+  calcularAlturasBarras,
+  calcularAvance,
+  calcularEscalaEjeY,
+  calcularParticipacion,
+  etiquetaMes,
+  formatearMontoCompacto,
+  nombreCompletoMes,
+  nombreCortoMes,
+  ordenarPorVentas,
+  validarMonto,
+} from './analiticaHelpers';
 
 describe('etiquetaMes', () => {
   test('arma octubre a partir del día 1 del mes', () => {
@@ -335,5 +348,152 @@ describe('ordenarPorVentas', () => {
 
     expect(resultado).toEqual(entrada);
     expect(resultado).not.toBe(entrada);
+  });
+});
+
+describe('nombreCortoMes', () => {
+  test('abrevia julio y octubre a partir del texto', () => {
+    expect(nombreCortoMes('2026-07-01')).toBe('Jul');
+    expect(nombreCortoMes('2026-10-01')).toBe('Oct');
+    expect(nombreCortoMes('2026-09-01')).toBe('Sep');
+    expect(nombreCortoMes('2026-12-01')).toBe('Dic');
+  });
+
+  test('un mes inválido no arma nombre', () => {
+    expect(nombreCortoMes('2026-13-01')).toBe('');
+    expect(nombreCortoMes('2026-00-01')).toBe('');
+    expect(nombreCortoMes('no-es-fecha')).toBe('');
+    expect(nombreCortoMes(null)).toBe('');
+  });
+});
+
+describe('nombreCompletoMes', () => {
+  test('arma el nombre completo sin correr el mes', () => {
+    expect(nombreCompletoMes('2026-01-01')).toBe('Enero');
+    expect(nombreCompletoMes('2026-07-01')).toBe('Julio');
+    expect(nombreCompletoMes('2026-10-01')).toBe('Octubre');
+  });
+
+  test('un mes inválido no arma nombre', () => {
+    expect(nombreCompletoMes('2026-13-01')).toBe('');
+    expect(nombreCompletoMes('')).toBe('');
+  });
+});
+
+describe('formatearMontoCompacto', () => {
+  test('deja el cero y los montos chicos sin escala', () => {
+    expect(formatearMontoCompacto(0)).toBe('$0');
+    expect(formatearMontoCompacto(203)).toBe('$203');
+  });
+
+  test('usa miles con un decimal solo cuando hace falta', () => {
+    expect(formatearMontoCompacto(3279)).toBe('$3.3 mil');
+    expect(formatearMontoCompacto(203000)).toBe('$203 mil');
+  });
+
+  test('usa millones', () => {
+    expect(formatearMontoCompacto(1200000)).toBe('$1.2 M');
+    expect(formatearMontoCompacto(1000000)).toBe('$1 M');
+  });
+
+  test('un monto inválido queda vacío', () => {
+    expect(formatearMontoCompacto('abc')).toBe('');
+    expect(formatearMontoCompacto(null)).toBe('');
+  });
+});
+
+describe('calcularAlturasBarras', () => {
+  test('un mes en cero usa la altura mínima y el mayor llena la escala', () => {
+    expect(calcularAlturasBarras([0, 200])).toEqual([ALTURA_BARRA_MIN, ALTURA_BARRA_MAX]);
+  });
+
+  test('la altura es proporcional al tope del eje', () => {
+    expect(calcularAlturasBarras([50, 100, 0], 100)).toEqual([
+      80,
+      ALTURA_BARRA_MAX,
+      ALTURA_BARRA_MIN,
+    ]);
+    expect(calcularAlturasBarras([4000], 8000)).toEqual([ALTURA_BARRA_MAX / 2]);
+  });
+
+  test('una lista vacía no arma barras', () => {
+    expect(calcularAlturasBarras([])).toEqual([]);
+  });
+
+  test('un solo mes positivo ocupa toda la escala', () => {
+    expect(calcularAlturasBarras([480])).toEqual([ALTURA_BARRA_MAX]);
+  });
+
+  test('si el máximo es 0 no divide y todas quedan en la altura mínima', () => {
+    expect(calcularAlturasBarras([0, 0, 0])).toEqual([
+      ALTURA_BARRA_MIN,
+      ALTURA_BARRA_MIN,
+      ALTURA_BARRA_MIN,
+    ]);
+  });
+
+  test('no muta el arreglo recibido', () => {
+    const entrada = [0, 50, 100];
+    const copia = [...entrada];
+
+    calcularAlturasBarras(entrada, 100);
+
+    expect(entrada).toEqual(copia);
+  });
+
+  test('un valor no numérico o negativo queda en la altura mínima', () => {
+    expect(calcularAlturasBarras(['no', -20, 0], 8000)).toEqual([
+      ALTURA_BARRA_MIN,
+      ALTURA_BARRA_MIN,
+      ALTURA_BARRA_MIN,
+    ]);
+  });
+});
+
+describe('calcularEscalaEjeY', () => {
+  test('máximo 0 usa un solo intervalo hasta $1 mil', () => {
+    expect(calcularEscalaEjeY(0)).toEqual({ tope: 1000, marcas: [0, 1000] });
+  });
+
+  test('un máximo chico no parte de cero ni divide entre cero', () => {
+    expect(calcularEscalaEjeY(220)).toEqual({
+      tope: 300,
+      marcas: [0, 100, 200, 300],
+    });
+  });
+
+  test('6497.5 termina en 8 mil con pasos de 2 mil', () => {
+    expect(calcularEscalaEjeY(6497.5)).toEqual({
+      tope: 8000,
+      marcas: [0, 2000, 4000, 6000, 8000],
+    });
+  });
+
+  test('286877.78 termina en 300 mil', () => {
+    expect(calcularEscalaEjeY(286877.78)).toEqual({
+      tope: 300000,
+      marcas: [0, 100000, 200000, 300000],
+    });
+  });
+
+  test('un tope ya redondo no salta al siguiente', () => {
+    expect(calcularEscalaEjeY(10000)).toEqual({
+      tope: 10000,
+      marcas: [0, 5000, 10000],
+    });
+  });
+
+  test('un solo mes positivo cubre ese total', () => {
+    const escala = calcularEscalaEjeY(480);
+    expect(escala.marcas[0]).toBe(0);
+    expect(escala.tope).toBeGreaterThanOrEqual(480);
+    expect(escala.marcas[escala.marcas.length - 1]).toBe(escala.tope);
+    expect(escala.marcas.every((marca) => Number.isFinite(marca))).toBe(true);
+  });
+
+  test('un valor no numérico o negativo no produce NaN', () => {
+    expect(calcularEscalaEjeY('abc')).toEqual({ tope: 1000, marcas: [0, 1000] });
+    expect(calcularEscalaEjeY(-40)).toEqual({ tope: 1000, marcas: [0, 1000] });
+    expect(calcularEscalaEjeY(null)).toEqual({ tope: 1000, marcas: [0, 1000] });
   });
 });

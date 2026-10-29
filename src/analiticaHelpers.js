@@ -184,6 +184,171 @@ export function calcularParticipacion(canales) {
   }));
 }
 
+const NOMBRES_MES_CORTO = [
+  'Ene',
+  'Feb',
+  'Mar',
+  'Abr',
+  'May',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dic',
+];
+
+const NOMBRES_MES_COMPLETO = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+
+export const ALTURA_BARRA_MAX = 160;
+export const ALTURA_BARRA_MIN = 2;
+
+function pasosBonitos(valor) {
+  const crudo = valor / 4;
+  const exponente = Math.floor(Math.log10(crudo));
+  const pasos = new Set();
+
+  for (let decada = exponente - 1; decada <= exponente + 2; decada += 1) {
+    const potencia = 10 ** decada;
+    for (const factor of [1, 2, 5]) {
+      const paso = factor * potencia;
+      if (paso > 0 && Number.isFinite(paso)) pasos.add(paso);
+    }
+  }
+
+  return [...pasos];
+}
+
+function marcaRedonda(paso, indice) {
+  const cruda = paso * indice;
+  return paso >= 1 ? Math.round(cruda) : Number(cruda.toFixed(6));
+}
+
+export function calcularEscalaEjeY(maximo) {
+  const numero = Number(maximo);
+  const valor = Number.isFinite(numero) && numero > 0 ? numero : 0;
+  if (valor <= 0) {
+    return { tope: 1000, marcas: [0, 1000] };
+  }
+
+  const opciones = [];
+  for (const paso of pasosBonitos(valor)) {
+    const intervalos = Math.ceil(valor / paso - 1e-9);
+    if (intervalos < 1 || intervalos > 6) continue;
+
+    const tope = marcaRedonda(paso, intervalos);
+    const marcas = intervalos + 1;
+    opciones.push({ paso, tope, marcas, intervalos });
+  }
+
+  opciones.sort((a, b) => {
+    const aEnRango = a.marcas >= 4 && a.marcas <= 5 ? 0 : 1;
+    const bEnRango = b.marcas >= 4 && b.marcas <= 5 ? 0 : 1;
+    if (aEnRango !== bEnRango) return aEnRango - bEnRango;
+    if (a.tope !== b.tope) return a.tope - b.tope;
+    const distancia = Math.abs(a.marcas - 4.5) - Math.abs(b.marcas - 4.5);
+    if (distancia !== 0) return distancia;
+    return a.marcas - b.marcas;
+  });
+
+  const elegida = opciones[0];
+  if (!elegida) {
+    return { tope: 1000, marcas: [0, 1000] };
+  }
+
+  const marcas = [];
+  for (let indice = 0; indice <= elegida.intervalos; indice += 1) {
+    marcas.push(marcaRedonda(elegida.paso, indice));
+  }
+
+  return { tope: elegida.tope, marcas };
+}
+
+function indiceMesTexto(textoFecha) {
+  const partes = String(textoFecha ?? '').trim().split('-');
+  if (partes.length < 2) return -1;
+
+  const anio = partes[0];
+  const mes = partes[1];
+  if (!/^\d{4}$/.test(anio) || !/^\d{2}$/.test(mes)) return -1;
+
+  const indice = Number(mes) - 1;
+  if (indice < 0 || indice > 11) return -1;
+  return indice;
+}
+
+export function nombreCortoMes(textoFecha) {
+  const indice = indiceMesTexto(textoFecha);
+  return indice < 0 ? '' : NOMBRES_MES_CORTO[indice];
+}
+
+export function nombreCompletoMes(textoFecha) {
+  const indice = indiceMesTexto(textoFecha);
+  return indice < 0 ? '' : NOMBRES_MES_COMPLETO[indice];
+}
+
+function escalaCompacta(valor) {
+  const redondeado = Math.round((valor + Number.EPSILON) * 10) / 10;
+  return Number.isInteger(redondeado) ? String(redondeado) : redondeado.toFixed(1);
+}
+
+export function formatearMontoCompacto(valor) {
+  if (valor == null || valor === '') return '';
+
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return '';
+
+  const signo = numero < 0 ? '-' : '';
+  const absoluto = Math.abs(numero);
+
+  if (absoluto >= 1000000) {
+    return `${signo}$${escalaCompacta(absoluto / 1000000)} M`;
+  }
+  if (absoluto >= 1000) {
+    return `${signo}$${escalaCompacta(absoluto / 1000)} mil`;
+  }
+  return `${signo}$${escalaCompacta(absoluto)}`;
+}
+
+export function calcularAlturasBarras(totales, tope) {
+  const lista = Array.isArray(totales) ? totales : [];
+  const seguros = lista.map((valor) => {
+    const numero = Number(valor);
+    return Number.isFinite(numero) && numero > 0 ? numero : 0;
+  });
+
+  if (seguros.length === 0) return [];
+
+  const topeNumero = Number(tope);
+  const techo = Number.isFinite(topeNumero) && topeNumero > 0
+    ? topeNumero
+    : seguros.reduce((mayor, valor) => (valor > mayor ? valor : mayor), 0);
+
+  if (!(techo > 0)) {
+    return seguros.map(() => ALTURA_BARRA_MIN);
+  }
+
+  return seguros.map((valor) => (
+    valor <= 0
+      ? ALTURA_BARRA_MIN
+      : Math.max(ALTURA_BARRA_MIN, Math.round((valor / techo) * ALTURA_BARRA_MAX))
+  ));
+}
+
 export function ordenarPorVentas(participacion) {
   const filas = Array.isArray(participacion) ? participacion : [];
   return filas

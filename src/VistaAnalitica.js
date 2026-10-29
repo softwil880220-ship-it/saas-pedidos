@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import DashboardNav from './DashboardNav';
 import { useAuth } from './AuthContext';
@@ -6,7 +6,20 @@ import { canalModuloHabilitado } from './pedidosQueryHelpers';
 import { formatearMoneda } from './pedidosShared';
 import { FILTROS_VENTA_REPORTE } from './reportesHelpers';
 import { supabase } from './supabase';
-import { calcularAvance, calcularParticipacion, etiquetaMes, ordenarPorVentas, validarMonto } from './analiticaHelpers';
+import {
+  ALTURA_BARRA_MAX,
+  ALTURA_BARRA_MIN,
+  calcularAlturasBarras,
+  calcularAvance,
+  calcularEscalaEjeY,
+  calcularParticipacion,
+  etiquetaMes,
+  formatearMontoCompacto,
+  nombreCompletoMes,
+  nombreCortoMes,
+  ordenarPorVentas,
+  validarMonto,
+} from './analiticaHelpers';
 import './VistaAnalitica.css';
 
 const MODO_POR_CANAL_ANALITICA = {
@@ -108,6 +121,263 @@ function textoDesdeMeta(monto) {
 
 function mesGuardable(mes) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(mes ?? ''));
+}
+
+function textoMes(valor) {
+  if (valor == null || valor === '') return null;
+  const texto = String(valor).trim().slice(0, 10);
+  return texto || null;
+}
+
+function normalizarAnio(data) {
+  const anioNumero = Number(data?.anio);
+  const meses = Array.isArray(data?.meses)
+    ? data.meses.map((fila) => ({
+        mes: textoMes(fila?.mes) ?? '',
+        total: numeroOCero(fila?.total),
+      }))
+    : [];
+
+  return {
+    anio: Number.isInteger(anioNumero) ? anioNumero : null,
+    mesActual: textoMes(data?.mes_actual),
+    meses,
+  };
+}
+
+function mesSeleccionadoInicial(datos) {
+  const meses = datos?.meses ?? [];
+  if (meses.length === 0) return null;
+  if (datos.mesActual && meses.some((fila) => fila.mes === datos.mesActual)) {
+    return datos.mesActual;
+  }
+  return meses[meses.length - 1].mes;
+}
+
+function anioDeTextoMes(texto) {
+  const anio = String(texto ?? '').split('-')[0] ?? '';
+  return /^\d{4}$/.test(anio) ? anio : '';
+}
+
+function etiquetaAccesibleMes(fila, enCurso) {
+  const nombre = nombreCompletoMes(fila.mes) || fila.mes || 'Mes';
+  const anio = anioDeTextoMes(fila.mes);
+  const base = `${nombre}${anio ? ` ${anio}` : ''}: ${formatearMoneda(fila.total)}`;
+  return enCurso ? `${base}, en curso` : base;
+}
+
+function lineaMesSeleccionado(fila) {
+  const nombre = nombreCompletoMes(fila.mes) || fila.mes;
+  const anio = anioDeTextoMes(fila.mes);
+  const titulo = [nombre, anio].filter(Boolean).join(' ');
+  return `${titulo} · ${formatearMoneda(fila.total)}`;
+}
+
+class LimiteErrorGraficaAnio extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { tieneError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { tieneError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error(error);
+  }
+
+  render() {
+    if (this.state.tieneError) {
+      return (
+        <article className="analitica-anio" aria-label="Ventas por mes">
+          <p className="analitica-anio-titulo">Ventas por mes</p>
+          <p className="analitica-anio-vacio">No se pudo mostrar la gráfica</p>
+        </article>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export function AnaliticaAnio({ negocioId }) {
+  const [cargandoAnio, setCargandoAnio] = useState(() => Boolean(negocioId));
+  const [errorAnio, setErrorAnio] = useState(null);
+  const [anio, setAnio] = useState(null);
+  const [mesSeleccionado, setMesSeleccionado] = useState(null);
+  const [intentoAnio, setIntentoAnio] = useState(0);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (!negocioId) {
+      setAnio(null);
+      setMesSeleccionado(null);
+      setCargandoAnio(false);
+      setErrorAnio(null);
+      return undefined;
+    }
+
+    const cargarAnio = async () => {
+      setCargandoAnio(true);
+      setErrorAnio(null);
+
+      const { data, error: errorRpc } = await supabase.rpc('obtener_analitica_ventas_anio', {
+        p_negocio_id: negocioId,
+        p_anio: null,
+      });
+
+      if (!activo) return;
+
+      if (errorRpc) {
+        if (esErrorAccesoDenegadoAnalitica(errorRpc)) {
+          console.error(
+            '[Analítica > Básica] Acceso denegado al negocio solicitado (42501). ' +
+              'Verifica que negocioId de la sesión coincide con usuario_negocio_id() en Supabase.',
+            { negocioId, error: errorRpc }
+          );
+        }
+
+        setErrorAnio('No se pudieron cargar las ventas del año. Intenta de nuevo.');
+        setAnio(null);
+        setMesSeleccionado(null);
+      } else {
+        const normalizado = normalizarAnio(data);
+        setAnio(normalizado);
+        setMesSeleccionado(mesSeleccionadoInicial(normalizado));
+      }
+
+      setCargandoAnio(false);
+    };
+
+    void cargarAnio();
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId, intentoAnio]);
+
+  if (!negocioId && !cargandoAnio) return null;
+
+  const mesesAnio = anio?.meses ?? [];
+  const titulo = anio?.anio != null ? `Ventas por mes · ${anio.anio}` : 'Ventas por mes';
+  const seleccionado = mesesAnio.find((fila) => fila.mes === mesSeleccionado)
+    ?? mesesAnio[mesesAnio.length - 1]
+    ?? null;
+  const maximoAnio = mesesAnio.reduce((mayor, fila) => Math.max(mayor, fila.total), 0);
+  const escalaAnio = calcularEscalaEjeY(maximoAnio);
+  const alturas = calcularAlturasBarras(
+    mesesAnio.map((fila) => fila.total),
+    escalaAnio.tope
+  );
+
+  let cuerpo = null;
+  if (cargandoAnio) {
+    cuerpo = <p className="analitica-estado">Cargando...</p>;
+  } else if (errorAnio) {
+    cuerpo = (
+      <div className="analitica-error" role="alert">
+        <p className="analitica-error-texto">{errorAnio}</p>
+        <button
+          type="button"
+          className="analitica-reintentar"
+          onClick={() => {
+            setCargandoAnio(true);
+            setErrorAnio(null);
+            setIntentoAnio((valor) => valor + 1);
+          }}
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  } else if (anio && anio.meses.length === 0) {
+    cuerpo = <p className="analitica-anio-vacio">Aún no hay ventas este año</p>;
+  } else if (anio) {
+    cuerpo = (
+      <>
+        {seleccionado ? (
+          <p className="analitica-anio-detalle" aria-live="polite">
+            {lineaMesSeleccionado(seleccionado)}
+          </p>
+        ) : null}
+        <div className="analitica-anio-grafica">
+          <div className="analitica-anio-eje" aria-hidden="true">
+            <div className="analitica-anio-eje-valor" />
+            <div className="analitica-anio-eje-marcas">
+              {escalaAnio.marcas.map((marca) => (
+                <span
+                  key={marca}
+                  className="analitica-anio-eje-marca"
+                  style={{ bottom: `${(marca / escalaAnio.tope) * 100}%` }}
+                >
+                  {formatearMontoCompacto(marca)}
+                </span>
+              ))}
+            </div>
+            <div className="analitica-anio-eje-meses" />
+          </div>
+          <div className="analitica-anio-plot">
+            <div className="analitica-anio-guias" aria-hidden="true">
+              {escalaAnio.marcas.map((marca) => (
+                <span
+                  key={marca}
+                  className={`analitica-anio-guia${marca === 0 ? ' base' : ''}`}
+                  style={{ bottom: `${(marca / escalaAnio.tope) * 100}%` }}
+                />
+              ))}
+            </div>
+            <div className="analitica-anio-barras" role="group" aria-label={titulo}>
+              {anio.meses.map((fila, indice) => {
+                const enCurso = anio.mesActual != null && fila.mes === anio.mesActual;
+                const activo = seleccionado?.mes === fila.mes;
+                const altura = alturas[indice];
+                const esMinima = altura <= ALTURA_BARRA_MIN;
+                const porcentaje = (altura / ALTURA_BARRA_MAX) * 100;
+                return (
+                  <button
+                    key={`${fila.mes}-${indice}`}
+                    type="button"
+                    className={`analitica-anio-boton${activo ? ' activo' : ''}`}
+                    aria-pressed={activo}
+                    aria-label={etiquetaAccesibleMes(fila, enCurso)}
+                    onClick={() => setMesSeleccionado(fila.mes)}
+                  >
+                    <span className="analitica-anio-pista">
+                      <span className="analitica-anio-columna">
+                        <span
+                          className="analitica-anio-valor"
+                          style={{
+                            bottom: esMinima ? '6px' : `calc(${porcentaje}% + 4px)`,
+                          }}
+                        >
+                          {formatearMontoCompacto(fila.total)}
+                        </span>
+                        <span
+                          className={`analitica-anio-relleno${enCurso ? ' en-curso' : ''}`}
+                          style={{ height: esMinima ? ALTURA_BARRA_MIN : `${porcentaje}%` }}
+                        />
+                      </span>
+                    </span>
+                    <span className="analitica-anio-nombre">{nombreCortoMes(fila.mes)}</span>
+                    <span className="analitica-anio-curso">{enCurso ? 'en curso' : ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <article className="analitica-anio" aria-label={titulo}>
+      <p className="analitica-anio-titulo">{titulo}</p>
+      {cuerpo}
+    </article>
+  );
 }
 
 function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
@@ -312,50 +582,44 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
     </form>
   ) : null;
 
-  if (cargando) {
-    return <p className="analitica-estado">Cargando...</p>;
-  }
-
-  if (errorCarga) {
-    return (
-      <div className="analitica-error" role="alert">
-        <p className="analitica-error-texto">{errorCarga}</p>
-        <button
-          type="button"
-          className="analitica-reintentar"
-          onClick={() => {
-            setCargando(true);
-            setErrorCarga(null);
-            setIntento((valor) => valor + 1);
-          }}
-        >
-          Reintentar
-        </button>
-      </div>
-    );
-  }
-
-  if (!analitica) {
-    return null;
-  }
-
-  const avance = calcularAvance({
-    vendido: analitica.totalVendido,
-    meta: analitica.meta,
-    diaActual: analitica.diaActual,
-    diasEnMes: analitica.diasEnMes,
-  });
-  const etiqueta = etiquetaMes(analitica.mes);
-  const lineaMes = analitica.diaActual != null
+  const avance = analitica
+    ? calcularAvance({
+        vendido: analitica.totalVendido,
+        meta: analitica.meta,
+        diaActual: analitica.diaActual,
+        diasEnMes: analitica.diasEnMes,
+      })
+    : null;
+  const etiqueta = analitica ? etiquetaMes(analitica.mes) : '';
+  const lineaMes = analitica && analitica.diaActual != null
     ? `${etiqueta} · Día ${analitica.diaActual} de ${analitica.diasEnMes}`
     : etiqueta;
-  const hayMeta = analitica.meta != null && avance.porcentaje != null;
+  const hayMeta = Boolean(analitica && analitica.meta != null && avance?.porcentaje != null);
   const exceso = hayMeta && avance.superada
     ? analitica.totalVendido - analitica.meta
     : 0;
 
   return (
     <div className="analitica-basica">
+      {cargando ? (
+        <p className="analitica-estado">Cargando...</p>
+      ) : errorCarga ? (
+        <div className="analitica-error" role="alert">
+          <p className="analitica-error-texto">{errorCarga}</p>
+          <button
+            type="button"
+            className="analitica-reintentar"
+            onClick={() => {
+              setCargando(true);
+              setErrorCarga(null);
+              setIntento((valor) => valor + 1);
+            }}
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : analitica ? (
+        <>
       {lineaMes ? <p className="analitica-periodo">{lineaMes}</p> : null}
 
       {analitica.totalPedidos === 0 ? (
@@ -451,6 +715,11 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       ) : analitica.totalPedidos !== 0 ? (
         <p className="analitica-vacio">Todavía no hay ventas registradas este mes</p>
       ) : null}
+        </>
+      ) : null}
+      <LimiteErrorGraficaAnio>
+        <AnaliticaAnio negocioId={negocioId} />
+      </LimiteErrorGraficaAnio>
     </div>
   );
 }

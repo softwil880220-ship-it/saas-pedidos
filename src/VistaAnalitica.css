@@ -350,6 +350,232 @@
   font-variant-numeric: tabular-nums;
 }
 
+.analitica-basica {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.analitica-anio {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.15rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.analitica-anio-titulo {
+  margin: 0 0 0.65rem;
+  color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.analitica-anio-detalle {
+  margin: 0 0 0.75rem;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.analitica-anio-vacio {
+  margin: 0;
+  color: #334155;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.analitica-anio-grafica {
+  --analitica-alto: 160px;
+  --analitica-valor: 2.5em;
+  --analitica-nombre: 0.9rem;
+  --analitica-curso: 0.75rem;
+  --analitica-meses: calc(0.35rem + var(--analitica-nombre) + var(--analitica-curso));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.analitica-anio-eje {
+  flex: 0 0 auto;
+  width: 4.25rem;
+}
+
+.analitica-anio-eje-valor {
+  height: var(--analitica-valor);
+}
+
+.analitica-anio-eje-marcas {
+  position: relative;
+  height: var(--analitica-alto);
+}
+
+.analitica-anio-eje-marca {
+  position: absolute;
+  right: 0;
+  left: 0;
+  transform: translateY(50%);
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.analitica-anio-eje-meses {
+  height: var(--analitica-meses);
+}
+
+.analitica-anio-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.analitica-anio-guias {
+  position: absolute;
+  right: 0;
+  left: 0;
+  bottom: var(--analitica-meses);
+  height: var(--analitica-alto);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.analitica-anio-guia {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #e2e8f0;
+  transform: translateY(50%);
+}
+
+.analitica-anio-guia.base {
+  height: 2px;
+  background: #cbd5e1;
+  transform: none;
+}
+
+.analitica-anio-barras {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.analitica-anio-boton {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.analitica-anio-boton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.analitica-anio-valor {
+  position: absolute;
+  right: 0;
+  left: 0;
+  margin: 0;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.analitica-anio-boton.activo .analitica-anio-valor {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.analitica-anio-pista {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: calc(var(--analitica-alto) + var(--analitica-valor));
+}
+
+.analitica-anio-columna {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: var(--analitica-alto);
+}
+
+.analitica-anio-relleno {
+  display: block;
+  width: 68%;
+  max-width: 1.35rem;
+  min-height: 2px;
+  background: #2563eb;
+  border-radius: 4px 4px 2px 2px;
+}
+
+.analitica-anio-relleno.en-curso {
+  background: #93c5fd;
+}
+
+.analitica-anio-nombre {
+  height: var(--analitica-nombre);
+  margin-top: 0.35rem;
+  max-width: 100%;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.analitica-anio-boton.activo .analitica-anio-nombre {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.analitica-anio-curso {
+  height: var(--analitica-curso);
+  max-width: 100%;
+  color: #334155;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
   .analitica-seccion-nav {
     max-width: 100%;
@@ -394,5 +620,41 @@
 
   .analitica-meta-input {
     width: 100%;
+  }
+
+  .analitica-anio {
+    padding: 0.85rem 0.55rem;
+  }
+
+  .analitica-anio-grafica {
+    --analitica-alto: 140px;
+    --analitica-valor: 0px;
+    --analitica-nombre: 0.75rem;
+    --analitica-curso: 1.35rem;
+    gap: 0.2rem;
+  }
+
+  .analitica-anio-eje {
+    width: 2.5rem;
+  }
+
+  .analitica-anio-eje-marca {
+    font-size: 0.58rem;
+  }
+
+  .analitica-anio-barras {
+    gap: 0.12rem;
+  }
+
+  .analitica-anio-valor {
+    display: none;
+  }
+
+  .analitica-anio-nombre {
+    font-size: 0.62rem;
+  }
+
+  .analitica-anio-curso {
+    font-size: 0.55rem;
   }
 }
