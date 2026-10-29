@@ -475,14 +475,16 @@ export default function VistaAnalitica() {
       <main className="dashboard-main">
         <DashboardNav activo="analitica" rol={rol} />
 
-        <h1 className="analitica-titulo">Analítica</h1>
-
-        {tabsAnalitica.length > 1 ? (
-          <nav className="analitica-seccion-nav" aria-label="Secciones de analítica">
+        <section className="analitica-vista" aria-label="Analítica">
+          <nav className="analitica-seccion-nav" role="tablist" aria-label="Secciones de analítica">
             {tabsAnalitica.map(({ value, label }) => (
               <button
                 key={value}
                 type="button"
+                role="tab"
+                id={`analitica-tab-${value}`}
+                aria-selected={tabActivo === value}
+                aria-controls={`analitica-panel-${value}`}
                 className={`analitica-seccion-tab${tabActivo === value ? ' activo' : ''}`}
                 onClick={() => setTabAnalitica(value)}
               >
@@ -490,17 +492,23 @@ export default function VistaAnalitica() {
               </button>
             ))}
           </nav>
-        ) : null}
 
-        {tabActivo === 'basica' ? (
-          <section key={negocioId ?? 'sin-negocio'} className="analitica-panel">
-            <AnaliticaBasica
-              negocioId={negocioId}
-              modulosNegocio={modulosNegocio}
-              sessionUserId={session?.user?.id ?? null}
-            />
-          </section>
-        ) : null}
+          {tabActivo === 'basica' ? (
+            <section
+              key={negocioId ?? 'sin-negocio'}
+              id="analitica-panel-basica"
+              role="tabpanel"
+              aria-labelledby="analitica-tab-basica"
+              className="analitica-panel"
+            >
+              <AnaliticaBasica
+                negocioId={negocioId}
+                modulosNegocio={modulosNegocio}
+                sessionUserId={session?.user?.id ?? null}
+              />
+            </section>
+          ) : null}
+        </section>
       </main>
     </div>
   );

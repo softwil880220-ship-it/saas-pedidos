@@ -1,22 +1,18 @@
-.analitica-titulo {
-  margin: 1.5rem 0 0.35rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #14532d;
-}
-
 .analitica-seccion-nav {
   display: flex;
   flex-wrap: nowrap;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  max-width: 100%;
+  margin-bottom: 0.75rem;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0.25rem;
 }
 
 .analitica-seccion-tab {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   padding: 0.45rem 0.85rem;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
@@ -24,12 +20,18 @@
   color: #334155;
   font-size: 0.82rem;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.analitica-seccion-tab:hover {
+  background: #f8fafc;
 }
 
 .analitica-seccion-tab.activo {
-  background: #14532d;
-  border-color: #14532d;
+  background: #0f172a;
+  border-color: #0f172a;
   color: #fff;
 }
 
@@ -79,9 +81,9 @@
 
 .analitica-periodo {
   margin: 0 0 1.25rem;
-  color: #64748b;
+  color: #334155;
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -97,7 +99,7 @@
 
 .analitica-meta-accion,
 .analitica-meta-cancelar {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   background: #fff;
   color: #334155;
 }
@@ -107,8 +109,8 @@
 }
 
 .analitica-meta-guardar {
-  border: 1px solid #14532d;
-  background: #14532d;
+  border: 1px solid #0f172a;
+  background: #0f172a;
   color: #fff;
 }
 
@@ -137,7 +139,7 @@
   width: 12rem;
   max-width: 100%;
   padding: 0.45rem 0.65rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #fff;
   color: #1e293b;
@@ -174,14 +176,15 @@
   gap: 0.35rem;
   margin-bottom: 1.5rem;
   padding: 1rem 1.15rem;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 .analitica-meta-detalle {
   margin: 0;
-  color: #166534;
+  color: #2563eb;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.4;
@@ -189,7 +192,7 @@
 
 .analitica-objetivo {
   margin: 0;
-  color: #14532d;
+  color: #0f172a;
   font-size: 1.05rem;
   font-weight: 700;
   line-height: 1.4;
@@ -197,7 +200,7 @@
 
 .analitica-vendidos {
   margin: 0.15rem 0 0;
-  color: #14532d;
+  color: #0f172a;
   font-size: 1.35rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -207,7 +210,7 @@
 .analitica-meta-lista {
   margin: 0.15rem 0 0;
   padding-left: 1.15rem;
-  color: #166534;
+  color: #334155;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.45;
@@ -225,14 +228,14 @@
   flex: 1 1 auto;
   min-width: 0;
   height: 1.15rem;
-  background: #dcfce7;
+  background: #e2e8f0;
   border-radius: 6px;
   overflow: hidden;
 }
 
 .analitica-barra-relleno {
   height: 100%;
-  background: #14532d;
+  background: #2563eb;
 }
 
 .analitica-barra-segmentos {
@@ -242,15 +245,15 @@
     to right,
     transparent 0,
     transparent calc(10% - 2px),
-    #f0fdf4 calc(10% - 2px),
-    #f0fdf4 10%
+    #fff calc(10% - 2px),
+    #fff 10%
   );
   pointer-events: none;
 }
 
 .analitica-barra-porcentaje {
   flex: 0 0 auto;
-  color: #14532d;
+  color: #334155;
   font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -348,17 +351,8 @@
 }
 
 @media (max-width: 720px) {
-  .analitica-titulo {
-    font-size: 1.25rem;
-  }
-
   .analitica-seccion-nav {
     max-width: 100%;
-  }
-
-  .analitica-seccion-tab {
-    flex: 0 0 auto;
-    white-space: nowrap;
   }
 
   .analitica-barra-fila {
