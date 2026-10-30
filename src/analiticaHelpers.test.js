@@ -5,8 +5,12 @@ import {
   calcularAvance,
   calcularEscalaEjeY,
   calcularParticipacion,
+  esDiaEtiquetaClave,
+  esFinDeSemana,
   etiquetaMes,
   formatearMontoCompacto,
+  inicialDiaSemana,
+  nombreCompletoDiaSemana,
   nombreCompletoMes,
   nombreCortoMes,
   ordenarPorVentas,
@@ -447,6 +451,71 @@ describe('calcularAlturasBarras', () => {
       ALTURA_BARRA_MIN,
       ALTURA_BARRA_MIN,
     ]);
+  });
+});
+
+describe('inicialDiaSemana', () => {
+  test('dow ISO 1 a 7', () => {
+    expect(inicialDiaSemana(1)).toBe('L');
+    expect(inicialDiaSemana(2)).toBe('M');
+    expect(inicialDiaSemana(3)).toBe('M');
+    expect(inicialDiaSemana(4)).toBe('J');
+    expect(inicialDiaSemana(5)).toBe('V');
+    expect(inicialDiaSemana(6)).toBe('S');
+    expect(inicialDiaSemana(7)).toBe('D');
+  });
+
+  test('dow inválido queda vacío', () => {
+    expect(inicialDiaSemana(0)).toBe('');
+    expect(inicialDiaSemana(8)).toBe('');
+    expect(inicialDiaSemana(null)).toBe('');
+    expect(inicialDiaSemana('texto')).toBe('');
+  });
+});
+
+describe('nombreCompletoDiaSemana', () => {
+  test('dow ISO 1 a 7', () => {
+    expect(nombreCompletoDiaSemana(1)).toBe('Lunes');
+    expect(nombreCompletoDiaSemana(5)).toBe('Viernes');
+    expect(nombreCompletoDiaSemana(7)).toBe('Domingo');
+  });
+
+  test('dow inválido queda vacío', () => {
+    expect(nombreCompletoDiaSemana(0)).toBe('');
+    expect(nombreCompletoDiaSemana(8)).toBe('');
+    expect(nombreCompletoDiaSemana(null)).toBe('');
+    expect(nombreCompletoDiaSemana('texto')).toBe('');
+  });
+});
+
+describe('esFinDeSemana', () => {
+  test('sábado y domingo', () => {
+    expect(esFinDeSemana(6)).toBe(true);
+    expect(esFinDeSemana(7)).toBe(true);
+  });
+
+  test('días de semana y valores inválidos', () => {
+    expect(esFinDeSemana(1)).toBe(false);
+    expect(esFinDeSemana(5)).toBe(false);
+    expect(esFinDeSemana(0)).toBe(false);
+    expect(esFinDeSemana(null)).toBe(false);
+  });
+});
+
+describe('esDiaEtiquetaClave', () => {
+  test('días clave del mes', () => {
+    expect(esDiaEtiquetaClave(1)).toBe(true);
+    expect(esDiaEtiquetaClave(5)).toBe(true);
+    expect(esDiaEtiquetaClave(10)).toBe(true);
+    expect(esDiaEtiquetaClave(15)).toBe(true);
+    expect(esDiaEtiquetaClave(20)).toBe(true);
+    expect(esDiaEtiquetaClave(25)).toBe(true);
+    expect(esDiaEtiquetaClave(30)).toBe(true);
+  });
+
+  test('días que no son clave', () => {
+    expect(esDiaEtiquetaClave(2)).toBe(false);
+    expect(esDiaEtiquetaClave(31)).toBe(false);
   });
 });
 

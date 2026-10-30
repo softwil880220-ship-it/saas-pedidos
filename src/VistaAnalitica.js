@@ -11,12 +11,18 @@ import {
   ALTURA_BARRA_MIN,
   calcularAlturasBarras,
   calcularAvance,
+  calcularDowIsoDesdePartes,
   calcularEscalaEjeY,
   calcularParticipacion,
+  esDiaEtiquetaClave,
+  esFinDeSemana,
   etiquetaMes,
   formatearMontoCompacto,
+  inicialDiaSemana,
+  nombreCompletoDiaSemana,
   nombreCompletoMes,
   nombreCortoMes,
+  nombreMesMinuscula,
   ordenarPorVentas,
   validarMonto,
 } from './analiticaHelpers';
@@ -93,6 +99,8 @@ const COLOR_POR_CANAL = {
 };
 
 const COLOR_CANAL_FALLBACK = '#334155';
+
+const DIAS_MES_VACIO = [];
 
 function colorCanal(canal) {
   return COLOR_POR_CANAL[canal] ?? COLOR_CANAL_FALLBACK;
@@ -178,7 +186,59 @@ function lineaMesSeleccionado(fila) {
   return `${titulo} · ${formatearMoneda(fila.total)}`;
 }
 
-class LimiteErrorGraficaAnio extends Component {
+function normalizarDiasMes(data) {
+  const mesTexto = String(data?.mes ?? '').slice(0, 10);
+  const dias = Array.isArray(data?.dias)
+    ? data.dias.map((fila) => ({
+        dia: numeroOCero(fila?.dia),
+        fecha: textoMes(fila?.fecha) ?? '',
+        dow: numeroONull(fila?.dow),
+        total: numeroOCero(fila?.total),
+      }))
+    : [];
+
+  return {
+    mes: mesTexto,
+    diaActual: numeroONull(data?.dia_actual),
+    diasEnMes: numeroOCero(data?.dias_en_mes),
+    dias,
+  };
+}
+
+function diaSeleccionadoInicialDias(datos) {
+  const filas = datos?.dias ?? [];
+  if (filas.length === 0) return null;
+  if (datos.diaActual != null) {
+    const coincide = filas.some((fila) => fila.dia === datos.diaActual);
+    if (coincide) return datos.diaActual;
+  }
+  return filas[filas.length - 1].dia;
+}
+
+function capitalizarPrimeraLetra(texto) {
+  if (!texto) return '';
+  return `${texto.charAt(0).toUpperCase()}${texto.slice(1)}`;
+}
+
+function lineaDiaSeleccionado(fila, mesTexto) {
+  const nombreDia = capitalizarPrimeraLetra(nombreCompletoDiaSemana(fila.dow));
+  const mesNombre = nombreMesMinuscula(mesTexto);
+  return `${nombreDia} ${fila.dia} de ${mesNombre} · ${formatearMoneda(fila.total)}`;
+}
+
+function etiquetaAccesibleDia(fila, mesTexto) {
+  const nombreDia = nombreCompletoDiaSemana(fila.dow) || 'Día';
+  const mesNombre = nombreMesMinuscula(mesTexto) || 'mes';
+  return `${nombreDia} ${fila.dia} de ${mesNombre}: ${formatearMoneda(fila.total)}`;
+}
+
+function dowDeColumna(mesTexto, diaNumero, fila) {
+  if (fila?.dow != null) return fila.dow;
+  const partes = String(mesTexto ?? '').trim().slice(0, 10).split('-');
+  return calcularDowIsoDesdePartes(partes[0], partes[1], diaNumero);
+}
+
+class LimiteErrorGraficaAnalitica extends Component {
   constructor(props) {
     super(props);
     this.state = { tieneError: false };
@@ -194,9 +254,15 @@ class LimiteErrorGraficaAnio extends Component {
 
   render() {
     if (this.state.tieneError) {
+      const {
+        titulo,
+        tituloId,
+        className = 'analitica-anio',
+      } = this.props;
+
       return (
-        <article className="analitica-anio" aria-labelledby="analitica-anio-titulo">
-          <p id="analitica-anio-titulo" className="analitica-tarjeta-titulo">Ventas por mes</p>
+        <article className={className} aria-labelledby={tituloId}>
+          <p id={tituloId} className="analitica-tarjeta-titulo">{titulo}</p>
           <p className="analitica-anio-vacio">No se pudo mostrar la gráfica</p>
         </article>
       );
@@ -204,6 +270,247 @@ class LimiteErrorGraficaAnio extends Component {
 
     return this.props.children;
   }
+}
+
+export function AnaliticaDiasMes({ negocioId }) {
+  const [cargandoDias, setCargandoDias] = useState(() => Boolean(negocioId));
+  const [errorDias, setErrorDias] = useState(null);
+  const [diasMes, setDiasMes] = useState(null);
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
+  const [intentoDias, setIntentoDias] = useState(0);
+
+  useEffect(() => {
+    let activo = true;
+
+    if (!negocioId) {
+      setDiasMes(null);
+      setDiaSeleccionado(null);
+      setCargandoDias(false);
+      setErrorDias(null);
+      return undefined;
+    }
+
+    const cargarDias = async () => {
+      setCargandoDias(true);
+      setErrorDias(null);
+
+      const { data, error: errorRpc } = await supabase.rpc('obtener_analitica_ventas_dias_mes', {
+        p_negocio_id: negocioId,
+        p_mes: null,
+      });
+
+      if (!activo) return;
+
+      if (errorRpc) {
+        if (esErrorAccesoDenegadoAnalitica(errorRpc)) {
+          console.error(
+            '[Analítica > Básica] Acceso denegado al negocio solicitado (42501). ' +
+              'Verifica que negocioId de la sesión coincide con usuario_negocio_id() en Supabase.',
+            { negocioId, error: errorRpc }
+          );
+        }
+
+        setErrorDias('No se pudieron cargar las ventas diarias. Intenta de nuevo.');
+        setDiasMes(null);
+        setDiaSeleccionado(null);
+      } else {
+        const normalizado = normalizarDiasMes(data);
+        setDiasMes(normalizado);
+        setDiaSeleccionado(diaSeleccionadoInicialDias(normalizado));
+      }
+
+      setCargandoDias(false);
+    };
+
+    void cargarDias();
+
+    return () => {
+      activo = false;
+    };
+  }, [negocioId, intentoDias]);
+
+  const filasDias = diasMes?.dias ?? DIAS_MES_VACIO;
+  const mapaDias = useMemo(
+    () => new Map(filasDias.map((fila) => [fila.dia, fila])),
+    [filasDias]
+  );
+  const ultimoDiaDatos = filasDias.length > 0 ? filasDias[filasDias.length - 1].dia : 0;
+  const diasEnMes = diasMes?.diasEnMes ?? 0;
+  const seleccionado = mapaDias.get(diaSeleccionado) ?? filasDias[filasDias.length - 1] ?? null;
+  const maximoDias = filasDias.reduce((mayor, fila) => Math.max(mayor, fila.total), 0);
+  const escalaDias = calcularEscalaEjeY(maximoDias);
+  const alturasPorDia = useMemo(() => {
+    const mapa = new Map();
+    const alturas = calcularAlturasBarras(
+      filasDias.map((fila) => fila.total),
+      escalaDias.tope
+    );
+    filasDias.forEach((fila, indice) => {
+      mapa.set(fila.dia, alturas[indice]);
+    });
+    return mapa;
+  }, [filasDias, escalaDias.tope]);
+
+  const mesVisible = diasMes ? capitalizarEtiquetaMes(etiquetaMes(diasMes.mes)) : '';
+
+  if (!negocioId && !cargandoDias) return null;
+
+  let cuerpo = null;
+  if (cargandoDias) {
+    cuerpo = <p className="analitica-estado">Cargando...</p>;
+  } else if (errorDias) {
+    cuerpo = (
+      <div className="analitica-error" role="alert">
+        <p className="analitica-error-texto">{errorDias}</p>
+        <button
+          type="button"
+          className="analitica-reintentar"
+          onClick={() => {
+            setCargandoDias(true);
+            setErrorDias(null);
+            setIntentoDias((valor) => valor + 1);
+          }}
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  } else if (diasMes && filasDias.length === 0) {
+    cuerpo = <p className="analitica-anio-vacio">Aún no hay ventas este mes</p>;
+  } else if (diasMes) {
+    cuerpo = (
+      <>
+        {seleccionado ? (
+          <p className="analitica-anio-detalle" aria-live="polite">
+            {lineaDiaSeleccionado(seleccionado, diasMes.mes)}
+          </p>
+        ) : null}
+        <ul className="analitica-dias-leyenda" aria-hidden="true">
+          <li>
+            <span className="analitica-dias-leyenda-muestra fin-de-semana" />
+            Fin de semana
+          </li>
+          <li>
+            <span className="analitica-dias-leyenda-muestra hoy" />
+            <span className="analitica-dias-leyenda-muestra hoy-columna" />
+            Hoy
+          </li>
+        </ul>
+        <div className="analitica-anio-grafica analitica-dias-grafica">
+          <div className="analitica-anio-eje" aria-hidden="true">
+            <div className="analitica-anio-eje-valor analitica-dias-eje-valor" />
+            <div className="analitica-anio-eje-marcas">
+              {escalaDias.marcas.map((marca) => (
+                <span
+                  key={marca}
+                  className="analitica-anio-eje-marca"
+                  style={{ bottom: `${(marca / escalaDias.tope) * 100}%` }}
+                >
+                  {formatearMontoCompacto(marca)}
+                </span>
+              ))}
+            </div>
+            <div className="analitica-anio-eje-meses analitica-dias-eje-etiquetas" />
+          </div>
+          <div className="analitica-anio-plot">
+            <div className="analitica-anio-guias analitica-dias-guias" aria-hidden="true">
+              {escalaDias.marcas.map((marca) => (
+                <span
+                  key={marca}
+                  className={`analitica-anio-guia${marca === 0 ? ' base' : ''}`}
+                  style={{ bottom: `${(marca / escalaDias.tope) * 100}%` }}
+                />
+              ))}
+            </div>
+            <div
+              className="analitica-anio-barras analitica-dias-barras"
+              style={{ '--analitica-dias-columnas': diasEnMes }}
+              role="group"
+              aria-labelledby="analitica-dias-titulo"
+              data-testid="analitica-dias-columnas"
+            >
+              {Array.from({ length: diasEnMes }, (_, indice) => {
+                const diaNumero = indice + 1;
+                const fila = mapaDias.get(diaNumero);
+                const esFuturo = diaNumero > ultimoDiaDatos;
+                const dow = dowDeColumna(diasMes.mes, diaNumero, fila);
+                const esHoy = diasMes.diaActual != null && diaNumero === diasMes.diaActual;
+                const finDeSemana = esFinDeSemana(dow);
+                const etiquetaClave = esDiaEtiquetaClave(diaNumero) || esHoy;
+                const inicial = inicialDiaSemana(dow);
+                const altura = alturasPorDia.get(diaNumero);
+                const esMinima = altura != null && altura <= ALTURA_BARRA_MIN;
+                const porcentaje = altura != null ? (altura / ALTURA_BARRA_MAX) * 100 : 0;
+                const activo = seleccionado?.dia === diaNumero;
+
+                if (esFuturo) {
+                  return (
+                    <div
+                      key={`dia-futuro-${diaNumero}`}
+                      className="analitica-dias-columna-futura"
+                      aria-hidden="true"
+                    >
+                      <span className="analitica-dias-pista-vacia" />
+                      <span
+                        className={`analitica-dias-etiqueta${etiquetaClave ? ' etiqueta-clave' : ''}`}
+                      >
+                        <span className="analitica-dias-etiqueta-dow">{inicial}</span>
+                        <span className="analitica-dias-etiqueta-dia">{diaNumero}</span>
+                      </span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={`dia-${diaNumero}`}
+                    type="button"
+                    className={[
+                      'analitica-anio-boton',
+                      'analitica-dias-boton',
+                      activo ? 'activo' : '',
+                      esHoy ? 'columna-hoy' : '',
+                    ].filter(Boolean).join(' ')}
+                    aria-pressed={activo}
+                    aria-label={etiquetaAccesibleDia(fila, diasMes.mes)}
+                    onClick={() => setDiaSeleccionado(diaNumero)}
+                  >
+                    <span className="analitica-anio-pista analitica-dias-pista">
+                      <span className="analitica-anio-columna">
+                        <span
+                          className={[
+                            'analitica-anio-relleno',
+                            'analitica-dias-relleno',
+                            esHoy ? 'hoy' : '',
+                            finDeSemana && !esHoy ? 'fin-de-semana' : '',
+                          ].filter(Boolean).join(' ')}
+                          style={{ height: esMinima ? ALTURA_BARRA_MIN : `${porcentaje}%` }}
+                        />
+                      </span>
+                    </span>
+                    <span
+                      className={`analitica-dias-etiqueta${etiquetaClave ? ' etiqueta-clave' : ''}`}
+                    >
+                      <span className="analitica-dias-etiqueta-dow">{inicial}</span>
+                      <span className="analitica-dias-etiqueta-dia">{diaNumero}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <article className="analitica-dias" aria-labelledby="analitica-dias-titulo">
+      <p id="analitica-dias-titulo" className="analitica-tarjeta-titulo">Ventas por día</p>
+      {mesVisible ? <p className="analitica-tarjeta-subtitulo">{mesVisible}</p> : null}
+      {cuerpo}
+    </article>
+  );
 }
 
 export function AnaliticaAnio({ negocioId }) {
@@ -728,9 +1035,22 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       </section>
         </>
       ) : null}
-      <LimiteErrorGraficaAnio>
+
+      <LimiteErrorGraficaAnalitica
+        titulo="Ventas por día"
+        tituloId="analitica-dias-titulo-fallback"
+        className="analitica-dias"
+      >
+        <AnaliticaDiasMes negocioId={negocioId} />
+      </LimiteErrorGraficaAnalitica>
+
+      <LimiteErrorGraficaAnalitica
+        titulo="Ventas por mes"
+        tituloId="analitica-anio-titulo-fallback"
+        className="analitica-anio"
+      >
         <AnaliticaAnio negocioId={negocioId} />
-      </LimiteErrorGraficaAnio>
+      </LimiteErrorGraficaAnalitica>
     </div>
   );
 }

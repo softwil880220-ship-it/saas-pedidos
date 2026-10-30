@@ -349,6 +349,79 @@ export function calcularAlturasBarras(totales, tope) {
   ));
 }
 
+const INICIALES_DIA_SEMANA = ['', 'L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+const NOMBRES_DIA_SEMANA = [
+  '',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+];
+
+const DIAS_ETIQUETA_CLAVE = new Set([1, 5, 10, 15, 20, 25, 30]);
+
+function dowIsoValido(dow) {
+  const numero = Number(dow);
+  if (!Number.isInteger(numero) || numero < 1 || numero > 7) return null;
+  return numero;
+}
+
+export function inicialDiaSemana(dow) {
+  const iso = dowIsoValido(dow);
+  return iso == null ? '' : INICIALES_DIA_SEMANA[iso];
+}
+
+export function nombreCompletoDiaSemana(dow) {
+  const iso = dowIsoValido(dow);
+  return iso == null ? '' : NOMBRES_DIA_SEMANA[iso];
+}
+
+export function esFinDeSemana(dow) {
+  const iso = dowIsoValido(dow);
+  return iso === 6 || iso === 7;
+}
+
+export function esDiaEtiquetaClave(dia) {
+  const numero = Number(dia);
+  if (!Number.isInteger(numero) || numero < 1) return false;
+  return DIAS_ETIQUETA_CLAVE.has(numero);
+}
+
+export function nombreMesMinuscula(textoFecha) {
+  const indice = indiceMesTexto(textoFecha);
+  return indice < 0 ? '' : NOMBRES_MES[indice];
+}
+
+export function calcularDowIsoDesdePartes(anio, mes, dia) {
+  const y = Number(anio);
+  const m = Number(mes);
+  const d = Number(dia);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+
+  const js = new Date(y, m - 1, d).getDay();
+  return js === 0 ? 7 : js;
+}
+
+export function fechaTextoDesdeMesYDia(mesTexto, diaNumero) {
+  const indiceMes = indiceMesTexto(mesTexto);
+  if (indiceMes < 0) return '';
+
+  const dia = Number(diaNumero);
+  if (!Number.isInteger(dia) || dia < 1 || dia > 31) return '';
+
+  const partes = String(mesTexto ?? '').trim().slice(0, 10).split('-');
+  const anio = partes[0];
+  const mes = partes[1];
+  const diaTexto = String(dia).padStart(2, '0');
+
+  return `${anio}-${mes}-${diaTexto}`;
+}
+
 export function ordenarPorVentas(participacion) {
   const filas = Array.isArray(participacion) ? participacion : [];
   return filas

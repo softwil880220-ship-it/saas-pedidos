@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { supabase } from './supabase';
-import { AnaliticaAnio } from './VistaAnalitica';
+import { AnaliticaAnio, AnaliticaDiasMes } from './VistaAnalitica';
 
 jest.mock('./supabase', () => ({
   supabase: {
@@ -11,6 +11,24 @@ jest.mock('./supabase', () => ({
 jest.mock('./reportesHelpers', () => ({
   FILTROS_VENTA_REPORTE: [],
 }));
+
+const DIAS_MES_EJEMPLO = {
+  mes: '2026-10-01',
+  dia_actual: 10,
+  dias_en_mes: 31,
+  dias: [
+    { dia: 1, fecha: '2026-10-01', dow: 4, total: 500 },
+    { dia: 2, fecha: '2026-10-02', dow: 5, total: 1200 },
+    { dia: 3, fecha: '2026-10-03', dow: 6, total: 800 },
+    { dia: 4, fecha: '2026-10-04', dow: 7, total: 300 },
+    { dia: 5, fecha: '2026-10-05', dow: 1, total: 0 },
+    { dia: 6, fecha: '2026-10-06', dow: 2, total: 2500 },
+    { dia: 7, fecha: '2026-10-07', dow: 3, total: 900 },
+    { dia: 8, fecha: '2026-10-08', dow: 4, total: 1100 },
+    { dia: 9, fecha: '2026-10-09', dow: 5, total: 700 },
+    { dia: 10, fecha: '2026-10-10', dow: 6, total: 11438.8 },
+  ],
+};
 
 const MESES_EJEMPLO = {
   anio: 2026,
@@ -27,6 +45,53 @@ const MESES_EJEMPLO = {
 function mockAnaliticaAnio(data) {
   supabase.rpc.mockResolvedValue({ data, error: null });
 }
+
+function mockAnaliticaDiasMes(data) {
+  supabase.rpc.mockResolvedValue({ data, error: null });
+}
+
+describe('AnaliticaDiasMes', () => {
+  beforeEach(() => {
+    supabase.rpc.mockReset();
+  });
+
+  test('reserva 31 columnas, futuros sin botón y el detalle cambia al pulsar', async () => {
+    mockAnaliticaDiasMes(DIAS_MES_EJEMPLO);
+
+    render(<AnaliticaDiasMes negocioId="negocio-1" />);
+
+    expect(await screen.findByText('Octubre 2026')).toBeInTheDocument();
+    expect(screen.getByText('Ventas por día')).toBeInTheDocument();
+    expect(screen.getByText('Sábado 10 de octubre · $11,438.80')).toBeInTheDocument();
+
+    const barras = screen.getByTestId('analitica-dias-columnas');
+    for (let dia = 1; dia <= 31; dia += 1) {
+      expect(within(barras).getByText(String(dia))).toBeInTheDocument();
+    }
+    expect(within(barras).getAllByRole('button')).toHaveLength(10);
+    expect(screen.queryByRole('button', { name: /11 de octubre/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lunes 5 de octubre: $0.00' }));
+    expect(screen.getByText('Lunes 5 de octubre · $0.00')).toBeInTheDocument();
+    expect(screen.queryByText('No se pudo mostrar la gráfica')).not.toBeInTheDocument();
+  });
+
+  test('sin ventas en el mes muestra el estado vacío', async () => {
+    mockAnaliticaDiasMes({
+      mes: '2026-10-01',
+      dia_actual: 10,
+      dias_en_mes: 31,
+      dias: [],
+    });
+
+    render(<AnaliticaDiasMes negocioId="negocio-1" />);
+
+    expect(await screen.findByText('Aún no hay ventas este mes')).toBeInTheDocument();
+    expect(screen.getByText('Ventas por día')).toBeInTheDocument();
+    expect(screen.getByText('Octubre 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /octubre/ })).not.toBeInTheDocument();
+  });
+});
 
 describe('AnaliticaAnio', () => {
   beforeEach(() => {
