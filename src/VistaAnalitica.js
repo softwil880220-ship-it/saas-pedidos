@@ -1022,9 +1022,11 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
                     style={{ background: colorCanal(fila.canal) }}
                     aria-hidden="true"
                   />
-                  <span className="analitica-leyenda-nombre">{etiquetaCanal(fila.canal)}</span>
+                  <div className="analitica-leyenda-texto">
+                    <span className="analitica-leyenda-nombre">{etiquetaCanal(fila.canal)}</span>
+                    <span className="analitica-leyenda-monto">{formatearMoneda(fila.total)}</span>
+                  </div>
                   <span className="analitica-leyenda-porcentaje">{fila.porcentaje.toFixed(1)} %</span>
-                  <span className="analitica-leyenda-monto">{formatearMoneda(fila.total)}</span>
                 </li>
               ))}
             </ul>
