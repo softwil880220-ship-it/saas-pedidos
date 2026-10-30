@@ -38,7 +38,8 @@ describe('AnaliticaAnio', () => {
 
     render(<AnaliticaAnio negocioId="negocio-1" />);
 
-    expect(await screen.findByText('Ventas por mes · 2026')).toBeInTheDocument();
+    expect(await screen.findByText('2026')).toBeInTheDocument();
+    expect(screen.getByText('Ventas por mes')).toBeInTheDocument();
     expect(screen.getByText('Jun')).toBeInTheDocument();
     expect(screen.getByText('Jul')).toBeInTheDocument();
     expect(screen.getByText('Ago')).toBeInTheDocument();

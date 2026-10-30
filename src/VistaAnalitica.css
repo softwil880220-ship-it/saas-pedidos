@@ -60,6 +60,8 @@
 
 .analitica-sin-meta-bloque {
   margin-bottom: 1.5rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .analitica-sin-meta-fila {
@@ -77,14 +79,6 @@
 .analitica-sin-meta-fila .analitica-vendidos {
   font-size: 1rem;
   font-weight: 600;
-}
-
-.analitica-periodo {
-  margin: 0 0 1.25rem;
-  color: #334155;
-  font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1.4;
 }
 
 .analitica-meta-accion,
@@ -174,6 +168,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 1.5rem;
   padding: 1rem 1.15rem;
   background: #fff;
@@ -182,19 +179,15 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
+.analitica-meta > .analitica-tarjeta-encabezado {
+  margin-bottom: -0.35rem;
+}
+
 .analitica-meta-detalle {
   margin: 0;
   color: #2563eb;
   font-size: 0.95rem;
   font-weight: 600;
-  line-height: 1.4;
-}
-
-.analitica-objetivo {
-  margin: 0;
-  color: #0f172a;
-  font-size: 1.05rem;
-  font-weight: 700;
   line-height: 1.4;
 }
 
@@ -265,7 +258,9 @@
   align-items: center;
   justify-content: flex-start;
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .analitica-dona {
@@ -355,7 +350,8 @@
   max-width: 100%;
 }
 
-.analitica-anio {
+.analitica-anio,
+.analitica-canales {
   box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
@@ -367,12 +363,34 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-.analitica-anio-titulo {
-  margin: 0 0 0.65rem;
+.analitica-canales .analitica-vacio {
+  margin: 0;
+}
+
+.analitica-tarjeta-titulo {
+  margin: 0 0 0.15rem;
+  max-width: 100%;
   color: #0f172a;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.analitica-tarjeta-subtitulo {
+  margin: 0 0 0.75rem;
+  max-width: 100%;
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 500;
   line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+.analitica-tarjeta-subtitulo-monto {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .analitica-anio-detalle {
@@ -622,7 +640,8 @@
     width: 100%;
   }
 
-  .analitica-anio {
+  .analitica-anio,
+  .analitica-canales {
     padding: 0.85rem 0.55rem;
   }
 

@@ -166,6 +166,11 @@ function etiquetaAccesibleMes(fila, enCurso) {
   return enCurso ? `${base}, en curso` : base;
 }
 
+function capitalizarEtiquetaMes(etiqueta) {
+  if (!etiqueta) return '';
+  return `${etiqueta.charAt(0).toUpperCase()}${etiqueta.slice(1)}`;
+}
+
 function lineaMesSeleccionado(fila) {
   const nombre = nombreCompletoMes(fila.mes) || fila.mes;
   const anio = anioDeTextoMes(fila.mes);
@@ -190,8 +195,8 @@ class LimiteErrorGraficaAnio extends Component {
   render() {
     if (this.state.tieneError) {
       return (
-        <article className="analitica-anio" aria-label="Ventas por mes">
-          <p className="analitica-anio-titulo">Ventas por mes</p>
+        <article className="analitica-anio" aria-labelledby="analitica-anio-titulo">
+          <p id="analitica-anio-titulo" className="analitica-tarjeta-titulo">Ventas por mes</p>
           <p className="analitica-anio-vacio">No se pudo mostrar la gráfica</p>
         </article>
       );
@@ -261,7 +266,6 @@ export function AnaliticaAnio({ negocioId }) {
   if (!negocioId && !cargandoAnio) return null;
 
   const mesesAnio = anio?.meses ?? [];
-  const titulo = anio?.anio != null ? `Ventas por mes · ${anio.anio}` : 'Ventas por mes';
   const seleccionado = mesesAnio.find((fila) => fila.mes === mesSeleccionado)
     ?? mesesAnio[mesesAnio.length - 1]
     ?? null;
@@ -328,7 +332,7 @@ export function AnaliticaAnio({ negocioId }) {
                 />
               ))}
             </div>
-            <div className="analitica-anio-barras" role="group" aria-label={titulo}>
+            <div className="analitica-anio-barras" role="group" aria-labelledby="analitica-anio-titulo">
               {anio.meses.map((fila, indice) => {
                 const enCurso = anio.mesActual != null && fila.mes === anio.mesActual;
                 const activo = seleccionado?.mes === fila.mes;
@@ -373,8 +377,11 @@ export function AnaliticaAnio({ negocioId }) {
   }
 
   return (
-    <article className="analitica-anio" aria-label={titulo}>
-      <p className="analitica-anio-titulo">{titulo}</p>
+    <article className="analitica-anio" aria-labelledby="analitica-anio-titulo">
+      <p id="analitica-anio-titulo" className="analitica-tarjeta-titulo">Ventas por mes</p>
+      {anio?.anio != null ? (
+        <p className="analitica-tarjeta-subtitulo">{anio.anio}</p>
+      ) : null}
       {cuerpo}
     </article>
   );
@@ -591,9 +598,7 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       })
     : null;
   const etiqueta = analitica ? etiquetaMes(analitica.mes) : '';
-  const lineaMes = analitica && analitica.diaActual != null
-    ? `${etiqueta} · Día ${analitica.diaActual} de ${analitica.diasEnMes}`
-    : etiqueta;
+  const mesVisible = capitalizarEtiquetaMes(etiqueta);
   const hayMeta = Boolean(analitica && analitica.meta != null && avance?.porcentaje != null);
   const exceso = hayMeta && avance.superada
     ? analitica.totalVendido - analitica.meta
@@ -620,14 +625,10 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
         </div>
       ) : analitica ? (
         <>
-      {lineaMes ? <p className="analitica-periodo">{lineaMes}</p> : null}
-
-      {analitica.totalPedidos === 0 ? (
-        <p className="analitica-vacio">Todavía no hay ventas registradas este mes</p>
-      ) : null}
-
       {analitica.meta == null ? (
-        <div className="analitica-sin-meta-bloque">
+        <div className="analitica-sin-meta-bloque" aria-labelledby="analitica-meta-titulo">
+          <p id="analitica-meta-titulo" className="analitica-tarjeta-titulo">Objetivo de venta mensual</p>
+          {mesVisible ? <p className="analitica-tarjeta-subtitulo">{mesVisible}</p> : null}
           <div className="analitica-sin-meta-fila">
             <p className="analitica-sin-meta">Aún no hay meta definida para este mes</p>
             <p className="analitica-vendidos">{formatearMoneda(analitica.totalVendido)} vendidos</p>
@@ -640,10 +641,16 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
           {formularioMeta}
         </div>
       ) : hayMeta ? (
-        <article className="analitica-meta">
-          <p className="analitica-objetivo">
-            Objetivo mensual: {formatearMoneda(analitica.meta)}
-          </p>
+        <article className="analitica-meta" aria-labelledby="analitica-meta-titulo">
+          <div className="analitica-tarjeta-encabezado">
+            <p id="analitica-meta-titulo" className="analitica-tarjeta-titulo">Objetivo de venta mensual</p>
+            <p className="analitica-tarjeta-subtitulo">
+              {mesVisible ? `${mesVisible}: ` : null}
+              <span className="analitica-tarjeta-subtitulo-monto">
+                {formatearMoneda(analitica.meta)}
+              </span>
+            </p>
+          </div>
           <div className="analitica-barra-fila">
             <div
               className="analitica-barra"
@@ -683,8 +690,12 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
         </article>
       ) : null}
 
-      {participacion.some((fila) => fila.total > 0) ? (
-        <section className="analitica-canales" aria-label="Ventas por canal">
+      <section className="analitica-canales" aria-labelledby="analitica-canales-titulo">
+        <p id="analitica-canales-titulo" className="analitica-tarjeta-titulo">
+          Distribución de ventas por canal
+        </p>
+        {mesVisible ? <p className="analitica-tarjeta-subtitulo">{mesVisible}</p> : null}
+        {participacion.some((fila) => fila.total > 0) ? (
           <div className="analitica-dona-bloque">
             <div
               className="analitica-dona"
@@ -694,7 +705,7 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
                 .join(', ')}`}
               style={{ background: fondoDona(participacion) }}
             >
-              <div className="analitica-dona-hueco">Ventas por canal</div>
+              <div className="analitica-dona-hueco" />
             </div>
             <ul className="analitica-leyenda">
               {participacion.map((fila) => (
@@ -711,10 +722,10 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
               ))}
             </ul>
           </div>
-        </section>
-      ) : analitica.totalPedidos !== 0 ? (
-        <p className="analitica-vacio">Todavía no hay ventas registradas este mes</p>
-      ) : null}
+        ) : (
+          <p className="analitica-vacio">Todavía no hay ventas registradas este mes</p>
+        )}
+      </section>
         </>
       ) : null}
       <LimiteErrorGraficaAnio>
