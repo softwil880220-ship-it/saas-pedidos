@@ -70,6 +70,7 @@ import {
   formatearProductosReporte,
   MENSAJE_ARQUEO_SIN_DESGLOSE_RETIROS,
   normalizarRetirosDetalleArqueo,
+  obtenerRangoFechasNegocioMerida,
   obtenerRangoReporte,
   ORIGEN_JORNADA_FOCO_ABIERTA,
   ORIGEN_JORNADA_FOCO_ULTIMA_CERRADA,
@@ -478,9 +479,9 @@ export default function VistaReportes() {
       setCargandoResumenVentas(true);
       setErrorResumenVentas(null);
 
-      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
+      const rangoMerida = obtenerRangoFechasNegocioMerida(configPeriodo);
 
-      if (!inicio || !fin) {
+      if (!rangoMerida) {
         if (activo) {
           setResumenVentasRpc(RESUMEN_VENTAS_RPC_VACIO);
           setReportePorCategoriaRpc([]);
@@ -490,10 +491,10 @@ export default function VistaReportes() {
         return;
       }
 
-      const { data, error: errorRpc } = await supabase.rpc('obtener_reporte_ventas', {
+      const { data, error: errorRpc } = await supabase.rpc('obtener_reporte_ventas_jornada', {
         p_negocio_id: negocioId,
-        p_fecha_inicio: inicio.toISOString(),
-        p_fecha_fin: fin.toISOString(),
+        p_fecha_desde: rangoMerida.fechaDesde,
+        p_fecha_hasta: rangoMerida.fechaHasta,
         p_filtro_venta: filtroVenta,
       });
 

@@ -312,6 +312,109 @@ export function rangoFechasInvalido(fechaDesde, fechaHasta) {
   return Boolean(desde && hasta && desde > hasta);
 }
 
+const ZONA_FECHA_NEGOCIO = 'America/Merida';
+const FECHA_ISO_REPORTE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizarFechaIsoReporte(valor) {
+  if (typeof valor !== 'string') return null;
+
+  const fecha = valor.trim();
+  if (!FECHA_ISO_REPORTE_REGEX.test(fecha)) return null;
+
+  const [anio, mes, dia] = fecha.split('-').map(Number);
+  const calendario = new Date(Date.UTC(anio, mes - 1, dia));
+  if (
+    calendario.getUTCFullYear() !== anio ||
+    calendario.getUTCMonth() + 1 !== mes ||
+    calendario.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+
+  return fecha;
+}
+
+function fechaCalendarioMerida(instante = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_FECHA_NEGOCIO }).format(instante);
+}
+
+function diaSemanaIsoMerida(instante = new Date()) {
+  const etiqueta = new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONA_FECHA_NEGOCIO,
+    weekday: 'short',
+  }).format(instante);
+  const indice = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(etiqueta);
+  if (indice < 0) return 1;
+  return indice === 0 ? 7 : indice;
+}
+
+function sumarDiasCalendario(fechaIso, dias) {
+  const [anio, mes, dia] = fechaIso.split('-').map(Number);
+  const calendario = new Date(Date.UTC(anio, mes - 1, dia + dias));
+  const y = calendario.getUTCFullYear();
+  const m = calendario.getUTCMonth() + 1;
+  const d = calendario.getUTCDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function primerDiaMesMerida(instante = new Date()) {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONA_FECHA_NEGOCIO,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(instante);
+
+  const mapa = {};
+  partes.forEach((parte) => {
+    if (parte.type !== 'literal') {
+      mapa[parte.type] = parte.value;
+    }
+  });
+
+  return `${mapa.year}-${mapa.month}-01`;
+}
+
+function lunesSemanaMerida(instante = new Date()) {
+  const hoy = fechaCalendarioMerida(instante);
+  const diasDesdeLunes = diaSemanaIsoMerida(instante) - 1;
+  return sumarDiasCalendario(hoy, -diasDesdeLunes);
+}
+
+export function obtenerRangoFechasNegocioMerida({
+  periodo,
+  fechaDesde = '',
+  fechaHasta = '',
+} = {}) {
+  if (rangoFechasInvalido(fechaDesde, fechaHasta)) {
+    return null;
+  }
+
+  if (rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
+    const desde = normalizarFechaIsoReporte(fechaDesde);
+    const hasta = normalizarFechaIsoReporte(fechaHasta);
+    if (!desde || !hasta || desde > hasta) {
+      return null;
+    }
+
+    return { fechaDesde: desde, fechaHasta: hasta };
+  }
+
+  const ahora = new Date();
+  const hoy = fechaCalendarioMerida(ahora);
+
+  if (periodo === PERIODOS_REPORTE.MES) {
+    return {
+      fechaDesde: primerDiaMesMerida(ahora),
+      fechaHasta: hoy,
+    };
+  }
+
+  return {
+    fechaDesde: lunesSemanaMerida(ahora),
+    fechaHasta: hoy,
+  };
+}
+
 export function obtenerRangoReporte({ periodo, fechaDesde = '', fechaHasta = '' }) {
   if (rangoPersonalizadoActivo(fechaDesde, fechaHasta)) {
     const desde = parsearFechaLocal(fechaDesde);
