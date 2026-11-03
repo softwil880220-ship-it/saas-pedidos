@@ -153,6 +153,48 @@
   gap: 0.5rem;
 }
 
+.analitica-meta-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.analitica-meta-quitar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.analitica-meta-quitar-texto {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.analitica-meta-quitar-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.analitica-meta-quitar-confirmar {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #b91c1c;
+  border-radius: 6px;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.analitica-meta-quitar-confirmar:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .analitica-reintentar {
   padding: 0.45rem 0.85rem;
   border: 1px solid #cbd5e1;

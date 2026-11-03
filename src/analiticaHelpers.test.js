@@ -9,6 +9,7 @@ import {
   esFinDeSemana,
   etiquetaMes,
   formatearMontoCompacto,
+  formatearPorcentajeAvance,
   inicialDiaSemana,
   nombreCompletoDiaSemana,
   nombreCompletoMes,
@@ -154,6 +155,26 @@ describe('calcularAvance', () => {
 
   test('porcentaje con un decimal', () => {
     expect(calcularAvance({ vendido: 1015, meta: 3000 }).porcentaje).toBe(33.8);
+  });
+});
+
+describe('formatearPorcentajeAvance', () => {
+  test('formatea avances habituales con un decimal', () => {
+    expect(formatearPorcentajeAvance(0)).toBe('0.0 %');
+    expect(formatearPorcentajeAvance(33.8)).toBe('33.8 %');
+    expect(formatearPorcentajeAvance(100)).toBe('100.0 %');
+    expect(formatearPorcentajeAvance(999.9)).toBe('999.9 %');
+  });
+
+  test('topa avances extremos en 999+ %', () => {
+    expect(formatearPorcentajeAvance(1000)).toBe('999+ %');
+    expect(formatearPorcentajeAvance(1841440)).toBe('999+ %');
+  });
+
+  test('valores inválidos devuelven cadena vacía', () => {
+    expect(formatearPorcentajeAvance(null)).toBe('');
+    expect(formatearPorcentajeAvance(undefined)).toBe('');
+    expect(formatearPorcentajeAvance(Number.NaN)).toBe('');
   });
 });
 

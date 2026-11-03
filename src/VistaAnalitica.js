@@ -18,6 +18,7 @@ import {
   esFinDeSemana,
   etiquetaMes,
   formatearMontoCompacto,
+  formatearPorcentajeAvance,
   inicialDiaSemana,
   nombreCompletoDiaSemana,
   nombreCompletoMes,
@@ -694,7 +695,7 @@ export function AnaliticaAnio({ negocioId }) {
   );
 }
 
-function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
+export function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
   const [cargando, setCargando] = useState(() => Boolean(negocioId));
   const [errorCarga, setErrorCarga] = useState(null);
   const [analitica, setAnalitica] = useState(null);
@@ -704,9 +705,15 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
   const [errorMeta, setErrorMeta] = useState(null);
   const [errorGuardado, setErrorGuardado] = useState(null);
   const [guardandoMeta, setGuardandoMeta] = useState(false);
+  const [confirmandoQuitarMeta, setConfirmandoQuitarMeta] = useState(false);
+  const [quitandoMeta, setQuitandoMeta] = useState(false);
+  const [errorQuitarMeta, setErrorQuitarMeta] = useState(null);
   const montadoRef = useRef(true);
   const guardadoRef = useRef(0);
   const guardadoEnVueloRef = useRef(false);
+  const quitarRef = useRef(0);
+  const quitarEnVueloRef = useRef(false);
+  const cancelarQuitarBtnRef = useRef(null);
 
   useEffect(() => {
     montadoRef.current = true;
@@ -714,6 +721,12 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       montadoRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (confirmandoQuitarMeta && cancelarQuitarBtnRef.current) {
+      cancelarQuitarBtnRef.current.focus();
+    }
+  }, [confirmandoQuitarMeta]);
 
   useEffect(() => {
     let activo = true;
@@ -854,6 +867,87 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
     setIntento((valor) => valor + 1);
   };
 
+  const abrirConfirmacionQuitar = () => {
+    setErrorQuitarMeta(null);
+    setConfirmandoQuitarMeta(true);
+  };
+
+  const cancelarQuitarMeta = () => {
+    if (quitandoMeta) return;
+    setConfirmandoQuitarMeta(false);
+    setErrorQuitarMeta(null);
+  };
+
+  const confirmarQuitarMeta = async () => {
+    if (quitandoMeta || quitarEnVueloRef.current) return;
+
+    const mes = analitica?.mes;
+    if (!negocioId || !mesGuardable(mes)) {
+      setErrorQuitarMeta('red');
+      return;
+    }
+
+    const marca = quitarRef.current + 1;
+    quitarRef.current = marca;
+    quitarEnVueloRef.current = true;
+    setQuitandoMeta(true);
+    setErrorQuitarMeta(null);
+
+    let error;
+    let filas;
+    try {
+      const resultado = await supabase
+        .from('metas_ventas')
+        .delete()
+        .eq('negocio_id', negocioId)
+        .eq('mes', mes)
+        .select();
+      error = resultado.error;
+      filas = resultado.data;
+    } catch (errorInesperado) {
+      error = errorInesperado;
+    }
+
+    if (!montadoRef.current || marca !== quitarRef.current) {
+      quitarEnVueloRef.current = false;
+      return;
+    }
+
+    quitarEnVueloRef.current = false;
+
+    if (error) {
+      setQuitandoMeta(false);
+      setErrorQuitarMeta('red');
+      return;
+    }
+
+    if (!Array.isArray(filas) || filas.length < 1) {
+      setQuitandoMeta(false);
+      setErrorQuitarMeta('cero');
+      return;
+    }
+
+    setQuitandoMeta(false);
+    setConfirmandoQuitarMeta(false);
+    setErrorQuitarMeta(null);
+    setAnalitica((prev) => (prev ? { ...prev, meta: null } : prev));
+
+    if (!montadoRef.current || marca !== quitarRef.current) return;
+
+    try {
+      const resultado = await supabase.rpc('obtener_analitica_ventas_mes', {
+        p_negocio_id: negocioId,
+        p_mes: null,
+      });
+      if (!montadoRef.current || marca !== quitarRef.current) return;
+      if (!resultado.error && resultado.data) {
+        setAnalitica(normalizarAnalitica(resultado.data));
+      }
+    } catch {
+      /* La meta ya se quitó; el refresco en segundo plano puede fallar sin bloquear la UI. */
+    }
+  };
+
   const formularioMeta = editandoMeta ? (
     <form className="analitica-meta-form" onSubmit={guardarMeta}>
       <label className="analitica-meta-label" htmlFor="analitica-meta-monto">
@@ -973,7 +1067,9 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
               />
               <div className="analitica-barra-segmentos" aria-hidden="true" />
             </div>
-            <span className="analitica-barra-porcentaje">{avance.porcentaje.toFixed(1)} %</span>
+            <span className="analitica-barra-porcentaje">
+              {formatearPorcentajeAvance(avance.porcentaje)}
+            </span>
           </div>
           <p className="analitica-vendidos">{formatearMoneda(analitica.totalVendido)} vendidos</p>
           {avance.superada ? (
@@ -988,10 +1084,62 @@ function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
               ) : null}
             </ul>
           ) : null}
-          {editandoMeta ? null : (
-            <button type="button" className="analitica-meta-accion" onClick={abrirMeta}>
-              Editar meta
-            </button>
+          {confirmandoQuitarMeta ? (
+            <div className="analitica-meta-quitar">
+              <p className="analitica-meta-quitar-texto">
+                ¿Quitar la meta de {mesVisible}?
+              </p>
+              {errorQuitarMeta === 'cero' ? (
+                <p className="analitica-meta-error" role="alert">
+                  No se pudo quitar la meta
+                </p>
+              ) : null}
+              {errorQuitarMeta === 'red' ? (
+                <div className="analitica-meta-quitar-error" role="alert">
+                  <p className="analitica-meta-error">No se pudo quitar la meta. Intenta de nuevo.</p>
+                  <button
+                    type="button"
+                    className="analitica-reintentar"
+                    onClick={() => {
+                      void confirmarQuitarMeta();
+                    }}
+                    disabled={quitandoMeta}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : null}
+              <div className="analitica-meta-botones">
+                <button
+                  type="button"
+                  className="analitica-meta-quitar-confirmar"
+                  onClick={() => {
+                    void confirmarQuitarMeta();
+                  }}
+                  disabled={quitandoMeta}
+                >
+                  {quitandoMeta ? 'Quitando…' : 'Quitar'}
+                </button>
+                <button
+                  ref={cancelarQuitarBtnRef}
+                  type="button"
+                  className="analitica-meta-cancelar"
+                  onClick={cancelarQuitarMeta}
+                  disabled={quitandoMeta}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : editandoMeta ? null : (
+            <div className="analitica-meta-acciones">
+              <button type="button" className="analitica-meta-accion" onClick={abrirMeta}>
+                Editar meta
+              </button>
+              <button type="button" className="analitica-meta-accion" onClick={abrirConfirmacionQuitar}>
+                Quitar meta
+              </button>
+            </div>
           )}
           {formularioMeta}
         </article>

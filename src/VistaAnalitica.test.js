@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { supabase } from './supabase';
-import { AnaliticaAnio, AnaliticaDiasMes } from './VistaAnalitica';
+import { AnaliticaAnio, AnaliticaBasica, AnaliticaDiasMes } from './VistaAnalitica';
 
 jest.mock('./supabase', () => ({
   supabase: {
     rpc: jest.fn(),
+    from: jest.fn(),
   },
 }));
 
@@ -30,6 +31,26 @@ const DIAS_MES_EJEMPLO = {
   ],
 };
 
+const ANALITICA_CON_META = {
+  mes: '2026-10-01',
+  dias_en_mes: 31,
+  dia_actual: 10,
+  meta: 10000,
+  total_vendido: 5000,
+  total_pedidos: 12,
+  por_canal: [],
+};
+
+const ANALITICA_SIN_META = {
+  mes: '2026-10-01',
+  dias_en_mes: 31,
+  dia_actual: 10,
+  meta: null,
+  total_vendido: 5000,
+  total_pedidos: 12,
+  por_canal: [],
+};
+
 const MESES_EJEMPLO = {
   anio: 2026,
   mes_actual: '2026-10-01',
@@ -49,6 +70,137 @@ function mockAnaliticaAnio(data) {
 function mockAnaliticaDiasMes(data) {
   supabase.rpc.mockResolvedValue({ data, error: null });
 }
+
+function mockAnaliticaBasica(dataMes, dataMesRefresco = dataMes) {
+  supabase.rpc.mockImplementation((nombre) => {
+    if (nombre === 'obtener_analitica_ventas_mes') {
+      const llamadasMes = supabase.rpc.mock.calls.filter(
+        (llamada) => llamada[0] === 'obtener_analitica_ventas_mes'
+      ).length;
+      const payload = llamadasMes <= 1 ? dataMes : dataMesRefresco;
+      return Promise.resolve({ data: payload, error: null });
+    }
+
+    if (nombre === 'obtener_analitica_ventas_dias_mes') {
+      return Promise.resolve({
+        data: { mes: '2026-10-01', dia_actual: 10, dias_en_mes: 31, dias: [] },
+        error: null,
+      });
+    }
+
+    if (nombre === 'obtener_analitica_ventas_anio') {
+      return Promise.resolve({
+        data: { anio: 2026, mes_actual: '2026-10-01', meses: [] },
+        error: null,
+      });
+    }
+
+    return Promise.resolve({ data: null, error: null });
+  });
+}
+
+function configurarDeleteMeta(resultado) {
+  const selectMock = jest.fn().mockResolvedValue(resultado);
+  const eqMesMock = jest.fn(() => ({ select: selectMock }));
+  const eqNegocioMock = jest.fn(() => ({ eq: eqMesMock }));
+  const deleteMock = jest.fn(() => ({ eq: eqNegocioMock }));
+
+  supabase.from.mockReturnValue({ delete: deleteMock });
+
+  return { deleteMock, eqNegocioMock, eqMesMock, selectMock };
+}
+
+describe('AnaliticaBasica', () => {
+  beforeEach(() => {
+    supabase.rpc.mockReset();
+    supabase.from.mockReset();
+  });
+
+  test('con meta existente muestra Quitar meta y cancela la confirmación', async () => {
+    mockAnaliticaBasica(ANALITICA_CON_META);
+
+    render(
+      <AnaliticaBasica
+        negocioId="negocio-1"
+        modulosNegocio={{}}
+        sessionUserId="usuario-1"
+      />
+    );
+
+    expect(await screen.findByRole('button', { name: 'Quitar meta' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar meta' }));
+    expect(screen.getByText('¿Quitar la meta de Octubre 2026?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText('¿Quitar la meta de Octubre 2026?')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quitar meta' })).toBeInTheDocument();
+  });
+
+  test('confirma quitar meta y llama al delete con negocio_id y mes', async () => {
+    mockAnaliticaBasica(ANALITICA_CON_META, ANALITICA_SIN_META);
+    const { eqNegocioMock, eqMesMock } = configurarDeleteMeta({
+      data: [{ negocio_id: 'negocio-1', mes: '2026-10-01' }],
+      error: null,
+    });
+
+    render(
+      <AnaliticaBasica
+        negocioId="negocio-1"
+        modulosNegocio={{}}
+        sessionUserId="usuario-1"
+      />
+    );
+
+    await screen.findByRole('button', { name: 'Quitar meta' });
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar meta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+
+    await waitFor(() => {
+      expect(eqNegocioMock).toHaveBeenCalledWith('negocio_id', 'negocio-1');
+    });
+    expect(eqMesMock).toHaveBeenCalledWith('mes', '2026-10-01');
+
+    expect(await screen.findByText('Aún no hay meta definida para este mes')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quitar meta' })).not.toBeInTheDocument();
+  });
+
+  test('muestra error cuando el delete no borra filas', async () => {
+    mockAnaliticaBasica(ANALITICA_CON_META);
+    configurarDeleteMeta({ data: [], error: null });
+
+    render(
+      <AnaliticaBasica
+        negocioId="negocio-1"
+        modulosNegocio={{}}
+        sessionUserId="usuario-1"
+      />
+    );
+
+    await screen.findByRole('button', { name: 'Quitar meta' });
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar meta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo quitar la meta');
+    expect(screen.getByText('¿Quitar la meta de Octubre 2026?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quitar' })).toBeInTheDocument();
+  });
+
+  test('sin meta no muestra Quitar meta', async () => {
+    mockAnaliticaBasica(ANALITICA_SIN_META);
+
+    render(
+      <AnaliticaBasica
+        negocioId="negocio-1"
+        modulosNegocio={{}}
+        sessionUserId="usuario-1"
+      />
+    );
+
+    expect(await screen.findByRole('button', { name: 'Definir meta' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quitar meta' })).not.toBeInTheDocument();
+  });
+});
 
 describe('AnaliticaDiasMes', () => {
   beforeEach(() => {

@@ -74,6 +74,19 @@ export function calcularAvance({ vendido, meta, diaActual = null, diasEnMes = nu
   };
 }
 
+export function formatearPorcentajeAvance(porcentaje) {
+  const numero = Number(porcentaje);
+  if (porcentaje == null || porcentaje === '' || !Number.isFinite(numero)) {
+    return '';
+  }
+
+  if (numero >= 1000) {
+    return '999+ %';
+  }
+
+  return `${numero.toFixed(1)} %`;
+}
+
 const MONTO_META_MAXIMO = 9999999999.99;
 
 function normalizarTextoMonto(limpio) {
