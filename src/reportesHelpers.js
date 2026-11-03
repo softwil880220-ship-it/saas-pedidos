@@ -210,6 +210,45 @@ export async function consultarPedidosReporteVentana(supabase, negocioId, inicio
   return { data: acumulado, error: null };
 }
 
+export async function consultarPedidosReporteVentanaJornada({
+  supabase,
+  negocioId,
+  fechaDesde,
+  fechaHasta,
+}) {
+  if (!negocioId || !fechaDesde || !fechaHasta) {
+    return { data: [], error: null };
+  }
+
+  const acumulado = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .rpc('listar_pedidos_reporte_ventas_jornada', {
+        p_negocio_id: negocioId,
+        p_fecha_desde: fechaDesde,
+        p_fecha_hasta: fechaHasta,
+      })
+      .range(offset, offset + TAMANO_PAGINA_PEDIDOS_REPORTE - 1);
+
+    if (error) {
+      return { data: [], error };
+    }
+
+    const lote = data || [];
+    acumulado.push(...lote);
+
+    if (lote.length < TAMANO_PAGINA_PEDIDOS_REPORTE) {
+      break;
+    }
+
+    offset += TAMANO_PAGINA_PEDIDOS_REPORTE;
+  }
+
+  return { data: acumulado, error: null };
+}
+
 export const TAMANO_PAGINA_REGISTROS_REPORTE = 1000;
 
 export async function consultarRegistrosReportePaginados(
@@ -552,6 +591,10 @@ export function filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta) {
       pedidoDentroDePeriodo(pedido, configPeriodo) &&
       pedidoCoincideFiltroVenta(pedido, filtroVenta)
   );
+}
+
+export function filtrarPedidosReporteVentasJornada(pedidos, filtroVenta) {
+  return (pedidos || []).filter((pedido) => pedidoCoincideFiltroVenta(pedido, filtroVenta));
 }
 
 export function calcularResumenReporte(pedidos) {
@@ -1359,6 +1402,7 @@ export function exportarReportePdf({
   filtroVenta,
   resumen,
   categorias = [],
+  productos,
   pedidos,
   jornadasPorId = {},
 }) {
@@ -1404,7 +1448,9 @@ export function exportarReportePdf({
 
   startYSeccion = (doc.lastAutoTable?.finalY ?? startYSeccion) + 8;
 
-  const reportePorProducto = calcularReportePorProducto(pedidos);
+  const reportePorProducto = Array.isArray(productos)
+    ? productos
+    : calcularReportePorProducto(pedidos);
 
   doc.setFontSize(11);
   doc.setTextColor(20, 83, 45);

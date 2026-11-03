@@ -33,7 +33,7 @@ import {
   agruparEntregasPorJornada,
   agruparEntregasPorRepartidor,
   agruparPedidosPorJornada,
-  consultarPedidosReporteVentana,
+  consultarPedidosReporteVentanaJornada,
   consultarRegistrosReportePaginados,
   enriquecerEntregasPorJornada,
   enriquecerEntregasPorJornadaConCobros,
@@ -62,7 +62,7 @@ import {
   FILTROS_VENTA_REPORTE,
   filtrarArqueosReporte,
   filtrarPorPeriodoCreatedAt,
-  filtrarPedidosReporte,
+  filtrarPedidosReporteVentasJornada,
   formatearClienteReporte,
   formatearFechaPedidoReporte,
   formatearFormaPagoReporte,
@@ -427,13 +427,23 @@ export default function VistaReportes() {
       setCargando(true);
       setError(null);
 
-      const { inicio, fin } = obtenerRangoReporte(configPeriodo);
-      const { data, error: errorConsulta } = await consultarPedidosReporteVentana(
+      const rangoMerida = obtenerRangoFechasNegocioMerida(configPeriodo);
+
+      if (!rangoMerida) {
+        if (activo) {
+          setError(null);
+          setPedidos([]);
+          setCargando(false);
+        }
+        return;
+      }
+
+      const { data, error: errorConsulta } = await consultarPedidosReporteVentanaJornada({
         supabase,
         negocioId,
-        inicio,
-        fin
-      );
+        fechaDesde: rangoMerida.fechaDesde,
+        fechaHasta: rangoMerida.fechaHasta,
+      });
 
       if (!activo) return;
 
@@ -1080,8 +1090,8 @@ export default function VistaReportes() {
   );
 
   const pedidosFiltrados = useMemo(
-    () => filtrarPedidosReporte(pedidos, configPeriodo, filtroVenta),
-    [pedidos, configPeriodo, filtroVenta]
+    () => filtrarPedidosReporteVentasJornada(pedidos, filtroVenta),
+    [pedidos, filtroVenta]
   );
 
   const multiplesDias = periodoMultiplesDias(configPeriodo);
@@ -1215,6 +1225,7 @@ export default function VistaReportes() {
       filtroVenta,
       resumen: resumenVentasRpc,
       categorias: reportePorCategoriaRpc,
+      productos: reportePorProductoRpc,
       pedidos: pedidosFiltrados,
       jornadasPorId,
     });
