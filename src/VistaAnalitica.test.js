@@ -213,7 +213,7 @@ describe('AnaliticaDiasMes', () => {
     render(<AnaliticaDiasMes negocioId="negocio-1" />);
 
     expect(await screen.findByText('Octubre 2026')).toBeInTheDocument();
-    expect(screen.getByText('Ventas por día')).toBeInTheDocument();
+    expect(screen.getByText('Evolución de ventas por día')).toBeInTheDocument();
     expect(screen.getByText('Sábado 10 de octubre · $11,438.80')).toBeInTheDocument();
 
     const barras = screen.getByTestId('analitica-dias-columnas');
@@ -239,7 +239,7 @@ describe('AnaliticaDiasMes', () => {
     render(<AnaliticaDiasMes negocioId="negocio-1" />);
 
     expect(await screen.findByText('Aún no hay ventas este mes')).toBeInTheDocument();
-    expect(screen.getByText('Ventas por día')).toBeInTheDocument();
+    expect(screen.getByText('Evolución de ventas por día')).toBeInTheDocument();
     expect(screen.getByText('Octubre 2026')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /octubre/ })).not.toBeInTheDocument();
   });
@@ -256,13 +256,15 @@ describe('AnaliticaAnio', () => {
     render(<AnaliticaAnio negocioId="negocio-1" />);
 
     expect(await screen.findByText('2026')).toBeInTheDocument();
-    expect(screen.getByText('Ventas por mes')).toBeInTheDocument();
+    expect(screen.getByText('Evolución de ventas por mes')).toBeInTheDocument();
     expect(screen.getByText('Jun')).toBeInTheDocument();
     expect(screen.getByText('Jul')).toBeInTheDocument();
     expect(screen.getByText('Ago')).toBeInTheDocument();
     expect(screen.getByText('Sep')).toBeInTheDocument();
     expect(screen.getByText('Oct')).toBeInTheDocument();
     expect(screen.getByText('en curso')).toBeInTheDocument();
+    expect(screen.getByText('Octubre · $220.00')).toBeInTheDocument();
+    expect(screen.queryByText('Octubre 2026 · $220.00')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Junio 2026: $0.00' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Octubre 2026: $220.00, en curso' })).toBeInTheDocument();
     expect(screen.queryByText('No se pudo mostrar la gráfica')).not.toBeInTheDocument();

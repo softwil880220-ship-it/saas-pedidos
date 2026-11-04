@@ -182,9 +182,7 @@ function capitalizarEtiquetaMes(etiqueta) {
 
 function lineaMesSeleccionado(fila) {
   const nombre = nombreCompletoMes(fila.mes) || fila.mes;
-  const anio = anioDeTextoMes(fila.mes);
-  const titulo = [nombre, anio].filter(Boolean).join(' ');
-  return `${titulo} · ${formatearMoneda(fila.total)}`;
+  return `${nombre} · ${formatearMoneda(fila.total)}`;
 }
 
 function normalizarDiasMes(data) {
@@ -507,7 +505,7 @@ export function AnaliticaDiasMes({ negocioId }) {
 
   return (
     <article className="analitica-dias" aria-labelledby="analitica-dias-titulo">
-      <p id="analitica-dias-titulo" className="analitica-tarjeta-titulo">Ventas por día</p>
+      <p id="analitica-dias-titulo" className="analitica-tarjeta-titulo">Evolución de ventas por día</p>
       {mesVisible ? <p className="analitica-tarjeta-subtitulo">{mesVisible}</p> : null}
       {cuerpo}
     </article>
@@ -686,7 +684,7 @@ export function AnaliticaAnio({ negocioId }) {
 
   return (
     <article className="analitica-anio" aria-labelledby="analitica-anio-titulo">
-      <p id="analitica-anio-titulo" className="analitica-tarjeta-titulo">Ventas por mes</p>
+      <p id="analitica-anio-titulo" className="analitica-tarjeta-titulo">Evolución de ventas por mes</p>
       {anio?.anio != null ? (
         <p className="analitica-tarjeta-subtitulo">{anio.anio}</p>
       ) : null}
@@ -1187,7 +1185,7 @@ export function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       ) : null}
 
       <LimiteErrorGraficaAnalitica
-        titulo="Ventas por día"
+        titulo="Evolución de ventas por día"
         tituloId="analitica-dias-titulo-fallback"
         className="analitica-dias"
       >
@@ -1195,7 +1193,7 @@ export function AnaliticaBasica({ negocioId, modulosNegocio, sessionUserId }) {
       </LimiteErrorGraficaAnalitica>
 
       <LimiteErrorGraficaAnalitica
-        titulo="Ventas por mes"
+        titulo="Evolución de ventas por mes"
         tituloId="analitica-anio-titulo-fallback"
         className="analitica-anio"
       >
