@@ -15,6 +15,9 @@ import VistaLogin from './VistaLogin';
 import DashboardNav from './DashboardNav';
 import DashboardHeaderReservaMovil from './DashboardHeaderReservaMovil';
 import BotonCerrarSesion from './BotonCerrarSesion';
+import BotonOjoMontos from './BotonOjoMontos';
+import { formatearMontoOcultable } from './formatearMontoOcultable';
+import { useMontosOcultos } from './useMontosOcultos';
 import useEsMobile from './useEsMobile';
 import { supabase } from './supabase';
 import { usePedidosRealtime, useProductosRealtime } from './usePedidosRealtime';
@@ -164,7 +167,7 @@ const MODOS = [
 const MODOS_DESGLOSE_HEADER_PRESENCIAL = ['presencial', 'mostrador'];
 const MODOS_DESGLOSE_HEADER_ENTREGA = ['whatsapp', 'mesas'];
 
-function renderDesgloseVentasHeader(modos, totalesPorModo, className) {
+function renderDesgloseVentasHeader(modos, totalesPorModo, className, visibles) {
   if (modos.length === 0) {
     return null;
   }
@@ -174,7 +177,14 @@ function renderDesgloseVentasHeader(modos, totalesPorModo, className) {
       {modos.map(({ value, label }, index) => (
         <span key={value}>
           {index > 0 ? ' | ' : null}
-          {label}: {formatearMoneda(totalesPorModo[value])}
+          {label}:{' '}
+          {visibles ? (
+            formatearMontoOcultable(true, totalesPorModo[value])
+          ) : (
+            <span aria-hidden="true">
+              {formatearMontoOcultable(false, totalesPorModo[value])}
+            </span>
+          )}
         </span>
       ))}
     </p>
@@ -961,6 +971,7 @@ function Dashboard() {
   const location = useLocation();
   const { negocioId, session, rol, usuario, modulosNegocio } = useAuth();
   const puedeVerVentasTotalesDashboard = ROLES_VENTAS_TOTALES_DASHBOARD.includes(rol);
+  const { visibles, alternar } = useMontosOcultos();
   const puedeGestionarJornadaDashboard = puedeGestionarJornada(rol);
   const esMobileDashboard = useEsMobile(720);
   const seccion = location.pathname === '/catalogo' ? 'catalogo' : 'pedidos';
@@ -3696,22 +3707,36 @@ function Dashboard() {
               <span className="header-stat-fecha">
                 {formatearEncabezadoGrupoJornada(jornadaAbierta)}
               </span>
-              <span className="header-stat-value header-stat-value-total">
-                {formatearMoneda(totalVentasHoyTotal)}
-              </span>
+              <div className="header-stat-total-con-ojo">
+                <span className="header-stat-value header-stat-value-total">
+                  {visibles ? (
+                    formatearMontoOcultable(true, totalVentasHoyTotal)
+                  ) : (
+                    <>
+                      <span aria-hidden="true">
+                        {formatearMontoOcultable(false, totalVentasHoyTotal)}
+                      </span>
+                      <span className="boton-ojo-montos-sr-only">Montos ocultos</span>
+                    </>
+                  )}
+                </span>
+                <BotonOjoMontos visibles={visibles} onAlternar={alternar} />
+              </div>
               {renderDesgloseVentasHeader(
                 modosVisibles.filter(({ value }) =>
                   MODOS_DESGLOSE_HEADER_PRESENCIAL.includes(value)
                 ),
                 totalVentasHoyPorModo,
-                'header-stat-desglose'
+                'header-stat-desglose',
+                visibles
               )}
               {renderDesgloseVentasHeader(
                 modosVisibles.filter(({ value }) =>
                   MODOS_DESGLOSE_HEADER_ENTREGA.includes(value)
                 ),
                 totalVentasHoyPorModo,
-                'header-stat-desglose header-stat-desglose-whatsapp'
+                'header-stat-desglose header-stat-desglose-whatsapp',
+                visibles
               )}
               <div className="header-acciones-caja">
                 <button

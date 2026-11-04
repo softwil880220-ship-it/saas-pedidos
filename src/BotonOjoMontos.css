@@ -1,0 +1,49 @@
+.header-stat-total-con-ojo {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+  min-width: 0;
+}
+
+.header-stat-total-con-ojo .header-stat-value-total {
+  margin-top: 0;
+}
+
+.boton-ojo-montos {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.boton-ojo-montos:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.boton-ojo-montos svg {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.boton-ojo-montos-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
