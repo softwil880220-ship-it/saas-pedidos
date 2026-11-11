@@ -138,6 +138,10 @@ import {
   validarRecetaInsumos as validarRecetaInsumosVariante,
 } from './varianteRecetaHelpers';
 import {
+  mensajeFalloEliminacion,
+  prepararEliminacionCatalogo,
+} from './catalogoEliminar';
+import {
   TAB_CATEGORIAS_VARIANTES,
   catalogosVariantesOrdenadosDesde,
   categoriasVariantesActivas,
@@ -1001,6 +1005,8 @@ function Dashboard() {
     recargarCatalogos,
   } = useVariantesCtx(negocioId, productos);
   const [catalogoTab, setCatalogoTab] = useState('productos');
+  const [dialogoEliminarCatalogo, setDialogoEliminarCatalogo] = useState(null);
+  const [eliminandoCatalogo, setEliminandoCatalogo] = useState(false);
   const productosOrdenados = useMemo(
     () => ordenarProductos(productos),
     [productos]
@@ -1133,6 +1139,7 @@ function Dashboard() {
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [cargandoEdicionProducto, setCargandoEdicionProducto] = useState(false);
   const edicionProductoEnCursoRef = useRef(null);
+  const eliminacionCatalogoEnCursoRef = useRef(false);
   const [editandoPedidoId, setEditandoPedidoId] = useState(null);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [guardandoVariante, setGuardandoVariante] = useState(false);
@@ -2278,26 +2285,201 @@ function Dashboard() {
     }
   };
 
-  const eliminarProducto = async (id) => {
-    const { error } = await queryConNegocio(
-      supabase.from('productos').delete().eq('id', id),
-      negocioId
-    );
+  const cerrarDialogoEliminarCatalogo = () => {
+    if (eliminandoCatalogo) return;
+    setDialogoEliminarCatalogo(null);
+  };
 
-    if (!error) {
-      setProductos((prev) => prev.filter((p) => p.id !== id));
-      if (editandoProductoId === id) {
-        resetProductoForm();
+  const pedirEliminarCatalogo = async (tipo, id, nombre) => {
+    if (eliminacionCatalogoEnCursoRef.current || dialogoEliminarCatalogo) return;
+
+    eliminacionCatalogoEnCursoRef.current = true;
+
+    try {
+      const preparacion = await prepararEliminacionCatalogo(tipo, id, nombre);
+
+      if (preparacion.accion === 'confirmar') {
+        setDialogoEliminarCatalogo({
+          modo: 'confirmar',
+          mensaje: preparacion.mensaje,
+          tipo,
+          id,
+          nombre,
+        });
+        return;
       }
-      actualizarLineasCarritoWhatsappPersistido((lineas) =>
-        lineas.map((linea) =>
-          String(linea.productoId) === String(id)
-            ? { ...linea, productoId: '' }
-            : linea
-        )
-      );
+
+      setDialogoEliminarCatalogo({
+        modo: 'aviso',
+        mensaje: preparacion.mensaje,
+      });
+    } finally {
+      eliminacionCatalogoEnCursoRef.current = false;
     }
   };
+
+  const aplicarCatalogoEliminado = ({ tipo, id }) => {
+    if (tipo === 'producto') {
+      setProductos((prev) => prev.filter((producto) => String(producto.id) !== String(id)));
+      setProductoItemsVariantes((prev) => {
+        const next = { ...prev };
+        delete next[String(id)];
+        return next;
+      });
+
+      if (String(editandoProductoId) === String(id)) {
+        resetProductoForm();
+      }
+
+      actualizarLineasCarritoWhatsappPersistido((lineas) =>
+        lineas.map((linea) =>
+          String(linea.productoId) === String(id) ? { ...linea, productoId: '' } : linea
+        )
+      );
+      return;
+    }
+
+    if (tipo === 'item') {
+      setCatalogosVariantes((prev) => {
+        const next = {};
+        Object.entries(prev || {}).forEach(([categoriaId, items]) => {
+          next[categoriaId] = (items || []).filter((item) => String(item.id) !== String(id));
+        });
+        return next;
+      });
+      setProductoItemsVariantes((prev) => {
+        const next = {};
+        Object.entries(prev || {}).forEach(([productoId, mapa]) => {
+          const mapaNuevo = {};
+          Object.entries(mapa || {}).forEach(([categoriaId, ids]) => {
+            const filtrados = (ids || []).filter((itemId) => String(itemId) !== String(id));
+            if (filtrados.length > 0) mapaNuevo[categoriaId] = filtrados;
+          });
+          next[productoId] = mapaNuevo;
+        });
+        return next;
+      });
+
+      if (editandoVariante && String(editandoVariante.id) === String(id)) {
+        resetVarianteForm();
+      }
+
+      actualizarLineasCarritoWhatsappPersistido((lineas) =>
+        lineas.map((linea) => {
+          const variantes = {};
+          Object.entries(linea.variantes || {}).forEach(([categoriaId, ids]) => {
+            variantes[categoriaId] = (ids || []).filter(
+              (varianteId) => String(varianteId) !== String(id)
+            );
+          });
+          return { ...linea, variantes };
+        })
+      );
+      return;
+    }
+
+    setCategoriasVariantes((prev) =>
+      prev.filter((categoria) => String(categoria.id) !== String(id))
+    );
+    setCatalogosVariantes((prev) => {
+      const next = { ...prev };
+      delete next[String(id)];
+      return next;
+    });
+    setProductoItemsVariantes((prev) => {
+      const next = {};
+      Object.entries(prev || {}).forEach(([productoId, mapa]) => {
+        const mapaNuevo = { ...(mapa || {}) };
+        delete mapaNuevo[String(id)];
+        next[productoId] = mapaNuevo;
+      });
+      return next;
+    });
+
+    if (String(editandoCategoriaVarianteId) === String(id)) {
+      resetCategoriaVarianteForm();
+    }
+
+    if (editandoVariante && String(editandoVariante.categoria) === String(id)) {
+      resetVarianteForm();
+    }
+
+    if (catalogoTab === String(id)) {
+      setCatalogoTab(TAB_CATEGORIAS_VARIANTES);
+    }
+
+    actualizarLineasCarritoWhatsappPersistido((lineas) =>
+      lineas.map((linea) => {
+        const variantes = { ...(linea.variantes || {}) };
+        delete variantes[String(id)];
+        return { ...linea, variantes };
+      })
+    );
+  };
+
+  const confirmarEliminarCatalogo = async () => {
+    const pendiente = dialogoEliminarCatalogo;
+
+    if (!pendiente || pendiente.modo !== 'confirmar' || eliminacionCatalogoEnCursoRef.current) {
+      return;
+    }
+
+    eliminacionCatalogoEnCursoRef.current = true;
+    setEliminandoCatalogo(true);
+
+    try {
+      let respuesta;
+
+      if (pendiente.tipo === 'producto') {
+        respuesta = await queryConNegocio(
+          supabase.from('productos').delete().eq('id', pendiente.id).select('id'),
+          negocioId
+        );
+      } else if (pendiente.tipo === 'item') {
+        respuesta = await supabase
+          .from('items_variantes')
+          .delete()
+          .eq('id', pendiente.id)
+          .select('id');
+      } else {
+        respuesta = await queryConNegocio(
+          supabase.from('categorias_variantes').delete().eq('id', pendiente.id).select('id'),
+          negocioId
+        );
+      }
+
+      const mensajeFallo = mensajeFalloEliminacion(
+        respuesta?.error,
+        respuesta?.data,
+        pendiente.nombre
+      );
+
+      if (mensajeFallo) {
+        setDialogoEliminarCatalogo({ modo: 'aviso', mensaje: mensajeFallo });
+        return;
+      }
+
+      aplicarCatalogoEliminado(pendiente);
+      setDialogoEliminarCatalogo(null);
+    } catch (error) {
+      setDialogoEliminarCatalogo({
+        modo: 'aviso',
+        mensaje: error?.message || 'No se pudo eliminar.',
+      });
+    } finally {
+      eliminacionCatalogoEnCursoRef.current = false;
+      setEliminandoCatalogo(false);
+    }
+  };
+
+  const eliminarProducto = (producto) =>
+    pedirEliminarCatalogo('producto', producto.id, producto.nombre);
+
+  const eliminarItemVariante = (item) =>
+    pedirEliminarCatalogo('item', item.id, item.nombre);
+
+  const eliminarCategoriaVariante = (categoria) =>
+    pedirEliminarCatalogo('categoria', categoria.id, categoria.nombre);
 
   const pedidosModoActual = pedidos.filter((pedido) => pedido.tipo === 'presencial');
 
@@ -3817,6 +3999,72 @@ function Dashboard() {
         </div>
       ) : null}
 
+      {dialogoEliminarCatalogo ? (
+        <div
+          className="retiro-modal-overlay"
+          onClick={cerrarDialogoEliminarCatalogo}
+          role="presentation"
+        >
+          <div
+            className="retiro-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eliminar-catalogo-modal-titulo"
+            aria-describedby="eliminar-catalogo-modal-mensaje"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="eliminar-catalogo-modal-titulo" className="retiro-modal-titulo">
+              {dialogoEliminarCatalogo.modo === 'confirmar' ? 'Eliminar' : 'No se puede eliminar'}
+            </h2>
+            {dialogoEliminarCatalogo.modo === 'confirmar' ? (
+              <p id="eliminar-catalogo-modal-mensaje" className="arqueo-modal-descripcion">
+                {dialogoEliminarCatalogo.mensaje}
+              </p>
+            ) : (
+              <p
+                id="eliminar-catalogo-modal-mensaje"
+                className="retiro-modal-error"
+                role="alert"
+              >
+                {dialogoEliminarCatalogo.mensaje}
+              </p>
+            )}
+            <div className="retiro-modal-acciones">
+              {dialogoEliminarCatalogo.modo === 'confirmar' ? (
+                <>
+                  <button
+                    type="button"
+                    className="retiro-modal-cancelar"
+                    onClick={cerrarDialogoEliminarCatalogo}
+                    disabled={eliminandoCatalogo}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="retiro-modal-guardar"
+                    onClick={() => {
+                      void confirmarEliminarCatalogo();
+                    }}
+                    disabled={eliminandoCatalogo}
+                  >
+                    {eliminandoCatalogo ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="retiro-modal-cancelar"
+                  onClick={cerrarDialogoEliminarCatalogo}
+                >
+                  Cerrar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {modalMesasAbiertasJornadaAbierto ? (
         <div
           className="retiro-modal-overlay"
@@ -4883,7 +5131,10 @@ function Dashboard() {
                             <button
                               type="button"
                               className="eliminar-btn"
-                              onClick={() => eliminarProducto(producto.id)}
+                              onClick={() => {
+                                void eliminarProducto(producto);
+                              }}
+                              disabled={eliminandoCatalogo}
                             >
                               Eliminar
                             </button>
@@ -4986,6 +5237,16 @@ function Dashboard() {
                                 onClick={() => toggleCategoriaVarianteActiva(categoria)}
                               >
                                 {categoria.activo === false ? 'Activar' : 'Desactivar'}
+                              </button>
+                              <button
+                                type="button"
+                                className="eliminar-btn"
+                                onClick={() => {
+                                  void eliminarCategoriaVariante(categoria);
+                                }}
+                                disabled={eliminandoCatalogo}
+                              >
+                                Eliminar
                               </button>
                             </div>
                           </article>
@@ -5196,6 +5457,16 @@ function Dashboard() {
                                 onClick={() => toggleItemVarianteActivo(categoriaId, item)}
                               >
                                 {item.activo === false ? 'Activar' : 'Desactivar'}
+                              </button>
+                              <button
+                                type="button"
+                                className="eliminar-btn"
+                                onClick={() => {
+                                  void eliminarItemVariante(item);
+                                }}
+                                disabled={eliminandoCatalogo}
+                              >
+                                Eliminar
                               </button>
                             </div>
                           </article>
